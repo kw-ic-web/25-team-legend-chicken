@@ -1,0 +1,180 @@
+/* Custom styles for Lec-Q platform */
+
+/* Layout */
+.layout {
+  @apply min-h-screen flex flex-col;
+}
+
+.main-content {
+  @apply flex flex-1;
+}
+
+.content {
+  @apply flex-1 p-8;
+}
+
+.content.with-sidebar {
+  @apply ml-64;
+}
+
+/* Header */
+.header {
+  @apply bg-slate-800 text-white py-4 shadow-md;
+}
+
+.header-container {
+  @apply max-w-7xl mx-auto px-8 flex justify-between items-center;
+}
+
+.logo a {
+  @apply text-white no-underline text-2xl font-bold;
+}
+
+.nav-list {
+  @apply flex list-none gap-8;
+}
+
+.nav-link {
+  @apply text-white no-underline px-4 py-2 rounded transition-colors duration-200;
+}
+
+.nav-link:hover,
+.nav-link.active {
+  @apply bg-slate-700;
+}
+
+/* Sidebar */
+.student-sidebar,
+.professor-sidebar {
+  @apply w-64 bg-white shadow-lg fixed top-0 left-0 h-screen pt-20 overflow-y-auto;
+}
+
+.sidebar-header {
+  @apply p-4 border-b border-gray-200;
+}
+
+.sidebar-header h3 {
+  @apply text-slate-800 text-lg font-semibold;
+}
+
+.sidebar-list {
+  @apply list-none;
+}
+
+.sidebar-item {
+  @apply my-1;
+}
+
+.sidebar-icon {
+  @apply mr-3 text-xl;
+}
+
+/* Pages */
+.landing-page,
+.login-page,
+.register-page {
+  @apply max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg;
+}
+
+.landing-page h1 {
+  @apply text-slate-800 mb-4 text-center text-4xl font-bold;
+}
+
+.landing-page p {
+  @apply text-gray-600 text-center mb-8 text-lg;
+}
+
+.auth-buttons {
+  @apply flex gap-4 justify-center;
+}
+
+.auth-buttons a {
+  @apply px-6 py-3 bg-blue-600 text-white no-underline rounded-lg transition-colors duration-200 hover:bg-blue-700;
+}
+
+/* Forms */
+.form-group {
+  @apply mb-4;
+}
+
+.form-row {
+  @apply grid grid-cols-2 gap-4;
+}
+
+.form-actions {
+  @apply flex gap-4 justify-end mt-8;
+}
+
+/* Dashboard */
+.dashboard-content {
+  @apply grid gap-8;
+}
+
+.quick-actions {
+  @apply bg-white p-6 rounded-lg shadow-sm border border-gray-200;
+}
+
+.quick-actions h2 {
+  @apply text-slate-800 mb-4 text-xl font-semibold;
+}
+
+.quick-actions a {
+  @apply inline-block my-2 mr-2 px-4 py-2 bg-blue-600 text-white no-underline rounded-lg transition-colors duration-200 hover:bg-blue-700;
+}
+
+.stats-grid {
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4;
+}
+
+.stat-card {
+  @apply bg-white p-6 rounded-lg shadow-sm border border-gray-200 text-center;
+}
+
+.stat-card h3 {
+  @apply text-gray-600 text-sm mb-2;
+}
+
+.stat-number {
+  @apply text-3xl font-bold text-slate-800;
+}
+
+.stat-number.pending {
+  @apply text-red-600;
+}
+
+/* Items */
+.question-item,
+.lecture-item,
+.report-item {
+  @apply bg-white p-6 mb-4 rounded-lg shadow-sm border border-gray-200;
+}
+
+.question-header,
+.lecture-header,
+.report-header {
+  @apply flex justify-between items-center mb-4;
+}
+
+.status {
+  @apply status-badge;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .content.with-sidebar {
+    @apply ml-0;
+  }
+
+  .student-sidebar,
+  .professor-sidebar {
+    @apply -translate-x-full transition-transform duration-300;
+  }
+
+  .form-row {
+    @apply grid-cols-1;
+  }
+
+  .stats-grid {
+    @apply grid-cols-2;
+  }
+}
