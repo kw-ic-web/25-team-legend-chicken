@@ -259,59 +259,73 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 푸터 4컬럼 */}
+      {/* 푸터 */}
       <footer className="bg-gray-900 text-gray-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-sm">
-            {[
-              {
-                title: "하단부 글쓰기",
-                links: [
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                ],
-              },
-              {
-                title: "하단부 글쓰기",
-                links: [
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                ],
-              },
-              {
-                title: "하단부 글쓰기",
-                links: [
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                ],
-              },
-              {
-                title: "하단부 글쓰기",
-                links: [
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                  "하단부 글쓰기",
-                ],
-              },
-            ].map((col, idx) => (
-              <div key={idx}>
-                <div className="text-white font-semibold mb-3">{col.title}</div>
-                <ul className="space-y-2">
-                  {col.links.map((l, i) => (
-                    <li key={i} className="hover:text-white/90 cursor-pointer">
-                      {l}
-                    </li>
-                  ))}
-                </ul>
+          {/* 팀 정보 섹션 */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
+            {/* 왼쪽: 로고 및 프로젝트 정보 */}
+            <div className="text-center lg:text-left">
+              <div className="flex items-center justify-center lg:justify-start mb-4">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+                  <span className="text-white font-bold text-sm">LQ</span>
+                </div>
+                <span className="text-white font-bold text-xl">Lec-Q</span>
               </div>
-            ))}
+              <h4 className="text-white font-semibold text-lg mb-2">
+                웹서비스설계및실습
+              </h4>
+              <p className="text-gray-400 text-sm">
+                AI 기반 스마트 학습 플랫폼 개발 프로젝트
+              </p>
+            </div>
+
+            {/* 중간: 프론트엔드 팀 */}
+            <div className="text-center">
+              <h5 className="text-white font-medium mb-4">Frontend</h5>
+              <div className="space-y-2">
+                <div className="text-gray-300">천성윤</div>
+                <div className="text-gray-300">유아름</div>
+              </div>
+            </div>
+
+            {/* 오른쪽: 백엔드 팀 */}
+            <div className="text-center">
+              <h5 className="text-white font-medium mb-4">Backend</h5>
+              <div className="space-y-2">
+                <div className="text-gray-300">박현우</div>
+                <div className="text-gray-300">지민서</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 하단 구분선 및 저작권 */}
+          <div className=" pt-8">
+            <div className="flex flex-col md:flex-row justify-between items-center">
+              <div className="text-gray-400 text-sm">
+                © 2025 Lec-Q. All rights reserved.
+              </div>
+              <div className="flex space-x-6 mt-4 md:mt-0">
+                <a
+                  href="#"
+                  className="text-gray-400 hover:text-white text-sm transition-colors"
+                >
+                  개인정보처리방침
+                </a>
+                <a
+                  href="#"
+                  className="text-gray-400 hover:text-white text-sm transition-colors"
+                >
+                  이용약관
+                </a>
+                <a
+                  href="#"
+                  className="text-gray-400 hover:text-white text-sm transition-colors"
+                >
+                  쿠키 정책
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
