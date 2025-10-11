@@ -5,7 +5,7 @@ import LoginForm from "../../components/auth/LoginForm";
 import CustomerSupport from "../../components/auth/CustomerSupport";
 
 const LoginPage: React.FC = () => {
-  const [userType, setUserType] = useState<"student" | "teacher">("teacher");
+  const [userType, setUserType] = useState<"student" | "teacher">("student");
   const [formData, setFormData] = useState({
     id: "",
     password: "",
@@ -25,7 +25,7 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col relative">
       {/* 로그인 섹션 */}
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
@@ -69,8 +69,7 @@ const LoginPage: React.FC = () => {
       <CustomerSupport />
 
       {/* 장식 요소 */}
-      <div className="absolute bottom-0 left-0 w-32 h-32 bg-yellow-200 rounded-full opacity-20 -translate-x-16 translate-y-16"></div>
-      <div className="absolute bottom-0 right-0 w-24 h-24 bg-purple-200 rounded-full opacity-20 translate-x-12 translate-y-12"></div>
+      <div className="absolute bottom-1/3 right-0 w-24 h-24 bg-purple-200 rounded-full opacity-20 translate-x-12 translate-y-12 -z-10"></div>
     </div>
   );
 };
