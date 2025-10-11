@@ -67,9 +67,6 @@ const LoginPage: React.FC = () => {
 
       {/* 고객 지원 섹션 */}
       <CustomerSupport />
-
-      {/* 장식 요소 */}
-      <div className="absolute bottom-1/3 right-0 w-24 h-24 bg-purple-200 rounded-full opacity-20 translate-x-12 translate-y-12 -z-10"></div>
     </div>
   );
 };
