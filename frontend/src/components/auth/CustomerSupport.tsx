@@ -3,12 +3,12 @@ import { MessageSquare, HelpCircle } from "lucide-react";
 
 const CustomerSupport: React.FC = () => {
   return (
-    <div className="bg-white border-t border-gray-200 py-12 relative">
+    <div className="bg-white border-t border-gray-200 py-12 relative overflow-hidden">
       {/* 장식 요소 */}
-      <div className="absolute top-4 left-4 w-16 h-16 bg-yellow-200 rounded-full opacity-60"></div>
-      <div className="absolute bottom-4 right-4 w-12 h-12 bg-pink-200 rounded-full opacity-60"></div>
+      <div className="absolute -top-4 left-1/3 w-16 h-16 bg-yellow-200 rounded-full opacity-60 z-0"></div>
+      <div className="absolute -bottom-4 right-1/3 w-12 h-12 bg-blue-100 rounded-full opacity-60 z-0"></div>
 
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-4xl mx-auto px-4 relative z-10">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
             Lec-Q 질문 및 문의
