@@ -101,22 +101,24 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ onNext, onPrev }) => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4">
+    <div className="max-w-3xl mx-auto px-4 overflow-hidden">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">정보 입력</h2>
-        <p className="text-gray-600">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2 break-words">
+          정보 입력
+        </h2>
+        <p className="text-sm md:text-base text-gray-600 break-words">
           필수항목이므로 반드시 입력해 주시기 바랍니다.
         </p>
       </div>
 
-      <div className="">
-        <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="bg-white rounded-lg border border-gray-200 p-4 md:p-6 overflow-hidden">
+        <form onSubmit={handleSubmit} className="space-y-4 md:space-y-5">
           {/* 이름 */}
           <div className="border-b border-gray-200 pb-4">
-            <div className="flex items-center">
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-0">
               <label
                 htmlFor="name"
-                className="w-32 text-sm font-medium text-gray-700"
+                className="w-full md:w-32 text-sm font-medium text-gray-700 break-words"
               >
                 이름
               </label>
@@ -126,7 +128,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ onNext, onPrev }) => {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className="flex-1 px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                className="flex-1 px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 min-w-0"
                 required
               />
             </div>
@@ -134,11 +136,11 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ onNext, onPrev }) => {
 
           {/* 회원 유형 */}
           <div className="border-b border-gray-200 pb-4">
-            <div className="flex items-center">
-              <label className="w-32 text-sm font-medium text-gray-700">
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-0">
+              <label className="w-full md:w-32 text-sm font-medium text-gray-700 break-words">
                 회원 유형
               </label>
-              <div className="flex space-x-6">
+              <div className="flex space-x-4 md:space-x-6">
                 <label className="flex items-center">
                   <input
                     type="radio"
@@ -148,7 +150,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ onNext, onPrev }) => {
                     onChange={handleChange}
                     className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                   />
-                  <span className="ml-2 text-gray-700">학생</span>
+                  <span className="ml-2 text-gray-700 break-words">학생</span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -159,7 +161,7 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ onNext, onPrev }) => {
                     onChange={handleChange}
                     className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                   />
-                  <span className="ml-2 text-gray-700">강의자</span>
+                  <span className="ml-2 text-gray-700 break-words">강의자</span>
                 </label>
               </div>
             </div>
@@ -167,37 +169,41 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ onNext, onPrev }) => {
 
           {/* 이메일 */}
           <div className="border-b border-gray-200 pb-4">
-            <div className="flex items-center">
-              <label className="w-32 text-sm font-medium text-gray-700">
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-0">
+              <label className="w-full md:w-32 text-sm font-medium text-gray-700 break-words">
                 이메일 (아이디)
               </label>
-              <div className="flex items-center space-x-2 flex-1">
-                <input
-                  type="text"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
-                  placeholder="이메일"
-                  required
-                />
-                <span className="text-gray-500">@</span>
-                <input
-                  type="text"
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
-                  placeholder="도메인"
-                />
-                <div className="flex-1">
-                  <Select
-                    value={emailDomainOptions.find(
-                      (option) => option.value === formData.emailDomain
-                    )}
-                    onChange={handleSelectChange}
-                    options={emailDomainOptions}
-                    styles={customSelectStyles}
-                    isSearchable={false}
-                    placeholder="직접입력"
+              <div className="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-2 flex-1 min-w-0">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="flex-1 px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 min-w-0"
+                    placeholder="이메일"
+                    required
                   />
+                  <span className="text-gray-500 whitespace-nowrap">@</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    className="flex-1 px-4 py-3 border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 min-w-0"
+                    placeholder="도메인"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <Select
+                      value={emailDomainOptions.find(
+                        (option) => option.value === formData.emailDomain
+                      )}
+                      onChange={handleSelectChange}
+                      options={emailDomainOptions}
+                      styles={customSelectStyles}
+                      isSearchable={false}
+                      placeholder="직접입력"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
