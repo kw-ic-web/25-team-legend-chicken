@@ -6,6 +6,11 @@ import LandingPage from "./pages/common/LandingPage";
 import LoginPage from "./pages/common/LoginPage";
 import RegisterPage from "./pages/common/RegisterPage";
 
+// Register step pages
+import RegisterStep1 from "./components/auth/register/RegisterStep1";
+import RegisterStep2 from "./components/auth/register/RegisterStep2";
+import RegisterStep3 from "./components/auth/register/RegisterStep3";
+
 // Student pages
 import StudentDashboard from "./pages/student/StudentDashboard";
 import RealTimeParticipation from "./pages/student/RealTimeParticipation";
@@ -28,6 +33,11 @@ function App() {
           <Route index element={<LandingPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
+
+          {/* Register step routes */}
+          <Route path="register/step1" element={<RegisterStep1 />} />
+          <Route path="register/step2" element={<RegisterStep2 />} />
+          <Route path="register/step3" element={<RegisterStep3 />} />
 
           {/* Student routes */}
           <Route path="student/dashboard" element={<StudentDashboard />} />

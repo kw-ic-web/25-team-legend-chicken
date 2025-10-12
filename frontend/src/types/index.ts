@@ -1,3 +1,5 @@
+import type { StylesConfig } from "react-select";
+
 // 사용자 타입
 export interface User {
   id: number;
@@ -96,6 +98,41 @@ export interface RegisterFormData {
   password: string;
   confirmPassword: string;
   userType: "student" | "professor";
+}
+
+// 인증 관련 타입들
+export interface EmailDomainOption {
+  value: string;
+  label: string;
+}
+
+export interface EmailStatus {
+  isChecking: boolean;
+  isDuplicate: boolean | null;
+  message: string;
+}
+
+export interface UserInfoFormData {
+  name: string;
+  userType: string;
+  email: string;
+  emailDomain: string;
+  password: string;
+  confirmPassword: string;
+  phone1: string;
+  phone2: string;
+  phone3: string;
+  birthYear: string;
+  birthMonth: string;
+  birthDay: string;
+  calendarType: string;
+}
+
+export type SelectStyles = StylesConfig<EmailDomainOption, false>;
+
+export interface UserInfoFormProps {
+  onNext: () => void;
+  onPrev: () => void;
 }
 
 export interface CreateLectureFormData {
