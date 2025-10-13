@@ -22,7 +22,8 @@ const LoginPage: React.FC = () => {
     const role = userType === "teacher" ? "professor" : "student";
     login({ id: formData.id || "user", name: "User", role });
 
-    const from = (location.state as any)?.from?.pathname as string | undefined;
+    const state = location.state as { from?: { pathname?: string } } | null;
+    const from = state?.from?.pathname;
     if (from && !from.startsWith("/login")) {
       navigate(from, { replace: true });
       return;
@@ -43,10 +44,21 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col relative">
-      {/* 로그인 섹션 */}
-      <div className="flex-1 flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-white flex flex-col relative">
+      {/* 로그인 섹션 (화면 높이 채움) */}
+      <div className="min-h-screen flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md">
+          {/* 브랜드 로고 & 문구 */}
+          <div className="flex flex-col items-center mb-6">
+            <img
+              src="/lecq-nooki.svg"
+              alt="Lec-Q"
+              className="h-20 w-auto mb-3"
+            />
+            <p className="text-gray-500 text-sm text-center">
+              AI 기반 스마트 학습 보조 플랫폼, Lec-Q
+            </p>
+          </div>
           {/* 제목 */}
           <h1 className="text-3xl font-bold text-center text-gray-900 mb-8">
             로그인
@@ -83,8 +95,10 @@ const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 고객 지원 섹션 */}
-      <CustomerSupport />
+      {/* 고객 지원 섹션 (본문 아래로 스크롤되어 노출) */}
+      <div className="shrink-0">
+        <CustomerSupport />
+      </div>
     </div>
   );
 };
