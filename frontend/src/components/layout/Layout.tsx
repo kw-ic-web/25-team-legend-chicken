@@ -9,10 +9,11 @@ const Layout: React.FC = () => {
 
   const isStudentRoute = location.pathname.startsWith("/student");
   const isProfessorRoute = location.pathname.startsWith("/professor");
+  const isLanding = location.pathname === "/";
 
   return (
     <div className="layout">
-      <Header />
+      {!isLanding && <Header />}
 
       <div className="main-content">
         {isStudentRoute && <StudentSidebar />}

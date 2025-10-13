@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import UserTypeSelector from "../../components/auth/UserTypeSelector";
 import LoginForm from "../../components/auth/LoginForm";
 import CustomerSupport from "../../components/auth/CustomerSupport";
+import { useAuth } from "../../contexts/AuthContext";
 
 const LoginPage: React.FC = () => {
   const [userType, setUserType] = useState<"student" | "teacher">("student");
@@ -11,10 +12,27 @@ const LoginPage: React.FC = () => {
     password: "",
   });
   const [rememberId, setRememberId] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("로그인 시도:", { userType, ...formData });
+    // TODO: 실제 API 연동 필요. 지금은 데모용으로 로컬 상태 저장
+    const role = userType === "teacher" ? "professor" : "student";
+    login({ id: formData.id || "user", name: "User", role });
+
+    const from = (location.state as any)?.from?.pathname as string | undefined;
+    if (from && !from.startsWith("/login")) {
+      navigate(from, { replace: true });
+      return;
+    }
+
+    if (role === "student") {
+      navigate("/student/dashboard", { replace: true });
+    } else {
+      navigate("/professor/dashboard", { replace: true });
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
