@@ -11,7 +11,7 @@ const RegisterStep1: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-6 md:py-12">
+    <div className="min-h-screen bg-white py-6 md:py-12">
       <div className="max-w-6xl mx-auto px-4">
         {/* 제목 */}
         <div className="text-center mb-6 md:mb-8">
