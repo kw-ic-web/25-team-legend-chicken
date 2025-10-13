@@ -1,6 +1,5 @@
 import React from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import Header from "./Header";
 import StudentSidebar from "./StudentSidebar";
 import ProfessorSidebar from "./ProfessorSidebar";
 
@@ -9,12 +8,9 @@ const Layout: React.FC = () => {
 
   const isStudentRoute = location.pathname.startsWith("/student");
   const isProfessorRoute = location.pathname.startsWith("/professor");
-  const isLanding = location.pathname === "/";
 
   return (
     <div className="layout">
-      {!isLanding && <Header />}
-
       <div className="main-content">
         {isStudentRoute && <StudentSidebar />}
         {isProfessorRoute && <ProfessorSidebar />}
