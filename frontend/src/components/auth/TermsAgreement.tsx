@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface TermsAgreementProps {
   onNext: () => void;
@@ -11,6 +12,7 @@ const TermsAgreement: React.FC<TermsAgreementProps> = ({ onNext }) => {
     thirdParty: false,
     all: false,
   });
+  const navigate = useNavigate();
 
   const handleAgreementChange = (type: keyof typeof agreements) => {
     if (type === "all") {
@@ -173,7 +175,14 @@ const TermsAgreement: React.FC<TermsAgreementProps> = ({ onNext }) => {
             </label>
           </div>
 
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="px-6 py-3 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              이전
+            </button>
             <button
               type="button"
               onClick={onNext}
