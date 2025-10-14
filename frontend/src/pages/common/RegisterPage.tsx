@@ -6,6 +6,7 @@ const RegisterPage: React.FC = () => {
 
   useEffect(() => {
     // 첫 번째 단계로 리다이렉트
+    //components/auth/register/RegisterStep1.tsx
     navigate("/register/step1", { replace: true });
   }, [navigate]);
 

@@ -1,5 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Layout from "./components/layout/Layout";
+import RequireAuth from "./components/RequireAuth";
+import { AuthProvider } from "./contexts/AuthContext";
 
 // Common pages
 import LandingPage from "./pages/common/LandingPage";
@@ -26,43 +28,55 @@ import LectureAnalysis from "./pages/professor/LectureAnalysis";
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          {/* Common routes */}
-          <Route index element={<LandingPage />} />
-          <Route path="login" element={<LoginPage />} />
-          <Route path="register" element={<RegisterPage />} />
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            {/* Public routes */}
+            <Route index element={<LandingPage />} />
+            <Route path="login" element={<LoginPage />} />
+            <Route path="register" element={<RegisterPage />} />
+            <Route path="register/step1" element={<RegisterStep1 />} />
+            <Route path="register/step2" element={<RegisterStep2 />} />
+            <Route path="register/step3" element={<RegisterStep3 />} />
 
-          {/* Register step routes */}
-          <Route path="register/step1" element={<RegisterStep1 />} />
-          <Route path="register/step2" element={<RegisterStep2 />} />
-          <Route path="register/step3" element={<RegisterStep3 />} />
+            {/* Protected routes */}
+            <Route element={<RequireAuth />}>
+              {/* Student routes */}
+              <Route path="student/dashboard" element={<StudentDashboard />} />
+              <Route
+                path="student/participate"
+                element={<RealTimeParticipation />}
+              />
+              <Route path="student/questions" element={<MyQuestions />} />
+              <Route
+                path="student/reports"
+                element={<LectureSummaryReport />}
+              />
 
-          {/* Student routes */}
-          <Route path="student/dashboard" element={<StudentDashboard />} />
-          <Route
-            path="student/participate"
-            element={<RealTimeParticipation />}
-          />
-          <Route path="student/questions" element={<MyQuestions />} />
-          <Route path="student/reports" element={<LectureSummaryReport />} />
-
-          {/* Professor routes */}
-          <Route path="professor/dashboard" element={<ProfessorDashboard />} />
-          <Route path="professor/create-lecture" element={<CreateLecture />} />
-          <Route
-            path="professor/manage-lectures"
-            element={<ManageLectures />}
-          />
-          <Route
-            path="professor/realtime-dashboard"
-            element={<RealtimeDashboard />}
-          />
-          <Route path="professor/analysis" element={<LectureAnalysis />} />
-        </Route>
-      </Routes>
-    </Router>
+              {/* Professor routes */}
+              <Route
+                path="professor/dashboard"
+                element={<ProfessorDashboard />}
+              />
+              <Route
+                path="professor/create-lecture"
+                element={<CreateLecture />}
+              />
+              <Route
+                path="professor/manage-lectures"
+                element={<ManageLectures />}
+              />
+              <Route
+                path="professor/realtime-dashboard"
+                element={<RealtimeDashboard />}
+              />
+              <Route path="professor/analysis" element={<LectureAnalysis />} />
+            </Route>
+          </Route>
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 
