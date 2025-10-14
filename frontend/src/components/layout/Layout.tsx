@@ -1,6 +1,5 @@
 import React from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import Header from "./Header";
 import StudentSidebar from "./StudentSidebar";
 import ProfessorSidebar from "./ProfessorSidebar";
 
@@ -12,8 +11,6 @@ const Layout: React.FC = () => {
 
   return (
     <div className="layout">
-      <Header />
-
       <div className="main-content">
         {isStudentRoute && <StudentSidebar />}
         {isProfessorRoute && <ProfessorSidebar />}
