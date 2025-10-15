@@ -19,6 +19,7 @@ interface CommonSidebarProps {
     title: string;
     participants: number;
   }>;
+  additionalContent?: React.ReactNode;
 }
 
 const CommonSidebar: React.FC<CommonSidebarProps> = ({
@@ -26,9 +27,10 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
   userInfo,
   upcomingLectures = [],
   myLectures = [],
+  additionalContent,
 }) => {
   return (
-    <div className="w-80 bg-white shadow-lg h-full overflow-y-auto">
+    <div className="w-80 bg-white shadow-lg h-[calc(100vh-4rem)] overflow-y-auto flex flex-col">
       {/* 사용자 프로필 섹션 */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center space-x-4 mb-4">
@@ -130,6 +132,9 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
           </Link>
         </div>
       )}
+
+      {/* 추가 콘텐츠 */}
+      {additionalContent}
     </div>
   );
 };
