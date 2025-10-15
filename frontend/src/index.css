@@ -1,3 +1,16 @@
+/* 전역: 윈도우 가로 스크롤바 숨김 (페이지 전체 가로 넘침 차단) */
+html,
+body {
+  overflow-x: hidden;
+}
+/* 수평/수직 스크롤바 숨김 (스크롤 자체는 가능) */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

@@ -99,6 +99,24 @@ const LoginPage: React.FC = () => {
       <div className="shrink-0">
         <CustomerSupport />
       </div>
+
+      {/* 임시 대시보드 이동 버튼 */}
+      <div className="px-4 py-6 border-t bg-white">
+        <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
+          <Link
+            to="/student/dashboard"
+            className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            학생 대시보드로 이동
+          </Link>
+          <Link
+            to="/professor/dashboard"
+            className="px-4 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition-colors"
+          >
+            강의자 대시보드로 이동
+          </Link>
+        </div>
+      </div>
     </div>
   );
 };
