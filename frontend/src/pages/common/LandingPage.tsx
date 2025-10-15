@@ -44,13 +44,16 @@ const LandingPage: React.FC = () => {
   const scrollToIndex = React.useCallback((idx: number) => {
     const max = sectionRefs.current.length - 1;
     const next = idx < 0 ? 0 : idx > max ? max : idx;
-    const el = sectionRefs.current[next];
-    if (containerRef.current && el) {
+    const container = containerRef.current;
+    const targetEl = sectionRefs.current[next];
+    if (container && targetEl) {
       if (isAnimatingRef.current) return;
       isAnimatingRef.current = true;
-      containerRef.current.scrollTo({
-        left: el.offsetLeft,
+      // 우선 스냅 대상 요소로 직접 스크롤 이동
+      targetEl.scrollIntoView({
         behavior: "smooth",
+        inline: "start",
+        block: "nearest",
       });
       setCurrentIndex(next);
       window.setTimeout(() => {
@@ -126,8 +129,8 @@ const LandingPage: React.FC = () => {
   // 배경 명암에 따른 전역 컨트롤 스타일 (1번 슬라이드는 흰 배경)
   const isLightBackground = currentIndex === 1;
   const arrowContainerClass = isLightBackground
-    ? "fixed z-30 p-3 rounded-full bg-black/20 hover:bg-black/30 transition-all duration-200"
-    : "fixed z-30 p-3 rounded-full bg-white/20 hover:bg-white/30 transition-all duration-200";
+    ? "fixed z-[1000] p-3 rounded-full bg-black/20 hover:bg-black/30 transition-all duration-200 pointer-events-auto"
+    : "fixed z-[1000] p-3 rounded-full bg-white/20 hover:bg-white/30 transition-all duration-200 pointer-events-auto";
   const arrowIconClass = isLightBackground
     ? "w-6 h-6 text-slate-900"
     : "w-6 h-6 text-white";
@@ -140,8 +143,11 @@ const LandingPage: React.FC = () => {
 
   return (
     <div className="h-screen relative overflow-hidden">
-      <div ref={containerRef} className="w-full h-full overflow-hidden">
-        <div className="flex w-full h-full snap-x snap-mandatory">
+      <div
+        ref={containerRef}
+        className="w-full h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory scrollbar-hide"
+      >
+        <div className="flex w-full h-full">
           {/* 히어로 섹션 */}
           <section
             className="relative opacity-0 will-change-transform w-screen h-screen flex-shrink-0 snap-start"
@@ -149,7 +155,7 @@ const LandingPage: React.FC = () => {
           >
             {/* 남는 영역을 2FA7FE로 채움 */}
             <div
-              className="absolute inset-0"
+              className="absolute inset-0 pointer-events-none"
               style={{ backgroundColor: "#2FA7FE" }}
             ></div>
 
@@ -326,7 +332,7 @@ const LandingPage: React.FC = () => {
           >
             {/* 남는 영역을 FF820C로 채움 */}
             <div
-              className="absolute inset-0"
+              className="absolute inset-0 pointer-events-none"
               style={{ backgroundColor: "#FF820C" }}
             ></div>
 
@@ -450,24 +456,24 @@ const LandingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 전역 고정 네비게이션 화살표 */}
+      {/* 전역 고정 네비게이션 화살표 (독립 fixed 요소) */}
       <button
         onClick={handlePrev}
-        className={`${arrowContainerClass} left-4 top-1/2 -translate-y-1/2`}
+        className={`${arrowContainerClass} left-4 top-1/2 -translate-y-1/2 z-[9999]`}
         aria-label="이전 섹션"
       >
         <ChevronLeft className={arrowIconClass} />
       </button>
       <button
         onClick={handleNext}
-        className={`${arrowContainerClass} right-4 top-1/2 -translate-y-1/2`}
+        className={`${arrowContainerClass} right-4 top-1/2 -translate-y-1/2 z-[9999]`}
         aria-label="다음 섹션"
       >
         <ChevronRight className={arrowIconClass} />
       </button>
 
-      {/* 전역 페이지네이션 점 (3개) */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex space-x-2">
+      {/* 전역 페이지네이션 점 (3개) - 독립 fixed 요소 */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex space-x-2 pointer-events-auto">
         {Array.from({ length: 3 }).map((_, i) => (
           <button
             key={i}
