@@ -10,6 +10,7 @@ interface CommonSidebarProps {
     affiliation: string;
     currentLectures?: number;
   };
+  showBroadcastControls?: boolean;
   upcomingLectures?: Array<{
     title: string;
     time: string;
@@ -25,6 +26,7 @@ interface CommonSidebarProps {
 const CommonSidebar: React.FC<CommonSidebarProps> = ({
   userType,
   userInfo,
+  showBroadcastControls = true,
   upcomingLectures = [],
   myLectures = [],
   additionalContent,
@@ -135,7 +137,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
         )}
 
       {/* 실시간 방송 시작하기 버튼 (교수만) */}
-      {userType === "professor" && (
+      {userType === "professor" && showBroadcastControls && (
         <div className="px-6 pt-6 pb-3">
           {upcomingLectures && upcomingLectures.length > 0 && (
             <div className="mb-2 text-center">

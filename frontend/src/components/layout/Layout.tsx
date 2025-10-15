@@ -9,6 +9,9 @@ const Layout: React.FC = () => {
 
   const isStudentRoute = location.pathname.startsWith("/student");
   const isProfessorRoute = location.pathname.startsWith("/professor");
+  const isProfessorCourseDetail = location.pathname.startsWith(
+    "/professor/courses/"
+  );
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
@@ -20,7 +23,7 @@ const Layout: React.FC = () => {
         {/* 사이드바 */}
         <div className="flex flex-col">
           {isStudentRoute && <StudentSidebar />}
-          {isProfessorRoute && <ProfessorSidebar />}
+          {isProfessorRoute && !isProfessorCourseDetail && <ProfessorSidebar />}
         </div>
 
         {/* 메인 콘텐츠 */}
