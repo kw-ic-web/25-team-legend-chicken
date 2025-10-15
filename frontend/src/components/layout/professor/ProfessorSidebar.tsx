@@ -1,4 +1,6 @@
 import React from "react";
+import { Link } from "react-router-dom";
+import { Plus } from "lucide-react";
 import CommonSidebar from "../CommonSidebar";
 
 const ProfessorSidebar: React.FC = () => {
@@ -34,6 +36,17 @@ const ProfessorSidebar: React.FC = () => {
       userInfo={professorInfo}
       upcomingLectures={upcomingLectures}
       myLectures={myLectures}
+      additionalContent={
+        <div className="p-6">
+          <Link
+            to="/professor/create-lecture"
+            className="w-full border-2 border-[#3A6EFF] text-[#3A6EFF] font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 hover:bg-[#3A6EFF] hover:text-white"
+          >
+            <Plus className="w-5 h-5" />
+            <span>새로운 강좌 만들기</span>
+          </Link>
+        </div>
+      }
     />
   );
 };
