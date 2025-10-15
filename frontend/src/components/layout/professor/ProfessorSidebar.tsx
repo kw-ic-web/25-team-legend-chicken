@@ -28,6 +28,7 @@ const ProfessorSidebar: React.FC = () => {
     { title: "프로그래밍 시작하기: 파이썬 입문", participants: 30 },
     { title: "웹 개발 기초", participants: 20 },
     { title: "데이터베이스 설계", participants: 12 },
+    { title: "머신러닝 입문", participants: 25 },
   ];
 
   return (
@@ -37,7 +38,7 @@ const ProfessorSidebar: React.FC = () => {
       upcomingLectures={upcomingLectures}
       myLectures={myLectures}
       additionalContent={
-        <div className="p-6">
+        <div className="px-6 pt-3 pb-6">
           <Link
             to="/professor/create-lecture"
             className="w-full border-2 border-[#3A6EFF] text-[#3A6EFF] font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 hover:bg-[#3A6EFF] hover:text-white"
