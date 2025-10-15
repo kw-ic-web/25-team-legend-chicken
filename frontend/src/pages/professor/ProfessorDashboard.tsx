@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { Search } from "lucide-react";
+// import { Search } from "lucide-react";
+import FilterTabs from "../../components/common/FilterTabs";
+import SearchBar from "../../components/common/SearchBar";
 import LectureCard from "../../components/common/LectureCard";
 import Pagination from "../../components/common/Pagination";
 
@@ -78,50 +80,24 @@ const ProfessorDashboard: React.FC = () => {
       <div className=" px-6 py-4">
         <div className="flex items-center justify-between">
           {/* 탭 네비게이션 */}
-          <div className="flex space-x-1">
-            {["전체", "진행 중인 강좌", "종료된 강좌"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() =>
-                  setActiveTab(
-                    tab === "전체"
-                      ? "all"
-                      : tab === "진행 중인 강좌"
-                        ? "ongoing"
-                        : "completed"
-                  )
-                }
-                className={`px-6 py-3 text-sm font-medium rounded-none transition-colors min-w-[170px] ${
-                  activeTab ===
-                  (tab === "전체"
-                    ? "all"
-                    : tab === "진행 중인 강좌"
-                      ? "ongoing"
-                      : "completed")
-                    ? "bg-blue-600 text-white"
-                    : "bg-white text-gray-600 hover:text-gray-800 border border-gray-200"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+          <FilterTabs
+            tabs={[
+              { label: "전체", value: "all" },
+              { label: "진행 중인 강좌", value: "ongoing" },
+              { label: "종료된 강좌", value: "completed" },
+            ]}
+            activeValue={activeTab}
+            onChange={setActiveTab}
+          />
 
           {/* 검색바 */}
-          <div className="flex items-center space-x-2">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="검색어를 입력하세요"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-[560px] px-4 py-3 border border-gray-300 rounded-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <button className="bg-[#607CA3] hover:bg-blue-700 text-white p-3 rounded-none transition-colors h-[48px] w-[48px] flex items-center justify-center">
-              <Search className="w-5 h-5" />
-            </button>
-          </div>
+          <SearchBar
+            value={searchTerm}
+            onChange={setSearchTerm}
+            onSubmit={() => {
+              /* TODO: hook up search */
+            }}
+          />
         </div>
       </div>
 
