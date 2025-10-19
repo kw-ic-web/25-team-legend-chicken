@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lec-Q 학습 보조 플랫폼</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Lec-Q</h1>
+            <p>학습 보조 플랫폼 - 강의 관리 시스템</p>
+        </div>
+        
+        <div class="nav">
+            <div class="nav-buttons">
+                <button class="btn btn-primary" onclick="showSection('courses')">강의 목록</button>
+                <button class="btn btn-success" onclick="showSection('create-course')" id="create-course-btn" style="display: none;">강의 생성</button>
+                <button class="btn btn-info" onclick="showSection('enroll-course')" id="enroll-course-btn" style="display: none;">강의 수강</button>
+                <button class="btn btn-warning" onclick="showSection('login')" id="login-btn">로그인</button>
+                <button class="btn btn-warning" onclick="logout()" id="logout-btn" style="display: none;">로그아웃</button>
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- 로그인 섹션 -->
+            <div id="login" class="section">
+                <div class="login-section">
+                    <h2>🔐 로그인</h2>
+                    <form id="login-form">
+                        <div class="form-group">
+                            <label for="login-email">이메일</label>
+                            <input type="email" id="login-email" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password">비밀번호</label>
+                            <input type="password" id="login-password" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">로그인</button>
+                    </form>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <p>계정이 없으신가요? <a href="#" onclick="showSection('register')">회원가입</a></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 회원가입 섹션 -->
+            <div id="register" class="section hidden">
+                <div class="login-section">
+                    <h2>📝 회원가입</h2>
+                    <form id="register-form">
+                        <div class="form-group">
+                            <label for="register-name">이름</label>
+                            <input type="text" id="register-name" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-email">이메일</label>
+                            <input type="email" id="register-email" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-password">비밀번호</label>
+                            <input type="password" id="register-password" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="register-role">역할</label>
+                            <select id="register-role" class="form-control" required>
+                                <option value="student">학생</option>
+                                <option value="instructor">교수자</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-success" style="width: 100%;">회원가입</button>
+                    </form>
+                    <div style="margin-top: 20px; text-align: center;">
+                        <p>이미 계정이 있으신가요? <a href="#" onclick="showSection('login')">로그인</a></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 강의 목록 섹션 -->
+            <div id="courses" class="section hidden">
+                <h2>📋 강의 목록</h2>
+                <button class="btn btn-primary" onclick="loadCourses()">새로고침</button>
+                <div id="course-list" class="lecture-grid">
+                    <div class="loading">강의를 불러오는 중...</div>
+                </div>
+            </div>
+            
+            <!-- 강의 생성 섹션 -->
+            <div id="create-course" class="section hidden">
+                <h2>➕ 새 강의 생성</h2>
+                <form id="course-form">
+                    <div class="form-group">
+                        <label for="course-title">강의 제목</label>
+                        <input type="text" id="course-title" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="course-professor">교수자명</label>
+                        <input type="text" id="course-professor" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="course-description">강의 설명</label>
+                        <textarea id="course-description" class="form-control" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="course-status">상태</label>
+                        <select id="course-status" class="form-control">
+                            <option value="ongoing">진행중</option>
+                            <option value="upcoming">예정</option>
+                            <option value="finished">완료</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success">강의 생성</button>
+                </form>
+            </div>
+            
+            <!-- 강의 수강 섹션 -->
+            <div id="enroll-course" class="section hidden">
+                <h2>📝 강의 수강 등록</h2>
+                <form id="enroll-form">
+                    <div class="form-group">
+                        <label for="course-code">강의 코드</label>
+                        <input type="text" id="course-code" class="form-control" placeholder="강의 코드를 입력하세요" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">수강 등록</button>
+                </form>
+            </div>
+            
+            <!-- 수업 상세 섹션 -->
+            <div id="session-detail" class="section hidden">
+                <h2>📖 수업 상세</h2>
+                <div id="session-info"></div>
+                
+                <div style="margin-top: 30px;">
+                    <h3>📄 PDF 업로드</h3>
+                    <form id="pdf-upload-form" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="pdf-title">파일 제목</label>
+                            <input type="text" id="pdf-title" class="form-control" placeholder="파일 제목을 입력하세요">
+                        </div>
+                        <div class="file-upload" onclick="document.getElementById('pdf-file').click()">
+                            <input type="file" id="pdf-file" accept=".pdf" style="display: none;">
+                            <p>📎 PDF 파일을 클릭하거나 드래그하여 업로드하세요</p>
+                            <small>최대 10MB까지 업로드 가능합니다</small>
+                        </div>
+                        <button type="submit" class="btn btn-success" style="margin-top: 15px;">업로드</button>
+                    </form>
+                </div>
+                
+                <div class="pdf-list">
+                    <h3>📚 업로드된 파일</h3>
+                    <div id="pdf-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '';
+        let currentSessionId = null;
+        let currentUser = null;
+        let authToken = null;
+        
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthStatus();
+            loadCourses();
+        });
+        
+        // 인증 상태 확인
+        async function checkAuthStatus() {
+            const token = localStorage.getItem('authToken');
+            console.log('저장된 토큰:', token);
+            
+            if (token) {
+                try {
+                    console.log('토큰 검증 시도...');
+                    const response = await fetch(`${API_BASE}/api/verify`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    console.log('토큰 검증 응답:', response.status);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log('사용자 정보:', data.user);
+                        currentUser = data.user;
+                        authToken = token;
+                        updateUIForLoggedInUser();
+                    } else {
+                        console.log('토큰이 유효하지 않음');
+                        localStorage.removeItem('authToken');
+                        updateUIForLoggedOutUser();
+                    }
+                } catch (error) {
+                    console.error('인증 확인 실패:', error);
+                    localStorage.removeItem('authToken');
+                    updateUIForLoggedOutUser();
+                }
+            } else {
+                console.log('저장된 토큰이 없음');
+                updateUIForLoggedOutUser();
+            }
+        }
+        
+        // 로그인된 사용자 UI 업데이트
+        function updateUIForLoggedInUser() {
+            document.getElementById('login-btn').style.display = 'none';
+            document.getElementById('logout-btn').style.display = 'inline-block';
+            
+            if (currentUser.role === 'instructor') {
+                document.getElementById('create-course-btn').style.display = 'inline-block';
+                
+                // 교수자명 자동 입력
+                document.getElementById('course-professor').value = currentUser.name;
+            } else if (currentUser.role === 'student') {
+                document.getElementById('enroll-course-btn').style.display = 'inline-block';
+            }
+            
+            // 로그인 섹션 숨기고 강의 목록 표시
+            showSection('courses');
+        }
+        
+        // 로그아웃된 사용자 UI 업데이트
+        function updateUIForLoggedOutUser() {
+            document.getElementById('login-btn').style.display = 'inline-block';
+            document.getElementById('logout-btn').style.display = 'none';
+            document.getElementById('create-course-btn').style.display = 'none';
+            document.getElementById('enroll-course-btn').style.display = 'none';
+            
+            currentUser = null;
+            authToken = null;
+            showSection('login');
+        }
+        
+        // 강의 목록 로드
+        async function loadCourses() {
+            try {
+                const response = await fetch(`${API_BASE}/api/courses`);
+                const courses = await response.json();
+                
+                const courseList = document.getElementById('course-list');
+                
+                if (courses.length === 0) {
+                    courseList.innerHTML = '<div class="loading">등록된 강의가 없습니다.</div>';
+                    return;
+                }
+                
+                courseList.innerHTML = courses.map(course => {
+                    // 권한 확인: 현재 사용자가 해당 강의의 교수자인지 확인
+                    const isMyCourse = currentUser && currentUser.role === 'instructor' && 
+                                       course.instructorId === currentUser.userId;
+                    
+                    return `
+                        <div class="lecture-card">
+                            <h3>${course.title}</h3>
+                            <p><strong>교수자:</strong> ${course.professor}</p>
+                            <p><strong>강의 코드:</strong> ${course.courseCode}</p>
+                            <p><strong>수업 수:</strong> ${course.classCount}개</p>
+                            <p><strong>수강생:</strong> ${course.enrolledCount}명</p>
+                            <div class="lecture-meta">
+                                <span class="status ${course.status}">${getStatusText(course.status)}</span>
+                                <button class="btn btn-info" onclick="viewCourseDetail('${course.courseId}')">상세보기</button>
+                                ${isMyCourse ? 
+                                    `<button class="btn btn-warning" onclick="editCourse('${course.courseId}')" style="margin-left: 5px;">수정</button>` :
+                                    ''
+                                }
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('강의 목록 로드 실패:', error);
+                document.getElementById('course-list').innerHTML = '<div class="loading">강의 목록을 불러올 수 없습니다.</div>';
+            }
+        }
+        
+        // 섹션 표시 함수
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            document.getElementById(sectionId).classList.remove('hidden');
+            
+            // 강의 생성 섹션으로 이동할 때 교수자명 자동 입력
+            if (sectionId === 'create-lecture' && currentUser && currentUser.role === 'instructor') {
+                document.getElementById('lecture-professor').value = currentUser.name;
+            }
+        }
+        
+        // 로그인 폼 처리
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser = data.user;
+                    authToken = data.token;
+                    localStorage.setItem('authToken', data.token);
+                    updateUIForLoggedInUser();
+                    showAlert('로그인에 성공했습니다!', 'success');
+                } else {
+                    showAlert(data.message || '로그인에 실패했습니다.', 'error');
+                }
+            } catch (error) {
+                console.error('로그인 실패:', error);
+                showAlert('로그인 중 오류가 발생했습니다.', 'error');
+            }
+        });
+        
+        // 회원가입 폼 처리
+        document.getElementById('register-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('register-name').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            const role = document.getElementById('register-role').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, email, password, role })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('회원가입에 성공했습니다! 로그인해주세요.', 'success');
+                    showSection('login');
+                    document.getElementById('register-form').reset();
+                } else {
+                    showAlert(data.message || '회원가입에 실패했습니다.', 'error');
+                }
+            } catch (error) {
+                console.error('회원가입 실패:', error);
+                showAlert('회원가입 중 오류가 발생했습니다.', 'error');
+            }
+        });
+        
+        // 로그아웃
+        function logout() {
+            localStorage.removeItem('authToken');
+            currentUser = null;
+            authToken = null;
+            updateUIForLoggedOutUser();
+            showAlert('로그아웃되었습니다.', 'success');
+        }
+        
+        // 강의 목록 로드
+        async function loadLectures() {
+            try {
+                const response = await fetch(`${API_BASE}/lecture`);
+                const lectures = await response.json();
+                
+                const lectureList = document.getElementById('lecture-list');
+                
+                if (lectures.length === 0) {
+                    lectureList.innerHTML = '<div class="loading">등록된 강의가 없습니다.</div>';
+                    return;
+                }
+                
+                lectureList.innerHTML = lectures.map(lecture => {
+                    // 권한 확인: 현재 사용자가 해당 강의의 교수자인지 확인
+                    const isMyLecture = currentUser && currentUser.role === 'instructor' && 
+                                       lecture.instructorId === currentUser.userId;
+                    
+                    return `
+                        <div class="lecture-card">
+                            <h3>${lecture.title}</h3>
+                            <p><strong>교수자:</strong> ${lecture.professor}</p>
+                            <p><strong>수업 수:</strong> ${lecture.sessionCount}개</p>
+                            <div class="lecture-meta">
+                                <span class="status ${lecture.status}">${getStatusText(lecture.status)}</span>
+                                <button class="btn btn-info" onclick="viewLectureDetail('${lecture.lectureId}')">상세보기</button>
+                                ${isMyLecture ? 
+                                    `<button class="btn btn-warning" onclick="editLecture('${lecture.lectureId}')" style="margin-left: 5px;">수정</button>` :
+                                    ''
+                                }
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('강의 목록 로드 실패:', error);
+                document.getElementById('lecture-list').innerHTML = '<div class="loading">강의 목록을 불러올 수 없습니다.</div>';
+            }
+        }
+        
+        // 강의 옵션 로드 (수업 생성용) - 내가 생성한 강의만
+        async function loadLectureOptions() {
+            if (!authToken) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/lecture/my/lectures`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                const lectures = await response.json();
+                
+                const select = document.getElementById('session-lecture');
+                select.innerHTML = '<option value="">강의를 선택하세요</option>' +
+                    lectures.map(lecture => `<option value="${lecture.lectureId}">${lecture.title}</option>`).join('');
+            } catch (error) {
+                console.error('강의 옵션 로드 실패:', error);
+            }
+        }
+        
+        // 강의 상세보기
+        async function viewLectureDetail(lectureId) {
+            try {
+                const response = await fetch(`${API_BASE}/lecture/${lectureId}`);
+                const lecture = await response.json();
+                
+                // 권한 확인: 현재 사용자가 해당 강의의 교수자인지 확인
+                const isMyLecture = currentUser && currentUser.role === 'instructor' && 
+                                   lecture.instructorId === currentUser.userId;
+                
+                const lectureList = document.getElementById('lecture-list');
+                lectureList.innerHTML = `
+                    <div class="lecture-card" style="grid-column: 1 / -1;">
+                        <h2>${lecture.title}</h2>
+                        <p><strong>교수자:</strong> ${lecture.professor}</p>
+                        <p><strong>상태:</strong> <span class="status ${lecture.status}">${getStatusText(lecture.status)}</span></p>
+                        <p><strong>설명:</strong> ${lecture.description}</p>
+                        <p><strong>총 수업 수:</strong> ${lecture.totalSessions}개</p>
+                        
+                        <div class="session-list">
+                            <h4>📚 수업 목록</h4>
+                            ${lecture.sessions.length === 0 ? 
+                                '<p>등록된 수업이 없습니다.</p>' :
+                                lecture.sessions.map(session => `
+                                    <div class="session-item">
+                                        <div class="session-info">
+                                            <h4>${session.sessionNumber}차 - ${session.title}</h4>
+                                            <small>PDF 파일: ${session.pdfCount}개</small>
+                                        </div>
+                                        ${isMyLecture ? 
+                                            `<button class="btn btn-primary" onclick="viewSessionDetail('${session.sessionId}')">관리</button>` :
+                                            `<span style="color: #6c757d; font-size: 0.9em;">권한 없음</span>`
+                                        }
+                                    </div>
+                                `).join('')
+                            }
+                        </div>
+                        
+                        <div style="margin-top: 20px;">
+                            <button class="btn btn-success" onclick="loadLectures()">목록으로</button>
+                            ${isMyLecture ? 
+                                `<button class="btn btn-info" onclick="showSection('create-session')" style="margin-left: 10px;">수업 추가</button>` :
+                                ''
+                            }
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('강의 상세 로드 실패:', error);
+                showAlert('강의 상세 정보를 불러올 수 없습니다.', 'error');
+            }
+        }
+        
+        // 수업 상세보기
+        async function viewSessionDetail(sessionId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/sessions/${sessionId}`);
+                const session = await response.json();
+                
+                // 권한 확인: 현재 사용자가 해당 수업의 강의를 생성한 교수자인지 확인
+                const isMySession = currentUser && currentUser.role === 'instructor' && 
+                                   session.lecture.instructorId === currentUser.userId;
+                
+                if (!isMySession) {
+                    showAlert('해당 수업을 관리할 권한이 없습니다.', 'error');
+                    return;
+                }
+                
+                currentSessionId = sessionId;
+                
+                document.getElementById('session-info').innerHTML = `
+                    <div class="lecture-card">
+                        <h3>${session.sessionNumber}차 - ${session.title}</h3>
+                        <p><strong>강의:</strong> ${session.lecture.title}</p>
+                        <p><strong>교수자:</strong> ${session.lecture.professor}</p>
+                        <p><strong>설명:</strong> ${session.description}</p>
+                        <p><strong>생성일:</strong> ${new Date(session.createdAt).toLocaleDateString()}</p>
+                    </div>
+                `;
+                
+                loadPdfList();
+                showSection('session-detail');
+            } catch (error) {
+                console.error('수업 상세 로드 실패:', error);
+                showAlert('수업 상세 정보를 불러올 수 없습니다.', 'error');
+            }
+        }
+        
+        // PDF 목록 로드
+        async function loadPdfList() {
+            if (!currentSessionId) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/sessions/${currentSessionId}`);
+                const session = await response.json();
+                
+                const pdfList = document.getElementById('pdf-list');
+                
+                if (session.pdfFiles.length === 0) {
+                    pdfList.innerHTML = '<p>업로드된 PDF 파일이 없습니다.</p>';
+                    return;
+                }
+                
+                pdfList.innerHTML = session.pdfFiles.map(pdf => `
+                    <div class="pdf-item">
+                        <div class="pdf-info">
+                            <h5>${pdf.title}</h5>
+                            <small>파일명: ${pdf.originalName} (${formatFileSize(pdf.size)})</small>
+                        </div>
+                        <button class="btn btn-info" onclick="downloadPdf('${pdf.filename}')">다운로드</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('PDF 목록 로드 실패:', error);
+            }
+        }
+        
+        // PDF 다운로드
+        function downloadPdf(filename) {
+            window.open(`${API_BASE}/api/sessions/${currentSessionId}/pdf/${filename}`, '_blank');
+        }
+        
+        // 강의 생성 폼 제출
+        document.getElementById('course-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            console.log('강의 생성 시도');
+            console.log('현재 사용자:', currentUser);
+            console.log('인증 토큰:', authToken);
+            
+            if (!authToken) {
+                console.log('인증 토큰이 없음');
+                showAlert('로그인이 필요합니다.', 'error');
+                return;
+            }
+            
+            const formData = {
+                title: document.getElementById('course-title').value,
+                professor: document.getElementById('course-professor').value,
+                description: document.getElementById('course-description').value,
+                status: document.getElementById('course-status').value
+            };
+            
+            console.log('전송할 데이터:', formData);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/courses`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                console.log('응답 상태:', response.status);
+                const result = await response.json();
+                console.log('응답 데이터:', result);
+                
+                if (response.ok) {
+                    showAlert('강의가 성공적으로 생성되었습니다!', 'success');
+                    showAlert(`강의 코드: ${result.courseCode}`, 'success');
+                    
+                    // 폼 리셋
+                    document.getElementById('course-form').reset();
+                    
+                    // 교수자명 다시 자동 입력
+                    if (currentUser && currentUser.role === 'instructor') {
+                        document.getElementById('course-professor').value = currentUser.name;
+                    }
+                    
+                    loadCourses();
+                } else {
+                    showAlert(result.message || '강의 생성에 실패했습니다.', 'error');
+                }
+            } catch (error) {
+                console.error('강의 생성/수정 실패:', error);
+                showAlert('강의 처리 중 오류가 발생했습니다.', 'error');
+            }
+        });
+        
+        // 강의 수강 등록 폼 제출
+        document.getElementById('enroll-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!authToken) {
+                showAlert('로그인이 필요합니다.', 'error');
+                return;
+            }
+            
+            const courseCode = document.getElementById('course-code').value;
+            
+            try {
+                // 먼저 강의 코드로 강의 정보 조회
+                const searchResponse = await fetch(`${API_BASE}/api/courses/code/${courseCode}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (!searchResponse.ok) {
+                    showAlert('유효하지 않은 강의 코드입니다.', 'error');
+                    return;
+                }
+                
+                const courseData = await searchResponse.json();
+                
+                // 수강 등록
+                const enrollResponse = await fetch(`${API_BASE}/api/courses/${courseData.courseId}/enroll`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const result = await enrollResponse.json();
+                
+                if (enrollResponse.ok) {
+                    showAlert(`"${courseData.title}" 강의에 성공적으로 수강 등록되었습니다!`, 'success');
+                    document.getElementById('enroll-form').reset();
+                    loadCourses();
+                } else {
+                    showAlert(result.message || '수강 등록에 실패했습니다.', 'error');
+                }
+            } catch (error) {
+                console.error('수강 등록 실패:', error);
+                showAlert('수강 등록 중 오류가 발생했습니다.', 'error');
+            }
+        });
+        
+        // 수업 생성 폼 제출
+        document.getElementById('session-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!authToken) {
+                showAlert('로그인이 필요합니다.', 'error');
+                return;
+            }
+            
+            const formData = {
+                lectureId: document.getElementById('session-lecture').value,
+                title: document.getElementById('session-title').value,
+                sessionNumber: parseInt(document.getElementById('session-number').value),
+                description: document.getElementById('session-description').value
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/sessions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('수업이 성공적으로 생성되었습니다!', 'success');
+                    document.getElementById('session-form').reset();
+                    loadLectures();
+                } else {
+                    showAlert(result.message || '수업 생성에 실패했습니다.', 'error');
+                }
+            } catch (error) {
+                console.error('수업 생성 실패:', error);
+                showAlert('수업 생성 중 오류가 발생했습니다.', 'error');
+            }
+        });
+        
+        // PDF 업로드 폼 제출
+        document.getElementById('pdf-upload-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!authToken) {
+                showAlert('로그인이 필요합니다.', 'error');
+                return;
+            }
+            
+            const fileInput = document.getElementById('pdf-file');
+            const titleInput = document.getElementById('pdf-title');
+            
+            if (!fileInput.files[0]) {
+                showAlert('PDF 파일을 선택해주세요.', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('pdf', fileInput.files[0]);
+            if (titleInput.value) {
+                formData.append('title', titleInput.value);
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/sessions/${currentSessionId}/upload_pdf`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showAlert('PDF 파일이 성공적으로 업로드되었습니다!', 'success');
+                    document.getElementById('pdf-upload-form').reset();
+                    loadPdfList();
+                } else {
+                    showAlert(result.message || 'PDF 업로드에 실패했습니다.', 'error');
+                }
+            } catch (error) {
+                console.error('PDF 업로드 실패:', error);
+                showAlert('PDF 업로드 중 오류가 발생했습니다.', 'error');
+            }
+        });
+        
+        // 파일 드래그 앤 드롭
+        const fileUpload = document.querySelector('.file-upload');
+        
+        fileUpload.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('dragover');
+        });
+        
+        fileUpload.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+        });
+        
+        fileUpload.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') {
+                document.getElementById('pdf-file').files = files;
+            } else {
+                showAlert('PDF 파일만 업로드 가능합니다.', 'error');
+            }
+        });
+        
+        // 강의 수정 함수
+        async function editLecture(lectureId) {
+            try {
+                const response = await fetch(`${API_BASE}/lecture/${lectureId}`);
+                const lecture = await response.json();
+                
+                // 권한 확인
+                const isMyLecture = currentUser && currentUser.role === 'instructor' && 
+                                   lecture.instructorId === currentUser.userId;
+                
+                if (!isMyLecture) {
+                    showAlert('해당 강의를 수정할 권한이 없습니다.', 'error');
+                    return;
+                }
+                
+                // 강의 수정 폼에 데이터 채우기
+                document.getElementById('lecture-title').value = lecture.title;
+                document.getElementById('lecture-professor').value = lecture.professor;
+                document.getElementById('lecture-description').value = lecture.description || '';
+                document.getElementById('lecture-status').value = lecture.status;
+                
+                // 강의 생성 섹션으로 이동
+                showSection('create-lecture');
+                
+                // 폼 제출 시 수정 모드로 동작하도록 설정
+                const form = document.getElementById('lecture-form');
+                form.dataset.editMode = 'true';
+                form.dataset.lectureId = lectureId;
+                
+                // 제출 버튼 텍스트 변경
+                const submitBtn = form.querySelector('button[type="submit"]');
+                submitBtn.textContent = '강의 수정';
+                
+            } catch (error) {
+                console.error('강의 정보 로드 실패:', error);
+                showAlert('강의 정보를 불러올 수 없습니다.', 'error');
+            }
+        }
+        
+        // 유틸리티 함수들
+        function getStatusText(status) {
+            const statusMap = {
+                'ongoing': '진행중',
+                'upcoming': '예정',
+                'finished': '완료'
+            };
+            return statusMap[status] || status;
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type === 'error' ? 'error' : 'success'}`;
+            alertDiv.textContent = message;
+            
+            const content = document.querySelector('.content');
+            content.insertBefore(alertDiv, content.firstChild);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
