@@ -90,7 +90,7 @@ router.get(
 
 // ✅ 강좌 멤버 조회 (수강 학생 목록 및 초대 링크)
 router.get(
-  "/lecture/:lectureId/check_member",
+  "/lectures/:lectureId/check_member",
   authenticateToken,
   async (req, res) => {
     try {
@@ -148,7 +148,7 @@ router.get(
 
 // ✅ 학생 초대 (이메일로 초대)
 router.post(
-  "/lecture/:lectureId/invite_student",
+  "/lectures/:lectureId/invite_student",
   authenticateToken,
   async (req, res) => {
     try {
