@@ -28,4 +28,4 @@ const LectureSchema = new mongoose.Schema({
   student_id_list: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 });
 
-module.exports = mongoose.models.User || mongoose.model("User", UserSchema);
+module.exports = mongoose.models.Lecture || mongoose.model("Lecture", LectureSchema);
