@@ -7,7 +7,7 @@ const crypto = require("crypto");
 
 // ✅ 강의 개설
 router.post(
-  "/professor/lectures/create",
+  "/lectures/create",
   authenticateToken,
   async (req, res) => {
     try {
@@ -65,7 +65,7 @@ router.post(
 
 // ✅ 강의 조회
 router.get(
-  "/professor/lectures/search",
+  "/lectures/search",
   authenticateToken,
   async (req, res) => {
     try {
