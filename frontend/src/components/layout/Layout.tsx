@@ -12,19 +12,25 @@ const Layout: React.FC = () => {
   const isProfessorCourseDetail = location.pathname.startsWith(
     "/professor/courses/"
   );
+  const isRealtimeDashboard =
+    location.pathname === "/professor/realtime-dashboard";
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
       {/* 헤더 */}
-      {isProfessorRoute && <ProfessorHeader />}
+      {isProfessorRoute && !isRealtimeDashboard && <ProfessorHeader />}
 
       {/* 메인 레이아웃 */}
       <div className="flex flex-1">
         {/* 사이드바 */}
-        <div className="flex flex-col">
-          {isStudentRoute && <StudentSidebar />}
-          {isProfessorRoute && !isProfessorCourseDetail && <ProfessorSidebar />}
-        </div>
+        {!isRealtimeDashboard && (
+          <div className="flex flex-col">
+            {isStudentRoute && <StudentSidebar />}
+            {isProfessorRoute && !isProfessorCourseDetail && (
+              <ProfessorSidebar />
+            )}
+          </div>
+        )}
 
         {/* 메인 콘텐츠 */}
         <main className="flex-1 flex flex-col">
