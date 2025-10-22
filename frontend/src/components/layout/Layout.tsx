@@ -18,7 +18,7 @@ const Layout: React.FC = () => {
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
       {/* 헤더 */}
-      {isProfessorRoute && !isRealtimeDashboard && <ProfessorHeader />}
+      {isProfessorRoute && <ProfessorHeader />}
 
       {/* 메인 레이아웃 */}
       <div className="flex flex-1">
