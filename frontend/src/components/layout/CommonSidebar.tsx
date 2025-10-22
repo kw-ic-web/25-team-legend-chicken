@@ -21,6 +21,7 @@ interface CommonSidebarProps {
     participants: number;
   }>;
   additionalContent?: React.ReactNode;
+  onStartBroadcast?: () => void;
 }
 
 const CommonSidebar: React.FC<CommonSidebarProps> = ({
@@ -30,6 +31,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
   upcomingLectures = [],
   myLectures = [],
   additionalContent,
+  onStartBroadcast,
 }) => {
   // 병합된 강의 개수 계산 (중복 제거 후)
   const mergedCount = React.useMemo(() => {
@@ -168,17 +170,31 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
               })()}
             </div>
           )}
-          <Link
-            to="/professor/realtime-dashboard"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-          >
-            <Play className="w-5 h-5" />
-            <span>
-              {upcomingLectures && upcomingLectures.length > 0
-                ? "방송 시작하기"
-                : "실시간 방송 시작하기"}
-            </span>
-          </Link>
+          {onStartBroadcast ? (
+            <button
+              onClick={onStartBroadcast}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+            >
+              <Play className="w-5 h-5" />
+              <span>
+                {upcomingLectures && upcomingLectures.length > 0
+                  ? "방송 시작하기"
+                  : "실시간 방송 시작하기"}
+              </span>
+            </button>
+          ) : (
+            <Link
+              to="/professor/realtime-dashboard"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+            >
+              <Play className="w-5 h-5" />
+              <span>
+                {upcomingLectures && upcomingLectures.length > 0
+                  ? "방송 시작하기"
+                  : "실시간 방송 시작하기"}
+              </span>
+            </Link>
+          )}
         </div>
       )}
 
