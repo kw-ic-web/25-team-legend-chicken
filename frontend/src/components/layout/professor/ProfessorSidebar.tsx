@@ -38,8 +38,13 @@ const ProfessorSidebar: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleAgree = () => {
-    console.log("방송 시작 동의됨");
+  const handleAgree = (cameraRequired: boolean, files: File[]) => {
+    console.log(
+      "방송 시작 동의됨, 카메라 필수:",
+      cameraRequired,
+      "업로드된 파일:",
+      files
+    );
     setIsModalOpen(false);
   };
 

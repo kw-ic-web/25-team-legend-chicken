@@ -47,9 +47,14 @@ const ProfessorClass: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleAgree = () => {
+  const handleAgree = (cameraRequired: boolean, files: File[]) => {
     // 실제 방송 시작 로직 (여기에 방송 시작 API 호출 등)
-    console.log("방송 시작 동의됨");
+    console.log(
+      "방송 시작 동의됨, 카메라 필수:",
+      cameraRequired,
+      "업로드된 파일:",
+      files
+    );
     setIsModalOpen(false);
   };
 
