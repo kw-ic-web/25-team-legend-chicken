@@ -1,13 +1,16 @@
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema({
-  email: { type: String, unique: true },
-  password: String,
-  name: String,
-  role: { type: String, enum: ["student", "instructor"], required: true },
-  createdAt: { type: Date, default: Date.now },
-});
+const UserSchema = new mongoose.Schema(
+  {
+    name: { type: String, default: "" },
+    email: { type: String, required: true, unique: true },
+    phone: { type: String, default: "" },
+    password: { type: String, required: true },
+    user_type: { type: String, enum: ["professor", "student"], required: true },
+  },
+  {
+    timestamps: true, // createdAt, updatedAt 자동 생성
+  }
+);
 
-module.exports = mongoose.model("User", userSchema);
-
-
+module.exports = mongoose.models.User || mongoose.model("User", UserSchema);
