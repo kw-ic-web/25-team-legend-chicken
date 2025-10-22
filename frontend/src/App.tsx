@@ -21,7 +21,6 @@ import LectureSummaryReport from "./pages/student/LectureSummaryReport";
 
 // Professor pages
 import ProfessorDashboard from "./pages/professor/ProfessorDashboard";
-import CreateLecture from "./pages/professor/CreateLecture";
 import ManageLectures from "./pages/professor/ManageLectures";
 import RealtimeDashboard from "./pages/professor/RealtimeDashboard";
 import LectureAnalysis from "./pages/professor/LectureAnalysis";
@@ -59,10 +58,6 @@ function App() {
               <Route
                 path="professor/dashboard"
                 element={<ProfessorDashboard />}
-              />
-              <Route
-                path="professor/create-lecture"
-                element={<CreateLecture />}
               />
               <Route
                 path="professor/manage-lectures"
