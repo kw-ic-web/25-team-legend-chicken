@@ -6,6 +6,14 @@ const ReferenceSchema = new mongoose.Schema({
   publisher: { type: String },
 });
 
+const ClassSchema = new mongoose.Schema({
+  id: { type: Number, required: true }, // 1, 2, 3, ...
+  title: { type: String, required: true }, // "파이썬 기초", "반복문", "제어문"
+  description: { type: String },
+  date: { type: Date },
+  materials: [{ type: String }], // 강의 자료 URL들
+});
+
 const LectureSchema = new mongoose.Schema({
   lecture_id: { type: String, unique: true, required: true },
   name: { type: String, required: true },
@@ -18,6 +26,7 @@ const LectureSchema = new mongoose.Schema({
   learning_method: { type: String },
   target_audience: { type: String },
   references: [ReferenceSchema],
+  classes: [ClassSchema], // 주차별 강의 목록
 
   // 내부 관리용
   professor_id: {
