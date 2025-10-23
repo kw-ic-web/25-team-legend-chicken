@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import CommonSidebar from "../CommonSidebar";
-import BroadcastAgreementModal from "../../modal/BroadcastAgreementModal";
+import BroadcastAgreementModal from "../../modal/startBroadcast/BroadcastAgreementModal";
 
 const ProfessorSidebar: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);

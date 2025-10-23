@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { Upload, X, Download } from "lucide-react";
-import Modal from "../common/Modal";
+import Modal from "../../common/Modal";
 import BroadcastSettingsModal from "./BroadcastSettingsModal";
 
 interface LectureMaterialUploadModalProps {
