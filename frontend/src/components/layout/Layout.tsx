@@ -1,8 +1,8 @@
 import React from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import Header from "./Header";
-import StudentSidebar from "./StudentSidebar";
-import ProfessorSidebar from "./ProfessorSidebar";
+import StudentSidebar from "./student/StudentSidebar";
+import ProfessorSidebar from "./professor/ProfessorSidebar";
+import ProfessorHeader from "./professor/ProfessorHeader";
 
 const Layout: React.FC = () => {
   const location = useLocation();
@@ -11,16 +11,20 @@ const Layout: React.FC = () => {
   const isProfessorRoute = location.pathname.startsWith("/professor");
 
   return (
-    <div className="layout">
-      <Header />
+    <div className="h-screen bg-gray-50 flex flex-col">
+      {/* 헤더 */}
+      {isProfessorRoute && <ProfessorHeader />}
 
-      <div className="main-content">
-        {isStudentRoute && <StudentSidebar />}
-        {isProfessorRoute && <ProfessorSidebar />}
+      {/* 메인 레이아웃 */}
+      <div className="flex flex-1">
+        {/* 사이드바 */}
+        <div className="flex flex-col">
+          {isStudentRoute && <StudentSidebar />}
+          {isProfessorRoute && <ProfessorSidebar />}
+        </div>
 
-        <main
-          className={`content ${isStudentRoute || isProfessorRoute ? "with-sidebar" : ""}`}
-        >
+        {/* 메인 콘텐츠 */}
+        <main className="flex-1 flex flex-col">
           <Outlet />
         </main>
       </div>
