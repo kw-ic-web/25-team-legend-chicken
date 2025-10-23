@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Play, Users, Download } from "lucide-react";
 import CommonSidebar from "../../components/layout/CommonSidebar";
-import BroadcastAgreementModal from "../../components/modal/BroadcastAgreementModal";
+import BroadcastAgreementModal from "../../components/modal/startBroadcast/BroadcastAgreementModal";
 
 const ProfessorClass: React.FC = () => {
   const { id } = useParams();

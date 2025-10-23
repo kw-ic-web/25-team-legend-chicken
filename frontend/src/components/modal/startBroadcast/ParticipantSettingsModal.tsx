@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Modal from "../common/Modal";
+import Modal from "../../common/Modal";
 import LectureMaterialUploadModal from "./LectureMaterialUploadModal";
 
 interface ParticipantSettingsModalProps {

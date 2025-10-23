@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Edit, Video, VideoOff } from "lucide-react";
-import Modal from "../common/Modal";
+import Modal from "../../common/Modal";
 
 interface BroadcastSettingsModalProps {
   isOpen: boolean;
