@@ -8,6 +8,18 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   showCloseButton?: boolean;
+  size?:
+    | "sm"
+    | "md"
+    | "lg"
+    | "xl"
+    | "2xl"
+    | "3xl"
+    | "4xl"
+    | "5xl"
+    | "6xl"
+    | "7xl"
+    | "full";
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -16,6 +28,7 @@ const Modal: React.FC<ModalProps> = ({
   title,
   children,
   showCloseButton = true,
+  size = "md",
 }) => {
   // ESC 키로 모달 닫기
   useEffect(() => {
@@ -48,7 +61,24 @@ const Modal: React.FC<ModalProps> = ({
       />
 
       {/* 모달 컨테이너 */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div
+        className={clsx(
+          "relative bg-white rounded-lg shadow-xl w-full mx-4 max-h-[90vh] overflow-y-auto",
+          {
+            "max-w-sm": size === "sm",
+            "max-w-md": size === "md",
+            "max-w-lg": size === "lg",
+            "max-w-xl": size === "xl",
+            "max-w-2xl": size === "2xl",
+            "max-w-3xl": size === "3xl",
+            "max-w-4xl": size === "4xl",
+            "max-w-5xl": size === "5xl",
+            "max-w-6xl": size === "6xl",
+            "max-w-7xl": size === "7xl",
+            "max-w-full": size === "full",
+          }
+        )}
+      >
         {/* 헤더 */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">{title}</h2>
