@@ -83,130 +83,134 @@ const LectureAnalysis: React.FC = () => {
   );
 
   return (
-    <div className="lecture-analysis">
-      <h1>강의 분석 및 리포트</h1>
+    <div className="flex-1 flex flex-col">
+      <div className="lecture-analysis p-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">
+          강의 분석 및 리포트
+        </h1>
 
-      <div className="analysis-content">
-        <div className="lecture-selector">
-          <h2>강의 선택</h2>
-          <select
-            value={selectedLecture || ""}
-            onChange={(e) => setSelectedLecture(Number(e.target.value))}
-            className="lecture-select"
-          >
-            <option value="">강의를 선택하세요</option>
-            {lectures.map((lecture) => (
-              <option key={lecture.id} value={lecture.id}>
-                {lecture.title}
-              </option>
-            ))}
-          </select>
-        </div>
+        <div className="analysis-content">
+          <div className="lecture-selector">
+            <h2>강의 선택</h2>
+            <select
+              value={selectedLecture || ""}
+              onChange={(e) => setSelectedLecture(Number(e.target.value))}
+              className="lecture-select"
+            >
+              <option value="">강의를 선택하세요</option>
+              {lectures.map((lecture) => (
+                <option key={lecture.id} value={lecture.id}>
+                  {lecture.title}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {selectedLectureData && (
-          <div className="analysis-details">
-            <div className="lecture-overview">
-              <h2>강의 개요</h2>
-              <div className="overview-grid">
-                <div className="overview-item">
-                  <h3>강의명</h3>
-                  <p>{selectedLectureData.title}</p>
-                </div>
-                <div className="overview-item">
-                  <h3>날짜</h3>
-                  <p>{selectedLectureData.date}</p>
-                </div>
-                <div className="overview-item">
-                  <h3>출석률</h3>
-                  <p>{selectedLectureData.attendance}명</p>
-                </div>
-                <div className="overview-item">
-                  <h3>총 질문 수</h3>
-                  <p>{selectedLectureData.totalQuestions}개</p>
-                </div>
-                <div className="overview-item">
-                  <h3>평균 참여도</h3>
-                  <p>{selectedLectureData.avgEngagement}/10</p>
+          {selectedLectureData && (
+            <div className="analysis-details">
+              <div className="lecture-overview">
+                <h2>강의 개요</h2>
+                <div className="overview-grid">
+                  <div className="overview-item">
+                    <h3>강의명</h3>
+                    <p>{selectedLectureData.title}</p>
+                  </div>
+                  <div className="overview-item">
+                    <h3>날짜</h3>
+                    <p>{selectedLectureData.date}</p>
+                  </div>
+                  <div className="overview-item">
+                    <h3>출석률</h3>
+                    <p>{selectedLectureData.attendance}명</p>
+                  </div>
+                  <div className="overview-item">
+                    <h3>총 질문 수</h3>
+                    <p>{selectedLectureData.totalQuestions}개</p>
+                  </div>
+                  <div className="overview-item">
+                    <h3>평균 참여도</h3>
+                    <p>{selectedLectureData.avgEngagement}/10</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="key-topics">
-              <h2>핵심 주제</h2>
-              <div className="topics-list">
-                {selectedLectureData.keyTopics.map((topic, index) => (
-                  <span key={index} className="topic-tag">
-                    {topic}
-                  </span>
-                ))}
+              <div className="key-topics">
+                <h2>핵심 주제</h2>
+                <div className="topics-list">
+                  {selectedLectureData.keyTopics.map((topic, index) => (
+                    <span key={index} className="topic-tag">
+                      {topic}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="charts-section">
-              <h2>분석 차트</h2>
-              <div className="charts-grid">
-                {charts.map((chart, index) => (
-                  <div key={index} className="chart-container">
-                    <h3>
-                      {chart.type === "attendance" && "출석률"}
-                      {chart.type === "questions" && "질문 수"}
-                      {chart.type === "engagement" && "참여도"}
-                    </h3>
-                    <div className="chart-placeholder">
-                      <p>차트 데이터: {chart.data.length}개 항목</p>
-                      <div className="chart-bars">
-                        {chart.data.map((item, i) => (
-                          <div
-                            key={i}
-                            className="chart-bar"
-                            style={{
-                              height: `${(item.value / Math.max(...chart.data.map((d) => d.value))) * 100}%`,
-                            }}
-                          >
-                            <span className="bar-value">{item.value}</span>
-                          </div>
-                        ))}
+              <div className="charts-section">
+                <h2>분석 차트</h2>
+                <div className="charts-grid">
+                  {charts.map((chart, index) => (
+                    <div key={index} className="chart-container">
+                      <h3>
+                        {chart.type === "attendance" && "출석률"}
+                        {chart.type === "questions" && "질문 수"}
+                        {chart.type === "engagement" && "참여도"}
+                      </h3>
+                      <div className="chart-placeholder">
+                        <p>차트 데이터: {chart.data.length}개 항목</p>
+                        <div className="chart-bars">
+                          {chart.data.map((item, i) => (
+                            <div
+                              key={i}
+                              className="chart-bar"
+                              style={{
+                                height: `${(item.value / Math.max(...chart.data.map((d) => d.value))) * 100}%`,
+                              }}
+                            >
+                              <span className="bar-value">{item.value}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="recommendations">
+                <h2>개선 제안</h2>
+                <div className="recommendation-list">
+                  <div className="recommendation-item">
+                    <h4>참여도 향상</h4>
+                    <p>
+                      학생들의 질문 수가 평균보다 낮습니다. 더 많은 상호작용을
+                      유도하는 방법을 고려해보세요.
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="recommendations">
-              <h2>개선 제안</h2>
-              <div className="recommendation-list">
-                <div className="recommendation-item">
-                  <h4>참여도 향상</h4>
-                  <p>
-                    학생들의 질문 수가 평균보다 낮습니다. 더 많은 상호작용을
-                    유도하는 방법을 고려해보세요.
-                  </p>
-                </div>
-                <div className="recommendation-item">
-                  <h4>주제별 집중도</h4>
-                  <p>
-                    특정 주제에서 질문이 집중되고 있습니다. 다른 주제들에 대한
-                    설명을 보강해보세요.
-                  </p>
-                </div>
-                <div className="recommendation-item">
-                  <h4>출석률 관리</h4>
-                  <p>
-                    출석률이 안정적으로 유지되고 있습니다. 현재 수준을
-                    유지하세요.
-                  </p>
+                  <div className="recommendation-item">
+                    <h4>주제별 집중도</h4>
+                    <p>
+                      특정 주제에서 질문이 집중되고 있습니다. 다른 주제들에 대한
+                      설명을 보강해보세요.
+                    </p>
+                  </div>
+                  <div className="recommendation-item">
+                    <h4>출석률 관리</h4>
+                    <p>
+                      출석률이 안정적으로 유지되고 있습니다. 현재 수준을
+                      유지하세요.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {!selectedLecture && (
-          <div className="no-selection">
-            <p>분석할 강의를 선택해주세요.</p>
-          </div>
-        )}
+          {!selectedLecture && (
+            <div className="no-selection">
+              <p>분석할 강의를 선택해주세요.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
