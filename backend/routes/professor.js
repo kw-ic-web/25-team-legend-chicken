@@ -91,7 +91,7 @@ router.get(
   }
 );
 
-// ✅ 강좌 멤버 조회 (수강 학생 목록 및 초대 링크)
+// 강좌 멤버 조회 (수강 학생 목록 및 초대 링크)
 router.get(
   "/lectures/:lectureId/check_member",
   authenticateToken,
@@ -295,7 +295,7 @@ router.put(
   }
 );
 
-// ✅ 강좌의 클래스 목록 조회
+// 강좌의 클래스 목록 조회
 router.get(
   "/lectures/:lectureId/classes",
   authenticateToken,
@@ -340,7 +340,7 @@ router.post("/lecture/:lectureId/class/:classId/create", authenticateToken, asyn
 // 강의 초대 페이지
 router.get("/lecture/:lectureId/class/invite", authenticateToken, async (req, res) => {});
 
-// ✅ PDF 업로드
+// PDF 업로드
 router.post(
   "/lectures/:lectureId/classes/:classId/uploadpdf",
   authenticateToken,

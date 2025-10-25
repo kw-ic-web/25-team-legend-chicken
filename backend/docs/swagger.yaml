@@ -1,0 +1,435 @@
+openapi: 3.0.0
+info:
+  title: Lec-Q API
+  description: Lec-Q 강의 관리 시스템 API 문서
+  version: 1.0.0
+  contact:
+    name: Hyunwoo Park
+
+servers:
+  - url: http://localhost:8080
+    description: 로컬 개발 서버
+
+tags:
+  - name: Auth
+    description: 인증 관련 API
+  - name: Lectures
+    description: 강의 관리 API
+  - name: Student
+    description: 학생 관련 API
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: 에러 메시지
+
+paths:
+  # ==================== 인증 API ====================
+  /api/register:
+    post:
+      tags: [Auth]
+      summary: 회원가입
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, user_type]
+              properties:
+                name:
+                  type: string
+                  example: 홍길동
+                email:
+                  type: string
+                  format: email
+                  example: hong@example.com
+                phone:
+                  type: string
+                  example: 010-1234-5678
+                password:
+                  type: string
+                  format: password
+                  example: password123
+                user_type:
+                  type: string
+                  enum: [professor, student]
+                  example: student
+      responses:
+        '201':
+          description: 회원가입 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  user:
+                    type: object
+        '400':
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/login:
+    post:
+      tags: [Auth]
+      summary: 로그인
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: hong@example.com
+                password:
+                  type: string
+                  format: password
+                  example: password123
+      responses:
+        '200':
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  user:
+                    type: object
+                  token:
+                    type: string
+        '401':
+          description: 인증 실패
+
+  /api/verify:
+    get:
+      tags: [Auth]
+      summary: 토큰 검증
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 유효한 토큰
+        '401':
+          description: 유효하지 않은 토큰
+        '419':
+          description: 토큰 만료
+
+  # ==================== 강의 API ====================
+  /api/lectures/create:
+    post:
+      tags: [Lectures]
+      summary: 강의 개설
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: 웹 프로그래밍
+                schedule:
+                  type: string
+                  example: 월요일 10:00-12:00
+                student_count:
+                  type: number
+                  example: 30
+                professor_name:
+                  type: string
+                  example: 김교수
+                professor_email:
+                  type: string
+                  example: prof@example.com
+                professor_phone:
+                  type: string
+                  example: 010-1234-5678
+                lecture_description:
+                  type: string
+                  example: 웹 개발 기초
+                learning_method:
+                  type: string
+                  example: 대면
+                target_audience:
+                  type: string
+                  example: 컴퓨터공학과 2학년
+                references:
+                  type: string
+                  example: 교재명
+                classes:
+                  type: array
+                  items:
+                    type: object
+                  example: []
+      responses:
+        '201':
+          description: 강의 개설 성공
+        '403':
+          description: 권한 없음
+
+  /api/lectures/search:
+    get:
+      tags: [Lectures]
+      summary: 강의 조회
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 강의 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lectures:
+                    type: array
+                    items:
+                      type: object
+
+  /api/lectures/{lectureId}/check_member:
+    get:
+      tags: [Lectures]
+      summary: 강좌 멤버 조회
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-1234ABCD
+      responses:
+        '200':
+          description: 멤버 조회 성공
+        '403':
+          description: 권한 없음
+        '404':
+          description: 강좌를 찾을 수 없음
+
+  /api/lectures/{lectureId}/invite_student:
+    post:
+      tags: [Lectures]
+      summary: 학생 초대
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-1234ABCD
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [student_email]
+              properties:
+                student_email:
+                  type: string
+                  format: email
+                  example: student@example.com
+      responses:
+        '200':
+          description: 학생 초대 성공
+        '400':
+          description: 잘못된 요청
+        '403':
+          description: 권한 없음
+
+  /api/lectures/{lectureId}/classes:
+    get:
+      tags: [Lectures]
+      summary: 클래스 목록 조회
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-1234ABCD
+      responses:
+        '200':
+          description: 클래스 목록 조회 성공
+        '403':
+          description: 권한 없음
+        '404':
+          description: 강좌를 찾을 수 없음
+
+    put:
+      tags: [Lectures]
+      summary: 클래스 수정
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-1234ABCD
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [classes]
+              properties:
+                classes:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '200':
+          description: 클래스 수정 성공
+        '400':
+          description: 잘못된 요청
+        '403':
+          description: 권한 없음
+
+  /api/lectures/{lectureId}/classes/{classId}/uploadpdf:
+    post:
+      tags: [Lectures]
+      summary: PDF 업로드
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-1234ABCD
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                pdf:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: PDF 업로드 성공
+        '400':
+          description: 잘못된 요청
+        '403':
+          description: 권한 없음
+
+  # ==================== 학생 API ====================
+  /api/student/join-lecture/{lectureId}:
+    post:
+      tags: [Student]
+      summary: 강좌 참가
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-1234ABCD
+      responses:
+        '200':
+          description: 강좌 참가 성공
+        '400':
+          description: 잘못된 요청 (이미 등록됨 또는 인원 초과)
+        '403':
+          description: 권한 없음 (학생만 가능)
+        '404':
+          description: 강좌를 찾을 수 없음
+
+  /api/student/my-lectures:
+    get:
+      tags: [Student]
+      summary: 내 강의 목록 조회
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 강의 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  student_name:
+                    type: string
+                  student_email:
+                    type: string
+                  lecture_count:
+                    type: number
+                  lectures:
+                    type: array
+                    items:
+                      type: object
+        '403':
+          description: 권한 없음 (학생만 가능)
+
+  /api/student/leave-lecture/{lectureId}:
+    delete:
+      tags: [Student]
+      summary: 강좌 나가기
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-1234ABCD
+      responses:
+        '200':
+          description: 강좌 나가기 성공
+        '400':
+          description: 잘못된 요청 (등록되지 않은 강좌)
+        '403':
+          description: 권한 없음 (학생만 가능)
+        '404':
+          description: 강좌를 찾을 수 없음
