@@ -182,7 +182,7 @@ const BroadcastSettingsModal: React.FC<BroadcastSettingsModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="방송 설정">
+    <Modal isOpen={isOpen} onClose={onClose} title="방송 설정" size="4xl">
       <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 왼쪽: 비디오 미리보기 영역 */}

@@ -44,6 +44,7 @@ const BroadcastAgreementModal: React.FC<BroadcastAgreementModalProps> = ({
         isOpen={isOpen}
         onClose={handleCancel}
         title="강의 시작 전, 꼭 확인하세요!"
+        size="lg"
       >
         <div className="space-y-6">
           <p className="text-gray-700">
