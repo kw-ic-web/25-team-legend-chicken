@@ -34,7 +34,7 @@ const ParticipantSettingsModal: React.FC<ParticipantSettingsModalProps> = ({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title="참여자 설정">
+      <Modal isOpen={isOpen} onClose={onClose} title="참여자 설정" size="lg">
         <div className="space-y-6">
           <p className="text-gray-700 text-sm">
             실시간 강의 중 학생의 카메라 사용 방식을 선택하세요. 해당 설정은
