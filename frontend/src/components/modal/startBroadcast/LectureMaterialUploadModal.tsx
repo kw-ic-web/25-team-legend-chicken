@@ -82,7 +82,7 @@ const LectureMaterialUploadModal: React.FC<LectureMaterialUploadModalProps> = ({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title="교안 업로드">
+      <Modal isOpen={isOpen} onClose={onClose} title="교안 업로드" size="lg">
         <div className="space-y-6">
           <div className="space-y-2">
             <p className="text-gray-700 text-sm">
