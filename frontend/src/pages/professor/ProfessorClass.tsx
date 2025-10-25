@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Play, Users, Download } from "lucide-react";
+import { Play, Users, Download, ChevronDown, ChevronUp } from "lucide-react";
 import CommonSidebar from "../../components/layout/CommonSidebar";
 import BroadcastAgreementModal from "../../components/modal/startBroadcast/BroadcastAgreementModal";
+import LectureReservationModal from "../../components/modal/reserveBroadcast/LectureReservationModal";
 
 const ProfessorClass: React.FC = () => {
   const { id } = useParams();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
 
   // mock: 강좌 정보 및 주차/자료
   const course = {
@@ -60,6 +62,27 @@ const ProfessorClass: React.FC = () => {
 
   const handleClose = () => {
     setIsModalOpen(false);
+  };
+
+  const handleReservationModalOpen = () => {
+    setIsReservationModalOpen(true);
+  };
+
+  const handleReservationModalClose = () => {
+    setIsReservationModalOpen(false);
+  };
+
+  const handleReservation = (reservationData: {
+    title: string;
+    date: string;
+    time: string;
+    participants: string;
+  }) => {
+    // 실제 예약 로직 (여기에 예약 API 호출 등)
+    console.log("강의 예약됨:", reservationData);
+    alert(
+      `강의가 예약되었습니다!\n제목: ${reservationData.title}\n날짜: ${reservationData.date}\n시간: ${reservationData.time}\n참여 대상: ${reservationData.participants}`
+    );
   };
 
   return (
@@ -133,9 +156,12 @@ const ProfessorClass: React.FC = () => {
             {course.title}
           </h1>
           <div className="flex items-center space-x-2">
-            <Link to="#" className="px-4 py-2 bg-gray-100 rounded-lg text-sm">
+            <button
+              onClick={handleReservationModalOpen}
+              className="px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors duration-200"
+            >
               강좌 예약
-            </Link>
+            </button>
             <Link to="#" className="px-4 py-2 bg-gray-100 rounded-lg text-sm">
               강좌 인원 관리
             </Link>
@@ -146,10 +172,16 @@ const ProfessorClass: React.FC = () => {
           {weeks.map((w) => (
             <details
               key={w.week}
-              className="bg-white border border-gray-200 rounded-lg"
+              className="bg-white border border-gray-200 rounded-lg group"
             >
               <summary className="list-none cursor-pointer select-none px-4 py-3 flex items-center justify-between">
-                <div className="font-semibold">{w.title}</div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 flex items-center justify-center">
+                    <ChevronDown className="w-4 h-4 text-gray-500 group-open:hidden" />
+                    <ChevronUp className="w-4 h-4 text-gray-500 hidden group-open:block" />
+                  </div>
+                  <div className="font-semibold">{w.title}</div>
+                </div>
                 <div className="flex items-center space-x-3">
                   <div className="text-sm text-gray-600">
                     {w.items.length}개
@@ -198,6 +230,13 @@ const ProfessorClass: React.FC = () => {
         isOpen={isModalOpen}
         onClose={handleClose}
         onAgree={handleAgree}
+      />
+
+      {/* 강의 예약 모달 */}
+      <LectureReservationModal
+        isOpen={isReservationModalOpen}
+        onClose={handleReservationModalClose}
+        onReserve={handleReservation}
       />
     </div>
   );
