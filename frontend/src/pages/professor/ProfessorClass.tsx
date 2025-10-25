@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Play, Users, Download, ChevronDown, ChevronUp } from "lucide-react";
 import CommonSidebar from "../../components/layout/CommonSidebar";
 import BroadcastAgreementModal from "../../components/modal/startBroadcast/BroadcastAgreementModal";
 import LectureReservationModal from "../../components/modal/reserveBroadcast/LectureReservationModal";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
+import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
 
 const ProfessorClass: React.FC = () => {
   const { id } = useParams();
@@ -17,6 +18,7 @@ const ProfessorClass: React.FC = () => {
     fileName: string;
     fileSize: string;
   } | null>(null);
+  const [isPersonnelModalOpen, setIsPersonnelModalOpen] = useState(false);
 
   // mock: 강좌 정보 및 주차/자료
   const course = {
@@ -112,6 +114,24 @@ const ProfessorClass: React.FC = () => {
     console.log("답변 추가됨:", { questionId, answer });
   };
 
+  const handlePersonnelModalOpen = () => {
+    setIsPersonnelModalOpen(true);
+  };
+
+  const handlePersonnelModalClose = () => {
+    setIsPersonnelModalOpen(false);
+  };
+
+  const handleInviteByLink = () => {
+    // 실제 링크 초대 로직 (여기에 API 호출 등)
+    console.log("링크 초대됨");
+  };
+
+  const handleInviteById = (studentId: string) => {
+    // 실제 아이디 초대 로직 (여기에 API 호출 등)
+    console.log("아이디 초대됨:", studentId);
+  };
+
   return (
     <div className="flex-1 flex">
       {/* 사이드바: 공용 컴포넌트 사용 */}
@@ -189,9 +209,12 @@ const ProfessorClass: React.FC = () => {
             >
               강좌 예약
             </button>
-            <Link to="#" className="px-4 py-2 bg-gray-100 rounded-lg text-sm">
+            <button
+              onClick={handlePersonnelModalOpen}
+              className="px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors duration-200"
+            >
               강좌 인원 관리
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -336,6 +359,26 @@ const ProfessorClass: React.FC = () => {
           onAddAnswer={handleAddAnswer}
         />
       )}
+
+      {/* 강좌 인원관리 모달 */}
+      <LecturePersonnelModal
+        isOpen={isPersonnelModalOpen}
+        onClose={handlePersonnelModalClose}
+        students={[
+          { id: 1, name: "천성윤", email: "sample@naver.com" },
+          { id: 2, name: "박현우", email: "sample@naver.com" },
+          { id: 3, name: "지민서", email: "sample@naver.com" },
+          { id: 4, name: "유아름", email: "sample@naver.com" },
+          { id: 5, name: "천현서", email: "sample@naver.com" },
+          { id: 6, name: "박민윤", email: "sample@naver.com" },
+          { id: 7, name: "지성우", email: "sample@naver.com" },
+          { id: 8, name: "김철수", email: "sample@naver.com" },
+          { id: 9, name: "이영희", email: "sample@naver.com" },
+          { id: 10, name: "정민수", email: "sample@naver.com" },
+        ]}
+        onInviteByLink={handleInviteByLink}
+        onInviteById={handleInviteById}
+      />
     </div>
   );
 };
