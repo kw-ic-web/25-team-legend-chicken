@@ -62,11 +62,8 @@ const LecturePersonnelModal: React.FC<LecturePersonnelModalProps> = ({
           {/* 헤더 정보 */}
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                강좌 인원 관리
-              </h2>
               <p className="text-sm text-gray-600 mt-1">
-                현재 강좌 인원: {students.length}명
+                <b>현재 강좌 인원:</b> {students.length}명
               </p>
               <p className="text-sm text-gray-500 mt-1">
                 아래에서 등록된 수강생을 확인하고 관리할 수 있습니다.
