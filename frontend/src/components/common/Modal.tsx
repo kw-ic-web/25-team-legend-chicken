@@ -5,9 +5,10 @@ import clsx from "clsx";
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title?: string;
   children: React.ReactNode;
   showCloseButton?: boolean;
+  showHeader?: boolean;
   size?:
     | "sm"
     | "md"
@@ -28,6 +29,7 @@ const Modal: React.FC<ModalProps> = ({
   title,
   children,
   showCloseButton = true,
+  showHeader = true,
   size = "md",
 }) => {
   // ESC 키로 모달 닫기
@@ -80,17 +82,21 @@ const Modal: React.FC<ModalProps> = ({
         )}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">{title}</h2>
-          {showCloseButton && (
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
-          )}
-        </div>
+        {showHeader && (
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            {title && (
+              <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+            )}
+            {showCloseButton && (
+              <button
+                onClick={onClose}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* 컨텐츠 */}
         <div className="p-6">{children}</div>
