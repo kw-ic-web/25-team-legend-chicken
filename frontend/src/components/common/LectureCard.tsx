@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import {
   Users,
   BookOpen,
@@ -22,6 +23,7 @@ interface LectureCardProps {
 }
 
 const LectureCard: React.FC<LectureCardProps> = ({
+  id,
   title,
   instructor,
   participants,
@@ -87,7 +89,10 @@ const LectureCard: React.FC<LectureCardProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+    <Link
+      to={`/professor/courses/${id}`}
+      className="block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+    >
       {/* 상단 섹션 - 강의 이미지 영역 */}
       <div className="relative h-48 bg-gray-100 flex items-center justify-center">
         {/* 그리드 패턴 배경 */}
@@ -138,7 +143,7 @@ const LectureCard: React.FC<LectureCardProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 
