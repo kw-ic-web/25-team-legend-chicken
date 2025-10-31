@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import CommonSidebar from "../CommonSidebar";
+import BroadcastAgreementModal from "../../modal/startBroadcast/BroadcastAgreementModal";
 
 const ProfessorSidebar: React.FC = () => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   // 교수 정보
   const professorInfo = {
     name: "김철수",
@@ -28,26 +31,55 @@ const ProfessorSidebar: React.FC = () => {
     { title: "프로그래밍 시작하기: 파이썬 입문", participants: 30 },
     { title: "웹 개발 기초", participants: 20 },
     { title: "데이터베이스 설계", participants: 12 },
+    { title: "머신러닝 입문", participants: 25 },
   ];
 
+  const handleStartBroadcast = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleAgree = (cameraRequired: boolean, files: File[]) => {
+    console.log(
+      "방송 시작 동의됨, 카메라 필수:",
+      cameraRequired,
+      "업로드된 파일:",
+      files
+    );
+    setIsModalOpen(false);
+  };
+
+  const handleClose = () => {
+    setIsModalOpen(false);
+  };
+
   return (
-    <CommonSidebar
-      userType="professor"
-      userInfo={professorInfo}
-      upcomingLectures={upcomingLectures}
-      myLectures={myLectures}
-      additionalContent={
-        <div className="p-6">
-          <Link
-            to="/professor/create-lecture"
-            className="w-full border-2 border-[#3A6EFF] text-[#3A6EFF] font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 hover:bg-[#3A6EFF] hover:text-white"
-          >
-            <Plus className="w-5 h-5" />
-            <span>새로운 강좌 만들기</span>
-          </Link>
-        </div>
-      }
-    />
+    <>
+      <CommonSidebar
+        userType="professor"
+        userInfo={professorInfo}
+        upcomingLectures={upcomingLectures}
+        myLectures={myLectures}
+        onStartBroadcast={handleStartBroadcast}
+        additionalContent={
+          <div className="px-6 pt-3 pb-6">
+            <Link
+              to="/professor/create-lecture"
+              className="w-full border-2 border-[#3A6EFF] text-[#3A6EFF] font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 hover:bg-[#3A6EFF] hover:text-white"
+            >
+              <Plus className="w-5 h-5" />
+              <span>새로운 강좌 만들기</span>
+            </Link>
+          </div>
+        }
+      />
+
+      {/* 실시간 방송 시작 모달 */}
+      <BroadcastAgreementModal
+        isOpen={isModalOpen}
+        onClose={handleClose}
+        onAgree={handleAgree}
+      />
+    </>
   );
 };
 
