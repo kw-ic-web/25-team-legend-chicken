@@ -5,6 +5,7 @@ import ParticipantStrip from "../../components/live/professor/ParticipantStrip";
 import ScreenShareArea from "../../components/live/professor/ScreenShareArea";
 import LiveControls from "../../components/live/professor/LiveControls";
 import EndBroadcastConfirmModal from "../../components/modal/live/EndBroadcastConfirmModal";
+import Toast from "../../components/common/Toast";
 
 interface Question {
   id: number;
@@ -22,6 +23,11 @@ const RealtimeDashboard: React.FC = () => {
   const [isSharing, setIsSharing] = useState(false);
   const [isPersonnelOpen, setIsPersonnelOpen] = useState(false);
   const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
+  const showError = (message: string) => setToast({ message, type: "error" });
   const [students] = useState(
     Array.from({ length: 8 }).map((_, i) => ({
       id: i + 1,
@@ -102,8 +108,18 @@ const RealtimeDashboard: React.FC = () => {
       if (stream.getAudioTracks().length > 0) {
         startAudioLevelMonitoring(stream);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("웹캠 접근 실패:", error);
+      const err = error as { name?: string };
+      if (err?.name === "NotAllowedError") {
+        showError(
+          "카메라/마이크 권한이 차단되어 있어요. 브라우저 권한을 허용해 주세요."
+        );
+      } else if (err?.name === "NotFoundError") {
+        showError("카메라 또는 마이크를 찾을 수 없어요.");
+      } else {
+        showError("웹캠을 시작할 수 없어요. 장치와 권한을 확인해 주세요.");
+      }
     }
   }, []);
 
@@ -208,9 +224,15 @@ const RealtimeDashboard: React.FC = () => {
       track.addEventListener("ended", () => {
         stopScreenShare();
       });
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("화면 공유 실패:", e);
       setIsSharing(false);
+      const err = e as { name?: string };
+      if (err?.name === "NotAllowedError") {
+        showError("화면 공유가 취소되었어요. 다시 시도해 주세요.");
+      } else {
+        showError("화면 공유를 시작할 수 없어요.");
+      }
     }
   }, [stopScreenShare]);
 
@@ -266,6 +288,26 @@ const RealtimeDashboard: React.FC = () => {
       stopScreenShare();
     };
   }, [startCamera, stopCamera, stopScreenShare]);
+
+  // 탭 숨김/이탈 시 리소스 정리
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopScreenShare();
+        stopCamera();
+      }
+    };
+    const onBeforeUnload = () => {
+      stopScreenShare();
+      stopCamera();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [stopCamera, stopScreenShare]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -408,6 +450,13 @@ const RealtimeDashboard: React.FC = () => {
           onClose={closePersonnel}
           students={students}
         />
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
         <EndBroadcastConfirmModal
           isOpen={isEndConfirmOpen}
           onClose={() => setIsEndConfirmOpen(false)}
