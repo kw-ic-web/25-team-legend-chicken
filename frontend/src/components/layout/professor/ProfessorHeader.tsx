@@ -37,9 +37,9 @@ const ProfessorHeader: React.FC = () => {
             <Link
               key={item.path}
               to={item.path}
-              className={`text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 hover:bg-white/20 ${
+              className={`text-white font-medium px-4 py-2 rounded-lg inline-flex items-center h-10 transition-transform duration-200 hover:bg-white/20 ${
                 location.pathname === item.path
-                  ? "bg-white/30 font-semibold"
+                  ? "bg-white/30 font-semibold scale-105"
                   : "hover:bg-white/10"
               }`}
             >

@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Mic, MicOff, Video, VideoOff, Send } from "lucide-react";
+import { Send } from "lucide-react";
+import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
+import ParticipantStrip from "../../components/live/professor/ParticipantStrip";
+import ScreenShareArea from "../../components/live/professor/ScreenShareArea";
+import LiveControls from "../../components/live/professor/LiveControls";
 
 interface Question {
   id: number;
@@ -14,9 +18,20 @@ const RealtimeDashboard: React.FC = () => {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
   const [chatMessage, setChatMessage] = useState("");
+  const [isSharing, setIsSharing] = useState(false);
+  const [isPersonnelOpen, setIsPersonnelOpen] = useState(false);
+  const [students] = useState(
+    Array.from({ length: 8 }).map((_, i) => ({
+      id: i + 1,
+      name: `수강생 ${i + 1}`,
+      email: `student${i + 1}@example.com`,
+    }))
+  );
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const shareVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const shareStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -147,6 +162,56 @@ const RealtimeDashboard: React.FC = () => {
     analyserRef.current = null;
   };
 
+  // 화면 공유 중지/시작
+  const stopScreenShare = useCallback(() => {
+    if (shareStreamRef.current) {
+      shareStreamRef.current.getTracks().forEach((t) => t.stop());
+      shareStreamRef.current = null;
+    }
+    if (shareVideoRef.current) {
+      shareVideoRef.current.srcObject = null;
+    }
+    setIsSharing(false);
+  }, []);
+
+  const startScreenShare = useCallback(async () => {
+    try {
+      const mediaDevices = navigator.mediaDevices as MediaDevices & {
+        getDisplayMedia?: (
+          constraints?: MediaStreamConstraints
+        ) => Promise<MediaStream>;
+      };
+      const getDisplay = mediaDevices.getDisplayMedia
+        ? mediaDevices.getDisplayMedia.bind(mediaDevices)
+        : // 일부 브라우저 호환용
+          (
+            navigator as unknown as {
+              getDisplayMedia: () => Promise<MediaStream>;
+            }
+          ).getDisplayMedia;
+
+      const displayStream = await getDisplay({
+        video: { frameRate: 30 },
+        audio: true,
+      });
+      shareStreamRef.current = displayStream;
+      if (shareVideoRef.current) {
+        shareVideoRef.current.srcObject =
+          displayStream as unknown as MediaStream;
+      }
+      setIsSharing(true);
+
+      // 사용자가 공유를 중지했을 때 이벤트 처리
+      const [track] = displayStream.getVideoTracks();
+      track.addEventListener("ended", () => {
+        stopScreenShare();
+      });
+    } catch (e) {
+      console.error("화면 공유 실패:", e);
+      setIsSharing(false);
+    }
+  }, [stopScreenShare]);
+
   const toggleMic = () => {
     if (streamRef.current) {
       const audioTracks = streamRef.current.getAudioTracks();
@@ -172,6 +237,8 @@ const RealtimeDashboard: React.FC = () => {
     }
   };
 
+  const closePersonnel = () => setIsPersonnelOpen(false);
+
   const handleAnswerQuestion = (questionId: number) => {
     setQuestions(
       questions.map((q) =>
@@ -194,54 +261,12 @@ const RealtimeDashboard: React.FC = () => {
 
     return () => {
       stopCamera();
+      stopScreenShare();
     };
-  }, [startCamera, stopCamera]);
+  }, [startCamera, stopCamera, stopScreenShare]);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 상단 네비게이션 */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <button className="p-1 hover:bg-gray-100 rounded">
-                  <svg
-                    className="w-4 h-4 text-gray-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
-                </button>
-                <span className="text-sm text-gray-600">학생 화면</span>
-                <button className="p-1 hover:bg-gray-100 rounded">
-                  <svg
-                    className="w-4 h-4 text-gray-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="flex h-[calc(100vh-80px)]">
         {/* 메인 콘텐츠 영역 */}
         <div className="flex-1 bg-white m-4 rounded-lg shadow-sm">
@@ -253,114 +278,24 @@ const RealtimeDashboard: React.FC = () => {
               </h1>
             </div>
 
-            {/* 강의 콘텐츠 */}
-            <div className="flex-1 p-6">
-              <div className="space-y-8">
-                {/* 프로그래밍 기초 섹션 */}
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-4 h-4 bg-green-500 rounded"></div>
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      프로그래밍 기초
-                    </h2>
-                  </div>
-                  <ul className="space-y-2 ml-7">
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">프로그래밍이란?</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">코딩 공부 하는 법</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">좋은 프로그램이란?</span>
-                    </li>
-                  </ul>
-                </div>
+            {/* 상단 참여자(웹캠) 스트립 */}
+            <ParticipantStrip isCameraOn={isCameraOn} videoRef={videoRef} />
 
-                {/* 파이썬 배우는 이유 섹션 */}
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-4 h-4 bg-green-500 rounded"></div>
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      파이썬 배우는 이유
-                    </h2>
-                  </div>
-                  <ul className="space-y-2 ml-7">
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">파이썬 장점</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">파이썬 활용 분야</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">파이썬 언어 특징</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* 교수자 웹캠 영역 */}
-              <div className="absolute bottom-4 right-4 w-48 h-32 bg-gray-200 rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-gray-500 text-sm mb-2">교수자 얼굴</div>
-                  {isCameraOn ? (
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      muted
-                      playsInline
-                      className="w-full h-full object-cover rounded-lg"
-                      style={{ transform: "scaleX(-1)" }}
-                    />
-                  ) : (
-                    <div className="w-full h-20 bg-gray-300 rounded flex items-center justify-center">
-                      <VideoOff className="w-8 h-8 text-gray-400" />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* 하단 컨트롤 */}
-              <div className="absolute bottom-4 left-4 flex items-center space-x-4">
-                <button
-                  onClick={toggleMic}
-                  className={`p-3 rounded-full transition-colors ${
-                    isMicOn
-                      ? "bg-red-500 text-white"
-                      : "bg-gray-200 text-gray-600"
-                  }`}
-                >
-                  {isMicOn ? (
-                    <Mic className="w-5 h-5" />
-                  ) : (
-                    <MicOff className="w-5 h-5" />
-                  )}
-                </button>
-                <button
-                  onClick={toggleCamera}
-                  className={`p-3 rounded-full transition-colors ${
-                    isCameraOn
-                      ? "bg-blue-500 text-white"
-                      : "bg-gray-200 text-gray-600"
-                  }`}
-                >
-                  {isCameraOn ? (
-                    <Video className="w-5 h-5" />
-                  ) : (
-                    <VideoOff className="w-5 h-5" />
-                  )}
-                </button>
-                <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
-                  방송 종료
-                </button>
-              </div>
-            </div>
+            {/* 강의 콘텐츠(화면 공유 영역) */}
+            <ScreenShareArea isSharing={isSharing} videoRef={shareVideoRef}>
+              <LiveControls
+                isMicOn={isMicOn}
+                isCameraOn={isCameraOn}
+                isSharing={isSharing}
+                onToggleMic={toggleMic}
+                onToggleCamera={toggleCamera}
+                onToggleShare={() =>
+                  isSharing ? stopScreenShare() : startScreenShare()
+                }
+                onOpenPersonnel={() => setIsPersonnelOpen(true)}
+                onEnd={() => console.log("방송 종료")}
+              />
+            </ScreenShareArea>
           </div>
         </div>
 
@@ -465,6 +400,12 @@ const RealtimeDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+        {/* 강의 인원 모달 */}
+        <LecturePersonnelModal
+          isOpen={isPersonnelOpen}
+          onClose={closePersonnel}
+          students={students}
+        />
       </div>
     </div>
   );
