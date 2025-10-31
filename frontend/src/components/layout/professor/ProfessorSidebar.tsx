@@ -1,11 +1,21 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
 import CommonSidebar from "../CommonSidebar";
-import BroadcastAgreementModal from "../../modal/startBroadcast/BroadcastAgreementModal";
+import CreateClassModal from "../../modal/createClass/CreateClassModal";
+import CreateClassCompleteModal from "../../modal/createClass/CreateClassCompleteModal";
 
 const ProfessorSidebar: React.FC = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // 방송 시작 관련 모달 로직은 추후 필요 시 다시 연결
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreateCompleteOpen, setIsCreateCompleteOpen] = useState(false);
+  const [createdClass, setCreatedClass] = useState({
+    title: "",
+    capacity: 0,
+    startDate: "",
+    endDate: "",
+  });
+  const navigate = useNavigate();
 
   // 교수 정보
   const professorInfo = {
@@ -34,24 +44,6 @@ const ProfessorSidebar: React.FC = () => {
     { title: "머신러닝 입문", participants: 25 },
   ];
 
-  const handleStartBroadcast = () => {
-    setIsModalOpen(true);
-  };
-
-  const handleAgree = (cameraRequired: boolean, files: File[]) => {
-    console.log(
-      "방송 시작 동의됨, 카메라 필수:",
-      cameraRequired,
-      "업로드된 파일:",
-      files
-    );
-    setIsModalOpen(false);
-  };
-
-  const handleClose = () => {
-    setIsModalOpen(false);
-  };
-
   return (
     <>
       <CommonSidebar
@@ -59,25 +51,47 @@ const ProfessorSidebar: React.FC = () => {
         userInfo={professorInfo}
         upcomingLectures={upcomingLectures}
         myLectures={myLectures}
-        onStartBroadcast={handleStartBroadcast}
         additionalContent={
           <div className="px-6 pt-3 pb-6">
-            <Link
-              to="/professor/create-lecture"
+            <button
+              type="button"
+              onClick={() => setIsCreateOpen(true)}
               className="w-full border-2 border-[#3A6EFF] text-[#3A6EFF] font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 hover:bg-[#3A6EFF] hover:text-white"
             >
               <Plus className="w-5 h-5" />
               <span>새로운 강좌 만들기</span>
-            </Link>
+            </button>
           </div>
         }
       />
 
-      {/* 실시간 방송 시작 모달 */}
-      <BroadcastAgreementModal
-        isOpen={isModalOpen}
-        onClose={handleClose}
-        onAgree={handleAgree}
+      {/* 강좌 개설 모달 */}
+      <CreateClassModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onSubmit={({ title, capacity, startDate, endDate }) => {
+          setCreatedClass({ title, capacity, startDate, endDate });
+          setIsCreateOpen(false);
+          setIsCreateCompleteOpen(true);
+        }}
+      />
+
+      {/* 개설 완료 모달 */}
+      <CreateClassCompleteModal
+        isOpen={isCreateCompleteOpen}
+        onClose={() => setIsCreateCompleteOpen(false)}
+        title={createdClass.title}
+        capacity={createdClass.capacity}
+        startDate={createdClass.startDate}
+        endDate={createdClass.endDate}
+        onEdit={() => {
+          setIsCreateCompleteOpen(false);
+          setIsCreateOpen(true);
+        }}
+        onGoDashboard={() => {
+          setIsCreateCompleteOpen(false);
+          navigate("/professor/dashboard");
+        }}
       />
     </>
   );
