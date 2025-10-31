@@ -4,6 +4,7 @@ import LecturePersonnelModal from "../../components/modal/lecturePersonnel/Lectu
 import ParticipantStrip from "../../components/live/professor/ParticipantStrip";
 import ScreenShareArea from "../../components/live/professor/ScreenShareArea";
 import LiveControls from "../../components/live/professor/LiveControls";
+import EndBroadcastConfirmModal from "../../components/modal/live/EndBroadcastConfirmModal";
 
 interface Question {
   id: number;
@@ -20,6 +21,7 @@ const RealtimeDashboard: React.FC = () => {
   const [chatMessage, setChatMessage] = useState("");
   const [isSharing, setIsSharing] = useState(false);
   const [isPersonnelOpen, setIsPersonnelOpen] = useState(false);
+  const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
   const [students] = useState(
     Array.from({ length: 8 }).map((_, i) => ({
       id: i + 1,
@@ -293,7 +295,7 @@ const RealtimeDashboard: React.FC = () => {
                   isSharing ? stopScreenShare() : startScreenShare()
                 }
                 onOpenPersonnel={() => setIsPersonnelOpen(true)}
-                onEnd={() => console.log("방송 종료")}
+                onEnd={() => setIsEndConfirmOpen(true)}
               />
             </ScreenShareArea>
           </div>
@@ -405,6 +407,16 @@ const RealtimeDashboard: React.FC = () => {
           isOpen={isPersonnelOpen}
           onClose={closePersonnel}
           students={students}
+        />
+        <EndBroadcastConfirmModal
+          isOpen={isEndConfirmOpen}
+          onClose={() => setIsEndConfirmOpen(false)}
+          onConfirm={() => {
+            setIsEndConfirmOpen(false);
+            stopScreenShare();
+            stopCamera();
+            console.log("방송 종료됨");
+          }}
         />
       </div>
     </div>
