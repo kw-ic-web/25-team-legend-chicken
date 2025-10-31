@@ -16,7 +16,7 @@ const ProfessorHeader: React.FC = () => {
         className="absolute inset-0"
         style={{
           backgroundImage:
-            "linear-gradient(-60deg, #3A6EFF 0% 70%, #1089E3 70% 75%, #07CDAC 75% 100%)",
+            "linear-gradient(-60deg, #07CDAC 0% 30%, #1089E3 30% 35%, #3A6EFF 35% 100%)",
         }}
       ></div>
 

@@ -7,7 +7,7 @@ const Header: React.FC = () => {
       className="text-white py-4 px-6 shadow-lg"
       style={{
         backgroundImage:
-          "linear-gradient(-60deg, rgba(37,99,235,1) 0%, rgba(37,99,235,1) 50%, rgba(34,197,94,1) 100%)",
+          "linear-gradient(-60deg, #07CDAC 0% 30%, #1089E3 30% 35%, #3A6EFF 35% 100%)",
       }}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-center">
