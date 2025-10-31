@@ -581,6 +581,100 @@ paths:
         '404':
           description: 강좌를 찾을 수 없음
 
+  /api/professor/lectures/{lectureId}/classes/{classId}:
+    get:
+      tags: [Professor]
+      summary: 특정 클래스 정보 조회
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 클래스 정보 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lecture_id:
+                    type: string
+                    example: LEC-A2787F9D
+                  lecture_name:
+                    type: string
+                    example: 파이썬 프로그래밍
+                  class:
+                    $ref: '#/components/schemas/Class'
+        '403':
+          description: 권한 없음
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+
+  /api/professor/lectures/{lectureId}/classes/{classId}/pdf:
+    get:
+      tags: [Professor]
+      summary: 특정 클래스의 PDF 목록 조회
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: PDF 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lecture_id:
+                    type: string
+                    example: LEC-A2787F9D
+                  lecture_name:
+                    type: string
+                    example: 파이썬 프로그래밍
+                  class_id:
+                    type: number
+                    example: 1
+                  class_title:
+                    type: string
+                    example: 파이썬 기초
+                  pdf_count:
+                    type: number
+                    example: 2
+                  pdfs:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - "https://example.com/python-basic.pdf"
+                      - "/uploads/pdfs/pdf-1760116004480-592477653.pdf"
+        '403':
+          description: 권한 없음
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+
   /api/professor/lectures/{lectureId}/classes/{classId}/uploadpdf:
     post:
       tags: [Professor]
@@ -641,6 +735,122 @@ paths:
           description: 권한 없음
         '404':
           description: 강좌 또는 클래스를 찾을 수 없음
+
+  /api/professor/lectures/{lectureId}/classes/{classId}/report:
+    get:
+      tags: [Professor]
+      summary: 분석 리포트 생성 (GPT 활용)
+      description: 가상의 학생 질문 데이터를 기반으로 GPT가 강의 분석 리포트를 생성합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 리포트 생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 분석 리포트가 성공적으로 생성되었습니다.
+                  lecture_id:
+                    type: string
+                    example: LEC-A2787F9D
+                  lecture_name:
+                    type: string
+                    example: 파이썬 프로그래밍
+                  class_id:
+                    type: number
+                    example: 1
+                  class_title:
+                    type: string
+                    example: 파이썬 기초
+                  generated_at:
+                    type: string
+                    format: date-time
+                    example: 2024-01-15T10:00:00.000Z
+                  analysis_period:
+                    type: object
+                    properties:
+                      start_date:
+                        type: string
+                        format: date-time
+                      end_date:
+                        type: string
+                        format: date-time
+                  student_count:
+                    type: number
+                    example: 30
+                  questions_analyzed:
+                    type: number
+                    example: 4
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        student_name:
+                          type: string
+                          example: 김학생
+                        question:
+                          type: string
+                          example: 파이썬 기초에 대해 제가 이해한 게 맞는지 확인하고 싶습니다.
+                        timestamp:
+                          type: string
+                          format: date-time
+                  report:
+                    type: object
+                    properties:
+                      summary:
+                        type: string
+                        description: GPT가 생성한 상세한 분석 리포트 내용
+                        example: |
+                          1. 질문 분석 요약
+                          - 학생들의 질문 패턴을 분석한 결과...
+                          
+                          2. 학습 이해도 평가
+                          - 전반적인 이해도는 중상 수준...
+                          
+                          3. 개선 제안
+                          - 추가 자료 제공 권장...
+                          
+                          4. 다음 주차 준비 사항
+                          - 실습 예제를 미리 준비...
+                      sections:
+                        type: object
+                        properties:
+                          question_analysis:
+                            type: string
+                            example: 질문 분석 요약이 포함되어 있습니다.
+                          understanding_level:
+                            type: string
+                            example: 학습 이해도 평가가 포함되어 있습니다.
+                          improvement_suggestions:
+                            type: string
+                            example: 개선 제안이 포함되어 있습니다.
+                          next_week_preparation:
+                            type: string
+                            example: 다음 주차 준비 사항이 포함되어 있습니다.
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+        '500':
+          description: 서버 오류 또는 OpenAI API 오류
 
   # ==================== 학생 API ====================
   /api/student/join-lecture/{lectureId}:
