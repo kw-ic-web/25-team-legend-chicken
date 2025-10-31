@@ -3,6 +3,9 @@ const bodyParser = require("body-parser"); // 클라이언트가 보내는 요�
 const cors = require("cors");
 require("dotenv").config(); // .env 파일에 저장해 둔 환경 변수들을 process.env 객체로 불러와 코드에서 사용할 수 있게 함
 const { connectToDatabase } = require("./config/db"); // ./config/db.js 파일에 별도로 작성된 데이터베이스 연결 함수를 가져옴
+const swaggerUi = require("swagger-ui-express");
+const YAML = require("yamljs");
+const swaggerDocument = YAML.load("./docs/swagger.yaml");
 
 // 라우터
 const authRouter = require("./routes/auth"); // 회원가입, 로그인 등 인증 관련 API
@@ -25,6 +28,9 @@ app.use("/uploads", express.static("uploads")); // '/uploads' 경로로 들어�
 
 // 프론트엔드 정적 파일 서빙
 app.use(express.static("public"));
+
+// Swagger API 문서
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // DB 연결
 connectToDatabase(process.env.MONGODB_URI);
