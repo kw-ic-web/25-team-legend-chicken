@@ -13,7 +13,7 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
 }) => {
   return (
     <div className="flex-1 p-6 relative">
-      <div className="w-full h-full rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden">
+      <div className="w-full h-full rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden relative">
         {isSharing ? (
           <video
             ref={videoRef as React.RefObject<HTMLVideoElement>}
@@ -24,6 +24,11 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
           />
         ) : (
           <span className="text-gray-500">화면 공유 영역</span>
+        )}
+        {isSharing && (
+          <div className="absolute top-3 right-3 px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-semibold shadow-sm">
+            공유 중
+          </div>
         )}
       </div>
       {children}
