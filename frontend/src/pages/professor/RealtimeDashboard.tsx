@@ -43,6 +43,7 @@ const RealtimeDashboard: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const isStartingShareRef = useRef(false);
 
   const [questions, setQuestions] = useState<Question[]>([
     {
@@ -193,6 +194,12 @@ const RealtimeDashboard: React.FC = () => {
   }, []);
 
   const startScreenShare = useCallback(async () => {
+    // 화면공유 시작 플래그 설정 (visibilitychange 무시)
+    isStartingShareRef.current = true;
+    setTimeout(() => {
+      isStartingShareRef.current = false;
+    }, 3000); // 3초 후 플래그 해제
+
     try {
       const mediaDevices = navigator.mediaDevices as MediaDevices & {
         getDisplayMedia?: (
@@ -216,6 +223,16 @@ const RealtimeDashboard: React.FC = () => {
       if (shareVideoRef.current) {
         shareVideoRef.current.srcObject =
           displayStream as unknown as MediaStream;
+        // 비디오 재생 보장
+        shareVideoRef.current.onloadedmetadata = () => {
+          if (shareVideoRef.current) {
+            shareVideoRef.current.play().catch(console.error);
+          }
+        };
+        // 이미 로드되어 있으면 바로 재생
+        if (shareVideoRef.current.readyState >= 2) {
+          shareVideoRef.current.play().catch(console.error);
+        }
       }
       setIsSharing(true);
 
@@ -239,10 +256,57 @@ const RealtimeDashboard: React.FC = () => {
   const toggleMic = () => {
     if (streamRef.current) {
       const audioTracks = streamRef.current.getAudioTracks();
-      audioTracks.forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-      setIsMicOn(!isMicOn);
+      if (audioTracks.length > 0) {
+        const newState = !audioTracks[0].enabled;
+        audioTracks.forEach((track) => {
+          track.enabled = newState;
+        });
+        setIsMicOn(newState);
+      } else {
+        // audio track이 없으면 마이크만 다시 시작
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((audioStream) => {
+            if (streamRef.current) {
+              audioStream.getAudioTracks().forEach((newTrack) => {
+                streamRef.current!.addTrack(newTrack);
+              });
+              setIsMicOn(true);
+            } else {
+              streamRef.current = audioStream;
+              setIsMicOn(true);
+            }
+          })
+          .catch((error) => {
+            console.error("마이크 접근 실패:", error);
+            const err = error as { name?: string };
+            if (err?.name === "NotAllowedError") {
+              showError("마이크 권한이 차단되어 있어요.");
+            } else {
+              showError("마이크를 시작할 수 없어요.");
+            }
+          });
+      }
+    } else {
+      // 스트림이 없으면 마이크만 시작
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((audioStream) => {
+          streamRef.current = audioStream;
+          setIsMicOn(true);
+          if (audioStream.getAudioTracks().length > 0) {
+            startAudioLevelMonitoring(audioStream);
+          }
+        })
+        .catch((error) => {
+          console.error("마이크 접근 실패:", error);
+          const err = error as { name?: string };
+          if (err?.name === "NotAllowedError") {
+            showError("마이크 권한이 차단되어 있어요.");
+          } else {
+            showError("마이크를 시작할 수 없어요.");
+          }
+        });
     }
   };
 
@@ -251,17 +315,94 @@ const RealtimeDashboard: React.FC = () => {
       const videoTracks = streamRef.current.getVideoTracks();
       if (videoTracks.length > 0) {
         // 기존 스트림이 있으면 video track만 토글
+        const newState = !videoTracks[0].enabled;
         videoTracks.forEach((track) => {
-          track.enabled = !track.enabled;
+          track.enabled = newState;
         });
-        setIsCameraOn(!isCameraOn);
+        setIsCameraOn(newState);
+        // 비디오 요소에도 반영
+        if (videoRef.current) {
+          if (newState) {
+            // 카메라를 켤 때: 비디오 요소 강제 재로드
+            videoRef.current.srcObject = null;
+            // 다음 프레임에서 다시 설정
+            requestAnimationFrame(() => {
+              if (videoRef.current && streamRef.current) {
+                videoRef.current.srcObject = streamRef.current;
+                videoRef.current.onloadedmetadata = () => {
+                  if (videoRef.current) {
+                    videoRef.current.play().catch(console.error);
+                  }
+                };
+                // 이미 로드되어 있으면 바로 재생
+                if (videoRef.current.readyState >= 2) {
+                  videoRef.current.play().catch(console.error);
+                }
+              }
+            });
+          } else {
+            // 카메라를 끌 때: 비디오 요소 비우기
+            videoRef.current.srcObject = null;
+          }
+        }
       } else {
-        // video track이 없으면 카메라 시작
-        startCamera();
+        // video track이 없으면 카메라만 다시 시작
+        navigator.mediaDevices
+          .getUserMedia({ video: true })
+          .then((videoStream) => {
+            if (streamRef.current) {
+              videoStream.getVideoTracks().forEach((newTrack) => {
+                streamRef.current!.addTrack(newTrack);
+              });
+              if (videoRef.current) {
+                videoRef.current.srcObject = streamRef.current;
+                videoRef.current.play().catch(console.error);
+              }
+              setIsCameraOn(true);
+            } else {
+              streamRef.current = videoStream;
+              if (videoRef.current) {
+                videoRef.current.srcObject = videoStream;
+                videoRef.current.play().catch(console.error);
+              }
+              setIsCameraOn(true);
+            }
+          })
+          .catch((error) => {
+            console.error("카메라 접근 실패:", error);
+            const err = error as { name?: string };
+            if (err?.name === "NotAllowedError") {
+              showError("카메라 권한이 차단되어 있어요.");
+            } else {
+              showError("카메라를 시작할 수 없어요.");
+            }
+          });
       }
     } else {
-      // 스트림이 없으면 카메라 시작
-      startCamera();
+      // 스트림이 없으면 카메라만 시작
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then((videoStream) => {
+          streamRef.current = videoStream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = videoStream;
+            videoRef.current.onloadedmetadata = () => {
+              if (videoRef.current) {
+                videoRef.current.play().catch(console.error);
+              }
+            };
+          }
+          setIsCameraOn(true);
+        })
+        .catch((error) => {
+          console.error("카메라 접근 실패:", error);
+          const err = error as { name?: string };
+          if (err?.name === "NotAllowedError") {
+            showError("카메라 권한이 차단되어 있어요.");
+          } else {
+            showError("카메라를 시작할 수 없어요.");
+          }
+        });
     }
   };
 
@@ -303,22 +444,31 @@ const RealtimeDashboard: React.FC = () => {
   // 탭 숨김/이탈 시 리소스 정리
   useEffect(() => {
     const onVisibility = () => {
+      // 화면공유 시작 중이면 무시 (getDisplayMedia 호출 시 일시적으로 hidden이 될 수 있음)
+      if (isStartingShareRef.current) return;
+
       if (document.hidden) {
-        stopScreenShare();
-        stopCamera();
+        // 화면공유 중이 아니면 정리
+        if (!isSharing) {
+          stopScreenShare();
+          stopCamera();
+        }
       }
     };
+
     const onBeforeUnload = () => {
       stopScreenShare();
       stopCamera();
     };
+
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("beforeunload", onBeforeUnload);
+
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
-  }, [stopCamera, stopScreenShare]);
+  }, [stopCamera, stopScreenShare, isSharing]);
 
   return (
     <div className="min-h-screen bg-gray-50">
