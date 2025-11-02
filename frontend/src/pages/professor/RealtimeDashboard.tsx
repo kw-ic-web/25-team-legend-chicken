@@ -247,9 +247,20 @@ const RealtimeDashboard: React.FC = () => {
   };
 
   const toggleCamera = () => {
-    if (isCameraOn) {
-      stopCamera();
+    if (streamRef.current) {
+      const videoTracks = streamRef.current.getVideoTracks();
+      if (videoTracks.length > 0) {
+        // 기존 스트림이 있으면 video track만 토글
+        videoTracks.forEach((track) => {
+          track.enabled = !track.enabled;
+        });
+        setIsCameraOn(!isCameraOn);
+      } else {
+        // video track이 없으면 카메라 시작
+        startCamera();
+      }
     } else {
+      // 스트림이 없으면 카메라 시작
       startCamera();
     }
   };
