@@ -14,8 +14,16 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
   return (
     <div className="flex-1 p-6 relative">
       <div className="w-full h-full flex items-center justify-center">
-        {/* 화면 공유 영역 - 16:9 비율 고정 */}
-        <div className="w-full max-w-full aspect-video rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden relative">
+        {/* 화면 공유 영역 - 16:9 비율 고정, 높이 우선 제한 */}
+        <div
+          className="max-w-full rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden relative"
+          style={{
+            height: "60vh",
+            width: "calc(60vh * 16 / 9)",
+            maxHeight: "calc(100% - 3rem)",
+            maxWidth: "100%",
+          }}
+        >
           <video
             ref={videoRef as React.RefObject<HTMLVideoElement>}
             autoPlay
