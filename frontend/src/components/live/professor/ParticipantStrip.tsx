@@ -14,18 +14,17 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
     <div className="px-6 py-3 border-b border-gray-200">
       <div className="flex items-center space-x-3 overflow-x-auto">
         {/* 교수자 타일 */}
-        <div className="min-w-[160px] w-40 h-28 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center">
-          {isCameraOn ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-              style={{ transform: "scaleX(-1)" }}
-            />
-          ) : (
-            <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+        <div className="min-w-[160px] w-40 h-28 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center relative">
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className={`w-full h-full object-cover ${isCameraOn ? "visible" : "hidden"}`}
+            style={{ transform: "scaleX(-1)" }}
+          />
+          {!isCameraOn && (
+            <div className="absolute inset-0 w-full h-full bg-gray-300 flex items-center justify-center">
               <VideoOff className="w-8 h-8 text-gray-400" />
             </div>
           )}
