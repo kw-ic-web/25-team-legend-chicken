@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Mic, MicOff, Video, VideoOff, Send } from "lucide-react";
+import { Send } from "lucide-react";
+import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
+import ParticipantStrip from "../../components/live/professor/ParticipantStrip";
+import ScreenShareArea from "../../components/live/professor/ScreenShareArea";
+import LiveControls from "../../components/live/professor/LiveControls";
+import EndBroadcastConfirmModal from "../../components/modal/live/EndBroadcastConfirmModal";
+import Toast from "../../components/common/Toast";
 
 interface Question {
   id: number;
@@ -14,12 +20,30 @@ const RealtimeDashboard: React.FC = () => {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
   const [chatMessage, setChatMessage] = useState("");
+  const [isSharing, setIsSharing] = useState(false);
+  const [isPersonnelOpen, setIsPersonnelOpen] = useState(false);
+  const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
+  const showError = (message: string) => setToast({ message, type: "error" });
+  const [students] = useState(
+    Array.from({ length: 8 }).map((_, i) => ({
+      id: i + 1,
+      name: `수강생 ${i + 1}`,
+      email: `student${i + 1}@example.com`,
+    }))
+  );
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const shareVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const shareStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const isStartingShareRef = useRef(false);
 
   const [questions, setQuestions] = useState<Question[]>([
     {
@@ -85,8 +109,18 @@ const RealtimeDashboard: React.FC = () => {
       if (stream.getAudioTracks().length > 0) {
         startAudioLevelMonitoring(stream);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("웹캠 접근 실패:", error);
+      const err = error as { name?: string };
+      if (err?.name === "NotAllowedError") {
+        showError(
+          "카메라/마이크 권한이 차단되어 있어요. 브라우저 권한을 허용해 주세요."
+        );
+      } else if (err?.name === "NotFoundError") {
+        showError("카메라 또는 마이크를 찾을 수 없어요.");
+      } else {
+        showError("웹캠을 시작할 수 없어요. 장치와 권한을 확인해 주세요.");
+      }
     }
   }, []);
 
@@ -147,21 +181,228 @@ const RealtimeDashboard: React.FC = () => {
     analyserRef.current = null;
   };
 
+  // 화면 공유 중지/시작
+  const stopScreenShare = useCallback(() => {
+    if (shareStreamRef.current) {
+      shareStreamRef.current.getTracks().forEach((t) => t.stop());
+      shareStreamRef.current = null;
+    }
+    if (shareVideoRef.current) {
+      shareVideoRef.current.srcObject = null;
+    }
+    setIsSharing(false);
+  }, []);
+
+  const startScreenShare = useCallback(async () => {
+    // 화면공유 시작 플래그 설정 (visibilitychange 무시)
+    isStartingShareRef.current = true;
+    setTimeout(() => {
+      isStartingShareRef.current = false;
+    }, 3000); // 3초 후 플래그 해제
+
+    try {
+      const mediaDevices = navigator.mediaDevices as MediaDevices & {
+        getDisplayMedia?: (
+          constraints?: MediaStreamConstraints
+        ) => Promise<MediaStream>;
+      };
+      const getDisplay = mediaDevices.getDisplayMedia
+        ? mediaDevices.getDisplayMedia.bind(mediaDevices)
+        : // 일부 브라우저 호환용
+          (
+            navigator as unknown as {
+              getDisplayMedia: () => Promise<MediaStream>;
+            }
+          ).getDisplayMedia;
+
+      const displayStream = await getDisplay({
+        video: { frameRate: 30 },
+        audio: true,
+      });
+      shareStreamRef.current = displayStream;
+      if (shareVideoRef.current) {
+        shareVideoRef.current.srcObject =
+          displayStream as unknown as MediaStream;
+        // 비디오 재생 보장
+        shareVideoRef.current.onloadedmetadata = () => {
+          if (shareVideoRef.current) {
+            shareVideoRef.current.play().catch(console.error);
+          }
+        };
+        // 이미 로드되어 있으면 바로 재생
+        if (shareVideoRef.current.readyState >= 2) {
+          shareVideoRef.current.play().catch(console.error);
+        }
+      }
+      setIsSharing(true);
+
+      // 사용자가 공유를 중지했을 때 이벤트 처리
+      const [track] = displayStream.getVideoTracks();
+      track.addEventListener("ended", () => {
+        stopScreenShare();
+      });
+    } catch (e: unknown) {
+      console.error("화면 공유 실패:", e);
+      setIsSharing(false);
+      const err = e as { name?: string };
+      if (err?.name === "NotAllowedError") {
+        showError("화면 공유가 취소되었어요. 다시 시도해 주세요.");
+      } else {
+        showError("화면 공유를 시작할 수 없어요.");
+      }
+    }
+  }, [stopScreenShare]);
+
   const toggleMic = () => {
     if (streamRef.current) {
       const audioTracks = streamRef.current.getAudioTracks();
-      audioTracks.forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-      setIsMicOn(!isMicOn);
+      if (audioTracks.length > 0) {
+        const newState = !audioTracks[0].enabled;
+        audioTracks.forEach((track) => {
+          track.enabled = newState;
+        });
+        setIsMicOn(newState);
+      } else {
+        // audio track이 없으면 마이크만 다시 시작
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((audioStream) => {
+            if (streamRef.current) {
+              audioStream.getAudioTracks().forEach((newTrack) => {
+                streamRef.current!.addTrack(newTrack);
+              });
+              setIsMicOn(true);
+            } else {
+              streamRef.current = audioStream;
+              setIsMicOn(true);
+            }
+          })
+          .catch((error) => {
+            console.error("마이크 접근 실패:", error);
+            const err = error as { name?: string };
+            if (err?.name === "NotAllowedError") {
+              showError("마이크 권한이 차단되어 있어요.");
+            } else {
+              showError("마이크를 시작할 수 없어요.");
+            }
+          });
+      }
+    } else {
+      // 스트림이 없으면 마이크만 시작
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((audioStream) => {
+          streamRef.current = audioStream;
+          setIsMicOn(true);
+          if (audioStream.getAudioTracks().length > 0) {
+            startAudioLevelMonitoring(audioStream);
+          }
+        })
+        .catch((error) => {
+          console.error("마이크 접근 실패:", error);
+          const err = error as { name?: string };
+          if (err?.name === "NotAllowedError") {
+            showError("마이크 권한이 차단되어 있어요.");
+          } else {
+            showError("마이크를 시작할 수 없어요.");
+          }
+        });
     }
   };
 
   const toggleCamera = () => {
-    if (isCameraOn) {
-      stopCamera();
+    if (streamRef.current) {
+      const videoTracks = streamRef.current.getVideoTracks();
+      if (videoTracks.length > 0) {
+        // 기존 스트림이 있으면 video track만 토글
+        const newState = !videoTracks[0].enabled;
+        videoTracks.forEach((track) => {
+          track.enabled = newState;
+        });
+        setIsCameraOn(newState);
+        // 비디오 요소에도 반영
+        if (videoRef.current) {
+          if (newState) {
+            // 카메라를 켤 때: 비디오 요소 강제 재로드
+            videoRef.current.srcObject = null;
+            // 다음 프레임에서 다시 설정
+            requestAnimationFrame(() => {
+              if (videoRef.current && streamRef.current) {
+                videoRef.current.srcObject = streamRef.current;
+                videoRef.current.onloadedmetadata = () => {
+                  if (videoRef.current) {
+                    videoRef.current.play().catch(console.error);
+                  }
+                };
+                // 이미 로드되어 있으면 바로 재생
+                if (videoRef.current.readyState >= 2) {
+                  videoRef.current.play().catch(console.error);
+                }
+              }
+            });
+          } else {
+            // 카메라를 끌 때: 비디오 요소 비우기
+            videoRef.current.srcObject = null;
+          }
+        }
+      } else {
+        // video track이 없으면 카메라만 다시 시작
+        navigator.mediaDevices
+          .getUserMedia({ video: true })
+          .then((videoStream) => {
+            if (streamRef.current) {
+              videoStream.getVideoTracks().forEach((newTrack) => {
+                streamRef.current!.addTrack(newTrack);
+              });
+              if (videoRef.current) {
+                videoRef.current.srcObject = streamRef.current;
+                videoRef.current.play().catch(console.error);
+              }
+              setIsCameraOn(true);
+            } else {
+              streamRef.current = videoStream;
+              if (videoRef.current) {
+                videoRef.current.srcObject = videoStream;
+                videoRef.current.play().catch(console.error);
+              }
+              setIsCameraOn(true);
+            }
+          })
+          .catch((error) => {
+            console.error("카메라 접근 실패:", error);
+            const err = error as { name?: string };
+            if (err?.name === "NotAllowedError") {
+              showError("카메라 권한이 차단되어 있어요.");
+            } else {
+              showError("카메라를 시작할 수 없어요.");
+            }
+          });
+      }
     } else {
-      startCamera();
+      // 스트림이 없으면 카메라만 시작
+      navigator.mediaDevices
+        .getUserMedia({ video: true })
+        .then((videoStream) => {
+          streamRef.current = videoStream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = videoStream;
+            videoRef.current.onloadedmetadata = () => {
+              if (videoRef.current) {
+                videoRef.current.play().catch(console.error);
+              }
+            };
+          }
+          setIsCameraOn(true);
+        })
+        .catch((error) => {
+          console.error("카메라 접근 실패:", error);
+          const err = error as { name?: string };
+          if (err?.name === "NotAllowedError") {
+            showError("카메라 권한이 차단되어 있어요.");
+          } else {
+            showError("카메라를 시작할 수 없어요.");
+          }
+        });
     }
   };
 
@@ -171,6 +412,8 @@ const RealtimeDashboard: React.FC = () => {
       setChatMessage("");
     }
   };
+
+  const closePersonnel = () => setIsPersonnelOpen(false);
 
   const handleAnswerQuestion = (questionId: number) => {
     setQuestions(
@@ -194,54 +437,41 @@ const RealtimeDashboard: React.FC = () => {
 
     return () => {
       stopCamera();
+      stopScreenShare();
     };
-  }, [startCamera, stopCamera]);
+  }, [startCamera, stopCamera, stopScreenShare]);
+
+  // 탭 숨김/이탈 시 리소스 정리
+  useEffect(() => {
+    const onVisibility = () => {
+      // 화면공유 시작 중이면 무시 (getDisplayMedia 호출 시 일시적으로 hidden이 될 수 있음)
+      if (isStartingShareRef.current) return;
+
+      if (document.hidden) {
+        // 화면공유 중이 아니면 정리
+        if (!isSharing) {
+          stopScreenShare();
+          stopCamera();
+        }
+      }
+    };
+
+    const onBeforeUnload = () => {
+      stopScreenShare();
+      stopCamera();
+    };
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [stopCamera, stopScreenShare, isSharing]);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 상단 네비게이션 */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <button className="p-1 hover:bg-gray-100 rounded">
-                  <svg
-                    className="w-4 h-4 text-gray-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
-                </button>
-                <span className="text-sm text-gray-600">학생 화면</span>
-                <button className="p-1 hover:bg-gray-100 rounded">
-                  <svg
-                    className="w-4 h-4 text-gray-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="flex h-[calc(100vh-80px)]">
         {/* 메인 콘텐츠 영역 */}
         <div className="flex-1 bg-white m-4 rounded-lg shadow-sm">
@@ -253,114 +483,24 @@ const RealtimeDashboard: React.FC = () => {
               </h1>
             </div>
 
-            {/* 강의 콘텐츠 */}
-            <div className="flex-1 p-6">
-              <div className="space-y-8">
-                {/* 프로그래밍 기초 섹션 */}
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-4 h-4 bg-green-500 rounded"></div>
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      프로그래밍 기초
-                    </h2>
-                  </div>
-                  <ul className="space-y-2 ml-7">
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">프로그래밍이란?</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">코딩 공부 하는 법</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">좋은 프로그램이란?</span>
-                    </li>
-                  </ul>
-                </div>
+            {/* 상단 참여자(웹캠) 스트립 */}
+            <ParticipantStrip isCameraOn={isCameraOn} videoRef={videoRef} />
 
-                {/* 파이썬 배우는 이유 섹션 */}
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-4 h-4 bg-green-500 rounded"></div>
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      파이썬 배우는 이유
-                    </h2>
-                  </div>
-                  <ul className="space-y-2 ml-7">
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">파이썬 장점</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">파이썬 활용 분야</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-black rounded-full"></div>
-                      <span className="text-gray-700">파이썬 언어 특징</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* 교수자 웹캠 영역 */}
-              <div className="absolute bottom-4 right-4 w-48 h-32 bg-gray-200 rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-gray-500 text-sm mb-2">교수자 얼굴</div>
-                  {isCameraOn ? (
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      muted
-                      playsInline
-                      className="w-full h-full object-cover rounded-lg"
-                      style={{ transform: "scaleX(-1)" }}
-                    />
-                  ) : (
-                    <div className="w-full h-20 bg-gray-300 rounded flex items-center justify-center">
-                      <VideoOff className="w-8 h-8 text-gray-400" />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* 하단 컨트롤 */}
-              <div className="absolute bottom-4 left-4 flex items-center space-x-4">
-                <button
-                  onClick={toggleMic}
-                  className={`p-3 rounded-full transition-colors ${
-                    isMicOn
-                      ? "bg-red-500 text-white"
-                      : "bg-gray-200 text-gray-600"
-                  }`}
-                >
-                  {isMicOn ? (
-                    <Mic className="w-5 h-5" />
-                  ) : (
-                    <MicOff className="w-5 h-5" />
-                  )}
-                </button>
-                <button
-                  onClick={toggleCamera}
-                  className={`p-3 rounded-full transition-colors ${
-                    isCameraOn
-                      ? "bg-blue-500 text-white"
-                      : "bg-gray-200 text-gray-600"
-                  }`}
-                >
-                  {isCameraOn ? (
-                    <Video className="w-5 h-5" />
-                  ) : (
-                    <VideoOff className="w-5 h-5" />
-                  )}
-                </button>
-                <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
-                  방송 종료
-                </button>
-              </div>
-            </div>
+            {/* 강의 콘텐츠(화면 공유 영역) */}
+            <ScreenShareArea isSharing={isSharing} videoRef={shareVideoRef}>
+              <LiveControls
+                isMicOn={isMicOn}
+                isCameraOn={isCameraOn}
+                isSharing={isSharing}
+                onToggleMic={toggleMic}
+                onToggleCamera={toggleCamera}
+                onToggleShare={() =>
+                  isSharing ? stopScreenShare() : startScreenShare()
+                }
+                onOpenPersonnel={() => setIsPersonnelOpen(true)}
+                onEnd={() => setIsEndConfirmOpen(true)}
+              />
+            </ScreenShareArea>
           </div>
         </div>
 
@@ -465,6 +605,29 @@ const RealtimeDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+        {/* 강의 인원 모달 */}
+        <LecturePersonnelModal
+          isOpen={isPersonnelOpen}
+          onClose={closePersonnel}
+          students={students}
+        />
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
+        <EndBroadcastConfirmModal
+          isOpen={isEndConfirmOpen}
+          onClose={() => setIsEndConfirmOpen(false)}
+          onConfirm={() => {
+            setIsEndConfirmOpen(false);
+            stopScreenShare();
+            stopCamera();
+            console.log("방송 종료됨");
+          }}
+        />
       </div>
     </div>
   );
