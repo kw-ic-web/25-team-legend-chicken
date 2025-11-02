@@ -16,7 +16,7 @@ const ProfessorHeader: React.FC = () => {
         className="absolute inset-0"
         style={{
           backgroundImage:
-            "linear-gradient(-60deg, #3A6EFF 0% 70%, #1089E3 70% 75%, #07CDAC 75% 100%)",
+            "linear-gradient(-60deg, #07CDAC 0% 30%, #1089E3 30% 35%, #3A6EFF 35% 100%)",
         }}
       ></div>
 
@@ -37,9 +37,9 @@ const ProfessorHeader: React.FC = () => {
             <Link
               key={item.path}
               to={item.path}
-              className={`text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 hover:bg-white/20 ${
+              className={`text-white font-medium px-4 py-2 rounded-lg inline-flex items-center h-10 transition-transform duration-200 hover:bg-white/20 ${
                 location.pathname === item.path
-                  ? "bg-white/30 font-semibold"
+                  ? "bg-white/30 font-semibold scale-105"
                   : "hover:bg-white/10"
               }`}
             >
