@@ -51,3 +51,4 @@ const StudentParticipantStrip: React.FC<Props> = ({
 };
 
 export default StudentParticipantStrip;
+
