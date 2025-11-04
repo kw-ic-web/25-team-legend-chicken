@@ -25,19 +25,14 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
-
-  useEffect(() => {
+  const [user, setUser] = useState<AuthUser | null>(() => {
     try {
       const raw = localStorage.getItem("lecq.auth");
-      if (raw) {
-        const parsed = JSON.parse(raw) as AuthUser;
-        setUser(parsed);
-      }
+      return raw ? (JSON.parse(raw) as AuthUser) : null;
     } catch (_e) {
-      // ignore
+      return null;
     }
-  }, []);
+  });
 
   const login = (nextUser: AuthUser) => {
     setUser(nextUser);

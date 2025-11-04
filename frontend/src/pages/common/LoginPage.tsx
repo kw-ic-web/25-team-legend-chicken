@@ -4,6 +4,8 @@ import UserTypeSelector from "../../components/auth/UserTypeSelector";
 import LoginForm from "../../components/auth/LoginForm";
 import CustomerSupport from "../../components/auth/CustomerSupport";
 import { useAuth } from "../../contexts/AuthContext";
+import { loginUser } from "../../api/auth";
+import Toast from "../../components/common/Toast";
 
 const LoginPage: React.FC = () => {
   const [userType, setUserType] = useState<"student" | "teacher">("student");
@@ -16,23 +18,57 @@ const LoginPage: React.FC = () => {
   const location = useLocation();
   const { login } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: 실제 API 연동 필요. 지금은 데모용으로 로컬 상태 저장
-    const role = userType === "teacher" ? "professor" : "student";
-    login({ id: formData.id || "user", name: "User", role });
+    try {
+      const res = await loginUser({
+        email: formData.id,
+        password: formData.password,
+      });
 
-    const state = location.state as { from?: { pathname?: string } } | null;
-    const from = state?.from?.pathname;
-    if (from && !from.startsWith("/login")) {
-      navigate(from, { replace: true });
-      return;
-    }
+      if (!res.success || !res.user || !res.token) {
+        setToast({
+          message: res.message || "로그인에 실패했습니다.",
+          type: "error",
+        });
+        return;
+      }
 
-    if (role === "student") {
-      navigate("/student/dashboard", { replace: true });
-    } else {
-      navigate("/professor/dashboard", { replace: true });
+      // 토큰 저장
+      localStorage.setItem("lecq.token", res.token);
+
+      const role = (
+        res.user.user_type === "professor" ? "professor" : "student"
+      ) as "student" | "professor";
+      login({ id: res.user.id, name: res.user.name, role });
+
+      // 성공 토스트 후 자연스러운 페이지 전환
+      setToast({ message: "로그인 성공!", type: "success" });
+
+      const state = location.state as { from?: { pathname?: string } } | null;
+      const userType = res.user.user_type;
+      const from = state?.from?.pathname;
+      setTimeout(() => {
+        if (from && !from.startsWith("/login")) {
+          navigate(from, { replace: true });
+          return;
+        }
+
+        if ((userType === "student" ? "student" : "professor") === "student") {
+          navigate("/student/dashboard", { replace: true });
+        } else {
+          navigate("/professor/dashboard", { replace: true });
+        }
+      }, 800);
+    } catch (error) {
+      const message =
+        (error as Error)?.message || "로그인 중 오류가 발생했습니다.";
+      setToast({ message, type: "error" });
     }
   };
 
@@ -45,6 +81,13 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white flex flex-col relative">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* 로그인 섹션 (화면 높이 채움) */}
       <div className="min-h-screen flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md">

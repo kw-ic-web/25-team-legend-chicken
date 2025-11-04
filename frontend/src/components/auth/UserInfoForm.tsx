@@ -7,6 +7,7 @@ import type {
   SelectStyles,
   UserInfoFormProps,
 } from "../../types";
+import { registerUser } from "../../api/auth";
 
 const UserInfoForm: React.FC<UserInfoFormProps> = ({ onNext, onPrev }) => {
   const [formData, setFormData] = useState<UserInfoFormData>({
@@ -273,13 +274,40 @@ const UserInfoForm: React.FC<UserInfoFormProps> = ({ onNext, onPrev }) => {
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // 유효성 검사 실행
     if (validateForm()) {
-      console.log("회원가입 정보:", formData);
-      onNext();
+      try {
+        const email = `${formData.email}@${
+          formData.emailDomain === "직접입력" ? "" : formData.emailDomain
+        }`;
+        const phone = `${formData.phone1}-${formData.phone2}-${formData.phone3}`;
+        const user_type =
+          formData.userType === "instructor" ? "professor" : "student";
+
+        const res = await registerUser({
+          name: formData.name,
+          email,
+          phone,
+          password: formData.password,
+          user_type,
+        });
+
+        if (res.success) {
+          onNext();
+        } else {
+          setValidationErrors([
+            res.message || "회원가입 중 오류가 발생했습니다.",
+          ]);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      } catch (err: unknown) {
+        const message = (err as Error)?.message || "회원가입에 실패했습니다.";
+        setValidationErrors([message]);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } else {
       // 오류가 있으면 스크롤을 맨 위로 이동하여 오류 메시지를 보여줌
       window.scrollTo({ top: 0, behavior: "smooth" });
