@@ -27,6 +27,7 @@ const LectureSchema = new mongoose.Schema({
   target_audience: { type: String },
   references: [ReferenceSchema],
   classes: [ClassSchema], // 주차별 강의 목록
+  thumbnail: { type: String, default: "" }, // 강의 썸네일 이미지 URL
 
   // 내부 관리용
   professor_id: {
