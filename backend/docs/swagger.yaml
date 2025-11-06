@@ -286,6 +286,33 @@ paths:
         '419':
           description: 토큰 만료
 
+  /api/logout:
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 로그아웃 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 로그아웃이 완료되었습니다.
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 유효하지 않은 토큰
+        '500':
+          description: 서버 오류
+
   # ==================== 교수 API ====================
   /api/professor/lectures/create:
     post:

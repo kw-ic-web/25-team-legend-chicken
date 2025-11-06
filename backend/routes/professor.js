@@ -610,7 +610,12 @@ ${mockQuestions.map((q, idx) => `${idx + 1}. [${q.student_name}] ${q.question}`)
 
       // GPT API 호출 (타임아웃 및 에러 처리 개선)
       let reportContent;
+      let usage = null; // 토큰 사용량 저장
       try {
+        console.log("📤 GPT API 호출 시작...");
+        console.log(`📋 요청 모델: gpt-4o-mini`);
+        console.log(`📊 요청 토큰 수 (예상): ${Math.ceil(prompt.length / 4)}`); // 대략적인 토큰 수 추정
+        
         const completion = await Promise.race([
           openai.chat.completions.create({
             model: "gpt-4o-mini",
@@ -632,10 +637,22 @@ ${mockQuestions.map((q, idx) => `${idx + 1}. [${q.student_name}] ${q.question}`)
           ),
         ]);
 
+        // 토큰 사용량 확인
+        usage = completion.usage;
+        console.log("✅ GPT API 호출 성공!");
+        console.log(`📊 토큰 사용량:`);
+        console.log(`   - Prompt 토큰: ${usage.prompt_tokens}`);
+        console.log(`   - Completion 토큰: ${usage.completion_tokens}`);
+        console.log(`   - 총 토큰: ${usage.total_tokens}`);
+        console.log(`   - 예상 비용: $${((usage.prompt_tokens * 0.00015) + (usage.completion_tokens * 0.0006)) / 1000} (대략적)`);
+
         reportContent = completion.choices[0].message.content;
       } catch (gptError) {
         // 타임아웃 또는 네트워크 오류 시 기본 리포트 생성
-        console.error("GPT API 호출 오류:", gptError);
+        console.error("❌ GPT API 호출 오류:", gptError.message || gptError);
+        if (gptError.response) {
+          console.error("   상세 정보:", gptError.response.data);
+        }
         reportContent = `## 리포트 생성 중 오류 발생
 
 GPT API 호출 중 문제가 발생하여 기본 리포트를 제공합니다.
@@ -665,7 +682,7 @@ GPT API 호출 중 문제가 발생하여 기본 리포트를 제공합니다.
       }
 
       // 리포트 응답 구성
-      res.status(200).json({
+      const response = {
         message: "분석 리포트가 성공적으로 생성되었습니다.",
         lecture_id: lecture.lecture_id,
         lecture_name: lecture.name,
@@ -688,7 +705,19 @@ GPT API 호출 중 문제가 발생하여 기본 리포트를 제공합니다.
             next_week_preparation: "다음 주차 준비 사항이 포함되어 있습니다.",
           },
         },
-      });
+      };
+
+      // 토큰 사용량이 있으면 응답에 포함
+      if (usage) {
+        response.usage = {
+          prompt_tokens: usage.prompt_tokens,
+          completion_tokens: usage.completion_tokens,
+          total_tokens: usage.total_tokens,
+          estimated_cost: ((usage.prompt_tokens * 0.00015) + (usage.completion_tokens * 0.0006)) / 1000, // 대략적인 비용 (USD)
+        };
+      }
+
+      res.status(200).json(response);
     } catch (err) {
       console.error("리포트 생성 오류:", err);
       
