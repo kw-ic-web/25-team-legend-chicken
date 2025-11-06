@@ -114,6 +114,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Class'
+        thumbnail:
+          type: string
+          example: /uploads/images/thumbnail-1234567890-123456789.jpg
         professor_id:
           type: string
         student_id_list:
@@ -286,6 +289,133 @@ paths:
         '419':
           description: 토큰 만료
 
+  /api/logout:
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 로그아웃 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 로그아웃이 완료되었습니다.
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 유효하지 않은 토큰
+        '500':
+          description: 서버 오류
+
+  /api/myinfo:
+    get:
+      tags: [Auth]
+      summary: 내 정보 조회
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 내 정보 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                      user_type:
+                        type: string
+                      profile_image:
+                        type: string
+                        example: /uploads/images/profile_image-1234567890-123456789.jpg
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '404':
+          description: 사용자를 찾을 수 없습니다.
+
+    put:
+      tags: [Auth]
+      summary: 내 정보 수정
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: 홍길동
+                phone:
+                  type: string
+                  example: 010-1234-5678
+                password:
+                  type: string
+                  format: password
+                  example: newpassword123
+                profile_image:
+                  type: string
+                  format: binary
+                  description: 프로필 사진 (jpg, jpeg, png, gif, webp)
+      responses:
+        '200':
+          description: 정보 수정 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 정보가 성공적으로 수정되었습니다.
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                      user_type:
+                        type: string
+                      profile_image:
+                        type: string
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '404':
+          description: 사용자를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+
   # ==================== 교수 API ====================
   /api/professor/lectures/create:
     post:
@@ -296,7 +426,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               type: object
               properties:
@@ -328,15 +458,17 @@ paths:
                   type: string
                   example: 컴퓨터공학 전공자
                 references:
-                  type: array
-                  items:
-                    type: object
-                  example: []
+                  type: string
+                  description: JSON 문자열 또는 JSON 배열
+                  example: '[{"title":"파이썬 프로그래밍","author":"홍길동","publisher":"한빛미디어"}]'
                 classes:
-                  type: array
-                  items:
-                    type: object
-                  example: []
+                  type: string
+                  description: JSON 문자열 또는 JSON 배열
+                  example: '[{"id":1,"title":"파이썬 기초","description":"파이썬 문법과 기본 개념","date":"2024-01-15T10:00:00.000Z","materials":[]}]'
+                thumbnail:
+                  type: string
+                  format: binary
+                  description: 강의 썸네일 이미지 (jpg, jpeg, png, gif, webp)
       responses:
         '201':
           description: 강의 개설 성공
