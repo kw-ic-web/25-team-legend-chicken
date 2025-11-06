@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require("../models/user");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { authenticateToken } = require("../middleware/auth");
 
 // 회원가입
 router.post("/register", async (req, res) => {
@@ -207,6 +208,28 @@ router.get("/verify", async (req, res) => {
     console.error("토큰 검증 오류:", error);
     return res.status(500).json({
       code: 500,
+      success: false,
+      message: "서버 오류가 발생했습니다.",
+    });
+  }
+});
+
+// 로그아웃
+router.post("/logout", authenticateToken, async (req, res) => {
+  try {
+    // JWT는 stateless이므로 서버 측에서 토큰을 무효화할 수 없습니다.
+    // 클라이언트에서 토큰을 삭제하도록 안내합니다.
+    // 향후 토큰 블랙리스트 기능을 추가할 수 있습니다.
+    
+    console.log("로그아웃 요청:", { email: req.user.email });
+
+    return res.json({
+      success: true,
+      message: "로그아웃이 완료되었습니다.",
+    });
+  } catch (error) {
+    console.error("로그아웃 오류:", error);
+    return res.status(500).json({
       success: false,
       message: "서버 오류가 발생했습니다.",
     });
