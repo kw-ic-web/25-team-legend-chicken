@@ -5,12 +5,14 @@ const User = require("../models/user");
 const { authenticateToken } = require("../middleware/auth");
 const crypto = require("crypto");
 const upload = require("../config/upload");
+const { uploadThumbnail } = require("../config/uploadImage");
 const OpenAI = require("openai");
 
 // 강의 개설
 router.post(
   "/lectures/create",
   authenticateToken,
+  uploadThumbnail.single("thumbnail"),
   async (req, res) => {
     try {
       const user = req.user;
@@ -39,6 +41,36 @@ router.post(
         classes, // 주차별 강의 목록
       } = req.body;
 
+      // 썸네일 이미지 URL 설정
+      let thumbnailUrl = "";
+      if (req.file) {
+        thumbnailUrl = `/uploads/images/${req.file.filename}`;
+      }
+
+      // references 파싱 (JSON 문자열인 경우)
+      let parsedReferences = [];
+      if (references) {
+        try {
+          parsedReferences = typeof references === "string" 
+            ? JSON.parse(references) 
+            : references;
+        } catch (e) {
+          parsedReferences = [];
+        }
+      }
+
+      // classes 파싱 (JSON 문자열인 경우)
+      let parsedClasses = [];
+      if (classes) {
+        try {
+          parsedClasses = typeof classes === "string" 
+            ? JSON.parse(classes) 
+            : classes;
+        } catch (e) {
+          parsedClasses = [];
+        }
+      }
+
       const lecture = new Lecture({
         lecture_id,
         name,
@@ -50,8 +82,9 @@ router.post(
         lecture_description,
         learning_method,
         target_audience,
-        references,
-        classes: classes || [], // 주차별 강의 목록 (없으면 빈 배열)
+        references: parsedReferences,
+        classes: parsedClasses || [], // 주차별 강의 목록 (없으면 빈 배열)
+        thumbnail: thumbnailUrl,
         professor_id: user._id,
         student_id_list: [],
       });
