@@ -24,8 +24,6 @@ const ProfessorDashboard: React.FC = () => {
       setIsLoading(true);
       try {
         const response = await getLectures();
-        console.log("API 응답:", response);
-        console.log("강의 목록:", response.lectures);
         setLectures(response.lectures || []);
       } catch (error) {
         console.error("강의 목록 조회 오류:", error);
@@ -94,12 +92,7 @@ const ProfessorDashboard: React.FC = () => {
 
   // 필터링 및 검색
   const filteredLectures = lectures
-    .map((lecture) => {
-      console.log("변환 전 강의:", lecture);
-      const transformed = transformLectureToCard(lecture);
-      console.log("변환 후 강의:", transformed);
-      return transformed;
-    })
+    .map((lecture) => transformLectureToCard(lecture))
     .filter((lecture) => {
       // 검색어 필터
       if (searchTerm.trim()) {

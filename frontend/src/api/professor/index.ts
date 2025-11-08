@@ -109,3 +109,38 @@ export async function getClasses(
     }
   );
 }
+
+export type Student = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+};
+
+export type GetMembersResponse = {
+  lecture_id: string;
+  lecture_name: string;
+  student_count: number;
+  max_students: number;
+  students: Student[];
+  invite_link: string;
+};
+
+export async function getMembers(
+  lectureId: string
+): Promise<GetMembersResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<GetMembersResponse>(
+    `/api/professor/lectures/${lectureId}/check_member`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
