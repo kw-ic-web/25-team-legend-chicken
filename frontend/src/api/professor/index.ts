@@ -84,3 +84,28 @@ export async function getLectures(): Promise<GetLecturesResponse> {
     },
   });
 }
+
+export type GetClassesResponse = {
+  lecture_id: string;
+  lecture_name: string;
+  classes: LectureClass[];
+};
+
+export async function getClasses(
+  lectureId: string
+): Promise<GetClassesResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<GetClassesResponse>(
+    `/api/professor/lectures/${lectureId}/classes`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
