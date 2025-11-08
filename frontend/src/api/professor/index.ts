@@ -114,7 +114,7 @@ export type Student = {
   id: string;
   name: string;
   email: string;
-  phone?: string;
+  phone: string;
 };
 
 export type GetMembersResponse = {
