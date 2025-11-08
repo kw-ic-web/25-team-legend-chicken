@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 interface LectureCardProps {
-  id: number;
+  id: number | string;
   title: string;
   instructor: string;
   participants: number;
