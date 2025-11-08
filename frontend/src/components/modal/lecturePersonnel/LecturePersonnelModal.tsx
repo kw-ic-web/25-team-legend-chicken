@@ -4,7 +4,7 @@ import LinkShareModal from "./LinkShareModal";
 import IdInviteModal from "./IdInviteModal";
 
 interface Student {
-  id: number;
+  id: number | string;
   name: string;
   email: string;
 }

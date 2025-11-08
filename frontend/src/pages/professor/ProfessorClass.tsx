@@ -6,7 +6,7 @@ import BroadcastAgreementModal from "../../components/modal/startBroadcast/Broad
 import LectureReservationModal from "../../components/modal/reserveBroadcast/LectureReservationModal";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
 import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
-import { getClasses } from "../../api/professor";
+import { getClasses, getMembers } from "../../api/professor";
 import Toast from "../../components/common/Toast";
 
 const ProfessorClass: React.FC = () => {
@@ -35,33 +35,52 @@ const ProfessorClass: React.FC = () => {
       items: Array<{ name: string; size: string; url?: string }>;
     }>
   >([]);
+  const [students, setStudents] = useState<
+    Array<{ id: number | string; name: string; email: string }>
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
 
-  // 클래스 목록 조회
+  // 클래스 목록 및 강좌 정보 조회
   useEffect(() => {
-    const fetchClasses = async () => {
+    const fetchData = async () => {
       if (!id) return;
 
       setIsLoading(true);
       try {
-        const response = await getClasses(id);
-        console.log("클래스 목록 응답:", response);
+        // 클래스 목록과 멤버 정보를 병렬로 조회
+        const [classesResponse, membersResponse] = await Promise.all([
+          getClasses(id),
+          getMembers(id).catch(() => null), // 실패해도 계속 진행
+        ]);
 
         // 강좌 정보 업데이트
         setCourse({
-          id: response.lecture_id,
-          title: response.lecture_name,
-          instructor: "", // API 응답에 없으므로 나중에 별도로 가져와야 할 수 있음
+          id: classesResponse.lecture_id,
+          title: classesResponse.lecture_name,
+          instructor: membersResponse?.lecture_name
+            ? "" // 멤버 API에서 교수자명을 가져올 수 없으므로 나중에 개선 필요
+            : "",
           description: "",
-          participants: 0, // API 응답에 없으므로 나중에 별도로 가져와야 할 수 있음
+          participants: membersResponse?.student_count || 0,
         });
 
+        // 학생 목록 업데이트
+        if (membersResponse) {
+          setStudents(
+            membersResponse.students.map((student, index) => ({
+              id: student.id || index + 1,
+              name: student.name,
+              email: student.email,
+            }))
+          );
+        }
+
         // 클래스를 weeks 형식으로 변환
-        const transformedWeeks = response.classes.map((cls, index) => {
+        const transformedWeeks = classesResponse.classes.map((cls, index) => {
           // materials URL에서 파일명 추출
           const items = cls.materials.map((materialUrl) => {
             const urlParts = materialUrl.split("/");
@@ -83,11 +102,11 @@ const ProfessorClass: React.FC = () => {
 
         setWeeks(transformedWeeks);
       } catch (error) {
-        console.error("클래스 목록 조회 오류:", error);
+        console.error("데이터 조회 오류:", error);
         const errorMessage =
           error instanceof Error
             ? error.message
-            : "클래스 목록을 불러오는 중 오류가 발생했습니다.";
+            : "데이터를 불러오는 중 오류가 발생했습니다.";
         setToast({ message: errorMessage, type: "error" });
         setWeeks([]);
       } finally {
@@ -95,7 +114,7 @@ const ProfessorClass: React.FC = () => {
       }
     };
 
-    fetchClasses();
+    fetchData();
   }, [id]);
 
   const latestQuestions = [
@@ -424,18 +443,7 @@ const ProfessorClass: React.FC = () => {
         isOpen={isPersonnelModalOpen}
         onClose={handlePersonnelModalClose}
         lectureId={id || ""}
-        students={[
-          { id: 1, name: "천성윤", email: "sample@naver.com" },
-          { id: 2, name: "박현우", email: "sample@naver.com" },
-          { id: 3, name: "지민서", email: "sample@naver.com" },
-          { id: 4, name: "유아름", email: "sample@naver.com" },
-          { id: 5, name: "천현서", email: "sample@naver.com" },
-          { id: 6, name: "박민윤", email: "sample@naver.com" },
-          { id: 7, name: "지성우", email: "sample@naver.com" },
-          { id: 8, name: "김철수", email: "sample@naver.com" },
-          { id: 9, name: "이영희", email: "sample@naver.com" },
-          { id: 10, name: "정민수", email: "sample@naver.com" },
-        ]}
+        students={students}
         onInviteByLink={handleInviteByLink}
         onInviteById={handleInviteById}
       />
