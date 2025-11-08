@@ -12,14 +12,16 @@ interface Student {
 interface LecturePersonnelModalProps {
   isOpen: boolean;
   onClose: () => void;
+  lectureId: string;
   students: Student[];
   onInviteByLink?: () => void;
-  onInviteById?: (studentId: string) => void;
+  onInviteById?: (studentEmail: string) => void;
 }
 
 const LecturePersonnelModal: React.FC<LecturePersonnelModalProps> = ({
   isOpen,
   onClose,
+  lectureId,
   students,
   onInviteByLink,
   onInviteById,
@@ -38,9 +40,9 @@ const LecturePersonnelModal: React.FC<LecturePersonnelModalProps> = ({
     setShowIdInviteModal(true);
   };
 
-  const handleIdInviteSubmit = (studentId: string) => {
+  const handleIdInviteSubmit = (studentEmail: string) => {
     if (onInviteById) {
-      onInviteById(studentId);
+      onInviteById(studentEmail);
     }
     setShowIdInviteModal(false);
   };
@@ -125,6 +127,7 @@ const LecturePersonnelModal: React.FC<LecturePersonnelModalProps> = ({
       <IdInviteModal
         isOpen={showIdInviteModal}
         onClose={() => setShowIdInviteModal(false)}
+        lectureId={lectureId}
         onInvite={handleIdInviteSubmit}
         onSwitchToLink={handleSwitchToLink}
       />
