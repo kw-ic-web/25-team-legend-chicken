@@ -127,9 +127,9 @@ const ProfessorClass: React.FC = () => {
     console.log("링크 초대됨");
   };
 
-  const handleInviteById = (studentId: string) => {
-    // 실제 아이디 초대 로직 (여기에 API 호출 등)
-    console.log("아이디 초대됨:", studentId);
+  const handleInviteById = (studentEmail: string) => {
+    // API 호출은 IdInviteModal에서 처리됨
+    console.log("이메일 초대됨:", studentEmail);
   };
 
   return (
@@ -364,6 +364,7 @@ const ProfessorClass: React.FC = () => {
       <LecturePersonnelModal
         isOpen={isPersonnelModalOpen}
         onClose={handlePersonnelModalClose}
+        lectureId={id || ""}
         students={[
           { id: 1, name: "천성윤", email: "sample@naver.com" },
           { id: 2, name: "박현우", email: "sample@naver.com" },
