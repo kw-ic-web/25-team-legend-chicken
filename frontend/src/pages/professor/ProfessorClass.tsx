@@ -61,9 +61,7 @@ const ProfessorClass: React.FC = () => {
         setCourse({
           id: classesResponse.lecture_id,
           title: classesResponse.lecture_name,
-          instructor: membersResponse?.lecture_name
-            ? "" // 멤버 API에서 교수자명을 가져올 수 없으므로 나중에 개선 필요
-            : "",
+          instructor: "", // API 응답에 교수자명이 없으므로 나중에 별도 API로 가져와야 함
           description: "",
           participants: membersResponse?.student_count || 0,
         });
@@ -71,8 +69,8 @@ const ProfessorClass: React.FC = () => {
         // 학생 목록 업데이트
         if (membersResponse) {
           setStudents(
-            membersResponse.students.map((student, index) => ({
-              id: student.id || index + 1,
+            membersResponse.students.map((student) => ({
+              id: student.id,
               name: student.name,
               email: student.email,
             }))
