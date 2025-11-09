@@ -12,6 +12,7 @@ const authRouter = require("./routes/auth"); // 회원가입, 로그인 등 인�
 const studentRouter = require("./routes/student"); // student 랜딩페이지 관련 API
 const professorRouter = require("./routes/professor"); // professor 랜딩페이지 관련 API
 const lecturesRouter = require("./routes/lectures"); // 강의 공통 API
+const whiteboardRouter = require("./routes/whiteboard"); // 화이트보드 스냅샷 API
 // const questionsRouter = require("./routes/questions"); // 질문 관련 API
 // const reportsRouter = require("./routes/reports"); // 리포트 관련 API
 
@@ -41,6 +42,7 @@ app.use("/api", authRouter); // /api/register, /api/login
 app.use("/api/student", studentRouter);
 app.use("/api/professor", professorRouter);
 app.use("/api", lecturesRouter); // 강의 공통 라우트
+app.use("/api", whiteboardRouter);
 // app.use("/api/questions", questionsRouter);
 // app.use("/api/reports", reportsRouter);
 

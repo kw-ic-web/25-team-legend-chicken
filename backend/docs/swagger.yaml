@@ -19,6 +19,8 @@ tags:
     description: 학생 관련 API
   - name: Lectures
     description: 강의 공통 API
+  - name: Whiteboard
+    description: 실시간 화이트보드 캡처 API
 
 components:
   securitySchemes:
@@ -123,6 +125,25 @@ components:
           type: array
           items:
             type: string
+
+    WhiteboardPage:
+      type: object
+      properties:
+        page_number:
+          type: number
+          example: 1
+        image_path:
+          type: string
+          example: /uploads/whiteboard/snapshot-1700000000000-123456789.png
+        text:
+          type: string
+          example: "for loop, while loop 정리"
+        pdf_path:
+          type: string
+          example: /uploads/pdfs/whiteboard/whiteboard-LEC-123-CLASS1-p1-1700000000000.pdf
+        status:
+          type: string
+          enum: [draft, finalized]
 
 paths:
   # ==================== 인증 API ====================
@@ -369,6 +390,10 @@ paths:
                 name:
                   type: string
                   example: 홍길동
+                email:
+                  type: string
+                  format: email
+                  example: professor@test.com
                 phone:
                   type: string
                   example: 010-1234-5678
@@ -867,6 +892,75 @@ paths:
           description: 권한 없음
         '404':
           description: 강좌 또는 클래스를 찾을 수 없음
+
+  # ==================== 화이트보드 API ====================
+  /api/lectures/{lectureId}/classes/{classId}/whiteboard/snapshot:
+    post:
+      tags: [Whiteboard]
+      summary: 화이트보드 스냅샷 업로드
+      description: >
+        강의자의 필기 화면 스냅샷을 업로드하여 Cloud Vision을 이용해 텍스트를 분석하고
+        페이지 변경 또는 필기 삭제를 감지합니다.
+        <br/> - 유사도가 높으면 현재 페이지를 업데이트합니다.
+        <br/> - 유사도가 낮거나 텍스트가 크게 줄어들면 이전 페이지를 PDF로 저장하고 새로운 페이지를 시작합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: CLASS-01
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [snapshot]
+              properties:
+                snapshot:
+                  type: string
+                  format: binary
+                  description: 화이트보드 화면 캡처 이미지 (jpg, jpeg, png, gif, webp)
+      responses:
+        '200':
+          description: 스냅샷 처리 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  action:
+                    type: string
+                    description: 처리 결과 (draft_created, draft_updated, finalized_and_new_draft)
+                    example: draft_updated
+                  page:
+                    $ref: '#/components/schemas/WhiteboardPage'
+                  finalized_page:
+                    $ref: '#/components/schemas/WhiteboardPage'
+                  draft_page:
+                    $ref: '#/components/schemas/WhiteboardPage'
+        '201':
+          description: 새 페이지 초안 생성
+        '400':
+          description: 잘못된 요청 (이미지 미업로드 등)
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 교수만 업로드 가능
+        '500':
+          description: 서버 오류
 
   /api/professor/lectures/{lectureId}/classes/{classId}/report:
     get:
