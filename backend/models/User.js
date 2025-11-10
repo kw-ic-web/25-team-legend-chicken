@@ -7,6 +7,7 @@ const UserSchema = new mongoose.Schema(
     phone: { type: String, default: "" },
     password: { type: String, required: true },
     user_type: { type: String, enum: ["professor", "student"], required: true },
+    profile_image: { type: String, default: "" }, // 프로필 사진 URL
   },
   {
     timestamps: true, // createdAt, updatedAt 자동 생성
