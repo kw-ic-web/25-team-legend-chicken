@@ -6,6 +6,7 @@ import LectureCard from "../../components/common/LectureCard";
 import Pagination from "../../components/common/Pagination";
 import { getLectures, type Lecture } from "../../api/professor";
 import Toast from "../../components/common/Toast";
+import { getBaseUrl } from "../../api/auth/client";
 
 const ProfessorDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState("all");
@@ -78,6 +79,13 @@ const ProfessorDashboard: React.FC = () => {
                 ? "SE"
                 : "Python";
 
+    // 썸네일 절대경로로 변환 (백엔드가 /uploads/... 경로를 반환하는 경우)
+    const thumbnail = lecture.thumbnail
+      ? lecture.thumbnail.startsWith("http")
+        ? lecture.thumbnail
+        : `${getBaseUrl()}${lecture.thumbnail}`
+      : undefined;
+
     return {
       id,
       title: lecture.name,
@@ -87,7 +95,7 @@ const ProfessorDashboard: React.FC = () => {
       newQuestions: 0, // API 응답에 없으므로 기본값
       subject,
       level: `Level. ${Math.min(lecture.classes?.length || 1, 5)}`,
-      image: lecture.thumbnail,
+      image: thumbnail,
     };
   };
 
