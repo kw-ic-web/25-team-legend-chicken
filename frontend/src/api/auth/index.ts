@@ -96,3 +96,54 @@ export async function getMyInfo(): Promise<MyInfoResponse> {
     },
   });
 }
+
+export type UpdateMyInfoPayload = {
+  name?: string;
+  phone?: string;
+  password?: string;
+  profile_image?: File | null;
+};
+
+export type UpdateMyInfoResponse = {
+  success: boolean;
+  message: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    user_type: string;
+    profile_image: string;
+  };
+};
+
+export async function updateMyInfo(
+  payload: UpdateMyInfoPayload
+): Promise<UpdateMyInfoResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const formData = new FormData();
+  if (payload.name !== undefined) {
+    formData.append("name", payload.name);
+  }
+  if (payload.phone !== undefined) {
+    formData.append("phone", payload.phone);
+  }
+  if (payload.password) {
+    formData.append("password", payload.password);
+  }
+  if (payload.profile_image) {
+    formData.append("profile_image", payload.profile_image);
+  }
+
+  return apiFetch<UpdateMyInfoResponse>("/api/myinfo", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+}

@@ -13,15 +13,21 @@ export async function apiFetch<T>(
   options: RequestInit & { json?: unknown } = {}
 ): Promise<T> {
   const url = `${getBaseUrl()}${path}`;
-  const { json, headers, ...rest } = options;
+  const { json, headers, body: originalBody, ...rest } = options;
+  const body =
+    json !== undefined
+      ? JSON.stringify(json)
+      : (originalBody as BodyInit | null | undefined);
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
+
   const resp = await fetch(url, {
+    ...rest,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(headers || {}),
     },
-    body:
-      json !== undefined ? JSON.stringify(json) : (options as RequestInit).body,
-    ...rest,
+    body,
   });
 
   const text = await resp.text();
