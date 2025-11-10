@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import StudentSidebar from "./student/StudentSidebar";
 import ProfessorSidebar from "./professor/ProfessorSidebar";
 import ProfessorHeader from "./professor/ProfessorHeader";
+import StudentHeader from "./student/StudentHeader";
 
 const Layout: React.FC = () => {
   const location = useLocation();
@@ -19,6 +20,7 @@ const Layout: React.FC = () => {
     <div className="h-screen bg-gray-50 flex flex-col">
       {/* 헤더 */}
       {isProfessorRoute && <ProfessorHeader />}
+      {isStudentRoute && <StudentHeader />}
 
       {/* 메인 레이아웃 */}
       <div className="flex flex-1">
