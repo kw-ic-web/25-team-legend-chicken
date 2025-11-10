@@ -133,7 +133,7 @@ const LectureCard: React.FC<LectureCardProps> = ({
       </div>
 
       {/* 하단 섹션 - 강의 정보 */}
-      <div className="p-4 bg-gray-50">
+      <div className="p-4 ">
         <h4 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2">
           {title}
         </h4>
