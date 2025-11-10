@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Play, Users, Download, ChevronDown, ChevronUp } from "lucide-react";
 import CommonSidebar from "../../components/layout/CommonSidebar";
@@ -6,8 +6,15 @@ import BroadcastAgreementModal from "../../components/modal/startBroadcast/Broad
 import LectureReservationModal from "../../components/modal/reserveBroadcast/LectureReservationModal";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
 import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
-import { getClasses, getMembers } from "../../api/professor";
+import {
+  getClassDetail,
+  getClassPdfs,
+  getClasses,
+  getMembers,
+  type GetClassDetailResponse,
+} from "../../api/professor";
 import Toast from "../../components/common/Toast";
+import { getBaseUrl } from "../../api/auth/client";
 
 const ProfessorClass: React.FC = () => {
   const { id } = useParams();
@@ -20,6 +27,7 @@ const ProfessorClass: React.FC = () => {
     fileName: string;
     fileSize: string;
   } | null>(null);
+  const [isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
   const [isPersonnelModalOpen, setIsPersonnelModalOpen] = useState(false);
   const [course, setCourse] = useState({
     id: id || "",
@@ -39,10 +47,17 @@ const ProfessorClass: React.FC = () => {
     Array<{ id: number | string; name: string; email: string }>
   >([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPdfLoadingFor, setIsPdfLoadingFor] = useState<number | null>(null);
+  const [loadedClassIds, setLoadedClassIds] = useState<number[]>([]);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  const resolveUrl = useCallback((url: string) => {
+    if (!url) return url;
+    return url.startsWith("http") ? url : `${getBaseUrl()}${url}`;
+  }, []);
 
   // 클래스 목록 및 강좌 정보 조회
   useEffect(() => {
@@ -81,22 +96,26 @@ const ProfessorClass: React.FC = () => {
         const transformedWeeks =
           classesResponse.classes && classesResponse.classes.length > 0
             ? classesResponse.classes.map((cls, index) => {
+                const classId = Number(
+                  cls.id !== undefined && cls.id !== null ? cls.id : index + 1
+                );
                 // materials URL에서 파일명 추출
                 const items = cls.materials
                   ? cls.materials.map((materialUrl) => {
-                      const urlParts = materialUrl.split("/");
+                      const resolvedUrl = resolveUrl(materialUrl);
+                      const urlParts = resolvedUrl.split("/");
                       const fileName = urlParts[urlParts.length - 1] || "파일";
                       // 파일 크기는 API에 없으므로 기본값 사용
                       return {
                         name: fileName,
                         size: "파일",
-                        url: materialUrl,
+                        url: resolvedUrl,
                       };
                     })
                   : [];
 
                 return {
-                  week: cls.id || index + 1,
+                  week: classId,
                   title: cls.title || `${index + 1}주차`,
                   items: items.length > 0 ? items : [],
                 };
@@ -104,6 +123,8 @@ const ProfessorClass: React.FC = () => {
             : [];
 
         setWeeks(transformedWeeks);
+        setLoadedClassIds([]);
+        setIsPdfLoadingFor(null);
       } catch (error) {
         console.error("데이터 조회 오류:", error);
         const errorMessage =
@@ -112,13 +133,15 @@ const ProfessorClass: React.FC = () => {
             : "데이터를 불러오는 중 오류가 발생했습니다.";
         setToast({ message: errorMessage, type: "error" });
         setWeeks([]);
+        setLoadedClassIds([]);
+        setIsPdfLoadingFor(null);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [id]);
+  }, [id, resolveUrl]);
 
   const latestQuestions = [
     { q: "과목에 대한 질문을 해도 되나요?", a: "네, 얼마든지요..." },
@@ -166,14 +189,91 @@ const ProfessorClass: React.FC = () => {
     );
   };
 
-  const handleLessonQuestionModalOpen = (lesson: {
-    title: string;
-    fileName: string;
-    fileSize: string;
-  }) => {
-    setSelectedLesson(lesson);
-    setIsLessonQuestionModalOpen(true);
+  const handleLessonQuestionModalOpen = async (
+    classId: number,
+    defaultTitle: string,
+    material?: { name: string; size: string }
+  ) => {
+    if (!course.id) return;
+    setIsLessonDetailLoading(true);
+    try {
+      const detail: GetClassDetailResponse = await getClassDetail(
+        course.id,
+        classId
+      );
+      const materials = detail.class?.materials ?? [];
+      const firstMaterialName =
+        material?.name ||
+        (materials.length > 0
+          ? materials[0].split("/").pop() || "자료"
+          : "자료");
+      const firstMaterialSize = material?.size || "파일";
+
+      setSelectedLesson({
+        title: detail.class?.title || defaultTitle,
+        fileName: firstMaterialName,
+        fileSize: firstMaterialSize,
+      });
+      setIsLessonQuestionModalOpen(true);
+    } catch (error) {
+      console.error("클래스 정보 조회 실패:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "클래스 정보를 불러오는 중 오류가 발생했습니다.";
+      setToast({ message, type: "error" });
+    } finally {
+      setIsLessonDetailLoading(false);
+    }
   };
+
+  const fetchClassPdfs = useCallback(
+    async (classId: number, defaultTitle: string) => {
+      if (!course.id) return;
+      setIsPdfLoadingFor(classId);
+      try {
+        const resp = await getClassPdfs(course.id, classId);
+        const newItems = (resp.pdfs || []).map((pdfUrl) => {
+          const url = resolveUrl(pdfUrl);
+          const name = url.split("/").pop() || "자료";
+          return { name, size: "파일", url };
+        });
+        setWeeks((prev) =>
+          prev.map((w) =>
+            Number(w.week) === Number(classId)
+              ? {
+                  ...w,
+                  title: resp.class_title || defaultTitle || w.title,
+                  items: newItems,
+                }
+              : w
+          )
+        );
+        setLoadedClassIds((prev) =>
+          prev.includes(classId) ? prev : [...prev, classId]
+        );
+      } catch (error) {
+        console.error("PDF 목록 조회 실패:", error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "PDF 목록을 불러오는 중 오류가 발생했습니다.";
+        setToast({ message, type: "error" });
+      } finally {
+        setIsPdfLoadingFor((current) => (current === classId ? null : current));
+      }
+    },
+    [course.id, resolveUrl]
+  );
+
+  const handleToggleWeek = useCallback(
+    (classId: number, defaultTitle: string, isOpen: boolean) => {
+      if (!isOpen) return;
+      if (loadedClassIds.includes(classId)) return;
+      fetchClassPdfs(classId, defaultTitle);
+    },
+    [fetchClassPdfs, loadedClassIds]
+  );
 
   const handleLessonQuestionModalClose = () => {
     setIsLessonQuestionModalOpen(false);
@@ -305,68 +405,99 @@ const ProfessorClass: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {weeks.map((w) => (
-              <details
-                key={w.week}
-                className="bg-white border border-gray-200 rounded-lg group"
-              >
-                <summary className="list-none cursor-pointer select-none px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 flex items-center justify-center">
-                      <ChevronDown className="w-4 h-4 text-gray-500 group-open:hidden" />
-                      <ChevronUp className="w-4 h-4 text-gray-500 hidden group-open:block" />
+            {weeks.map((w) => {
+              const classId = Number(w.week);
+              return (
+                <details
+                  key={w.week}
+                  className="bg-white border border-gray-200 rounded-lg group"
+                  onToggle={(event) =>
+                    handleToggleWeek(classId, w.title, event.currentTarget.open)
+                  }
+                >
+                  <summary className="list-none cursor-pointer select-none px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 flex items-center justify-center">
+                        <ChevronDown className="w-4 h-4 text-gray-500 group-open:hidden" />
+                        <ChevronUp className="w-4 h-4 text-gray-500 hidden group-open:block" />
+                      </div>
+                      <div className="font-semibold">{w.title}</div>
                     </div>
-                    <div className="font-semibold">{w.title}</div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="text-sm text-gray-600">
-                      {w.items.length}개
-                    </div>
-                    <button
-                      className="flex items-center space-x-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm transition-colors duration-200"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        // 전체 다운로드 로직 구현
-                        console.log(`${w.title} 전체 다운로드`);
-                      }}
-                    >
-                      <Download className="w-4 h-4" />
-                      <span>전체 다운로드</span>
-                    </button>
-                  </div>
-                </summary>
-                <div className="divide-y">
-                  {w.items.map((it, idx) => (
-                    <div
-                      key={idx}
-                      className="px-4 py-3 flex items-center justify-between"
-                    >
-                      <div className="text-sm text-gray-800 truncate pr-4">
-                        {idx + 1}. {it.name} [ {it.size} ]
+                    <div className="flex items-center space-x-3">
+                      <div className="text-sm text-gray-600">
+                        {w.items.length}개
                       </div>
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() =>
-                            handleLessonQuestionModalOpen({
-                              title: w.title,
-                              fileName: it.name,
-                              fileSize: it.size,
-                            })
-                          }
-                          className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200 transition-colors duration-200"
+                          className="flex items-center space-x-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm transition-colors duration-200"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            w.items.forEach((it) => {
+                              if (it.url) {
+                                window.open(resolveUrl(it.url), "_blank");
+                              }
+                            });
+                          }}
                         >
-                          교안 및 질문 보기
-                        </button>
-                        <button className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200 transition-colors duration-200">
-                          다운로드
+                          <Download className="w-4 h-4" />
+                          <span>전체 다운로드</span>
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </details>
-            ))}
+                  </summary>
+                  <div className="divide-y">
+                    {isPdfLoadingFor === classId ? (
+                      <div className="px-4 py-3 text-sm text-gray-500">
+                        PDF 목록을 불러오는 중...
+                      </div>
+                    ) : w.items.length > 0 ? (
+                      w.items.map((it, idx) => (
+                        <div
+                          key={idx}
+                          className="px-4 py-3 flex items-center justify-between"
+                        >
+                          <div className="text-sm text-gray-800 truncate pr-4">
+                            {idx + 1}. {it.name} [ {it.size} ]
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() =>
+                                handleLessonQuestionModalOpen(
+                                  classId,
+                                  w.title,
+                                  it
+                                )
+                              }
+                              disabled={isLessonDetailLoading}
+                              className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200 transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {isLessonDetailLoading
+                                ? "불러오는 중..."
+                                : "교안 및 질문 보기"}
+                            </button>
+                            <button
+                              className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200 transition-colors duration-200"
+                              onClick={() => {
+                                if (it.url) {
+                                  window.open(resolveUrl(it.url), "_blank");
+                                }
+                              }}
+                            >
+                              다운로드
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-sm text-gray-500">
+                        등록된 PDF가 없습니다.
+                      </div>
+                    )}
+                  </div>
+                </details>
+              );
+            })}
           </div>
         )}
       </section>
