@@ -87,6 +87,7 @@ const ProfessorDashboard: React.FC = () => {
       newQuestions: 0, // API 응답에 없으므로 기본값
       subject,
       level: `Level. ${Math.min(lecture.classes?.length || 1, 5)}`,
+      image: lecture.thumbnail,
     };
   };
 
