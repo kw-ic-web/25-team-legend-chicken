@@ -147,3 +147,22 @@ export async function updateMyInfo(
     body: formData,
   });
 }
+
+export type LogoutResponse = {
+  success: boolean;
+  message: string;
+};
+
+export async function logoutUser(): Promise<LogoutResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<LogoutResponse>("/api/logout", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
