@@ -19,6 +19,8 @@ tags:
     description: 학생 관련 API
   - name: Lectures
     description: 강의 공통 API
+  - name: Whiteboard
+    description: 실시간 화이트보드 캡처 API
 
 components:
   securitySchemes:
@@ -114,12 +116,34 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Class'
+        thumbnail:
+          type: string
+          example: /uploads/images/thumbnail-1234567890-123456789.jpg
         professor_id:
           type: string
         student_id_list:
           type: array
           items:
             type: string
+
+    WhiteboardPage:
+      type: object
+      properties:
+        page_number:
+          type: number
+          example: 1
+        image_path:
+          type: string
+          example: /uploads/whiteboard/snapshot-1700000000000-123456789.png
+        text:
+          type: string
+          example: "for loop, while loop 정리"
+        pdf_path:
+          type: string
+          example: /uploads/pdfs/whiteboard/whiteboard-LEC-123-CLASS1-p1-1700000000000.pdf
+        status:
+          type: string
+          enum: [draft, finalized]
 
 paths:
   # ==================== 인증 API ====================
@@ -286,6 +310,137 @@ paths:
         '419':
           description: 토큰 만료
 
+  /api/logout:
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 로그아웃 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 로그아웃이 완료되었습니다.
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 유효하지 않은 토큰
+        '500':
+          description: 서버 오류
+
+  /api/myinfo:
+    get:
+      tags: [Auth]
+      summary: 내 정보 조회
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 내 정보 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                      user_type:
+                        type: string
+                      profile_image:
+                        type: string
+                        example: /uploads/images/profile_image-1234567890-123456789.jpg
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '404':
+          description: 사용자를 찾을 수 없습니다.
+
+    put:
+      tags: [Auth]
+      summary: 내 정보 수정
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: 홍길동
+                email:
+                  type: string
+                  format: email
+                  example: professor@test.com
+                phone:
+                  type: string
+                  example: 010-1234-5678
+                password:
+                  type: string
+                  format: password
+                  example: newpassword123
+                profile_image:
+                  type: string
+                  format: binary
+                  description: 프로필 사진 (jpg, jpeg, png, gif, webp)
+      responses:
+        '200':
+          description: 정보 수정 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 정보가 성공적으로 수정되었습니다.
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                      user_type:
+                        type: string
+                      profile_image:
+                        type: string
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '404':
+          description: 사용자를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+
   # ==================== 교수 API ====================
   /api/professor/lectures/create:
     post:
@@ -296,7 +451,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               type: object
               properties:
@@ -328,15 +483,17 @@ paths:
                   type: string
                   example: 컴퓨터공학 전공자
                 references:
-                  type: array
-                  items:
-                    type: object
-                  example: []
+                  type: string
+                  description: JSON 문자열 또는 JSON 배열
+                  example: '[{"title":"파이썬 프로그래밍","author":"홍길동","publisher":"한빛미디어"}]'
                 classes:
-                  type: array
-                  items:
-                    type: object
-                  example: []
+                  type: string
+                  description: JSON 문자열 또는 JSON 배열
+                  example: '[{"id":1,"title":"파이썬 기초","description":"파이썬 문법과 기본 개념","date":"2024-01-15T10:00:00.000Z","materials":[]}]'
+                thumbnail:
+                  type: string
+                  format: binary
+                  description: 강의 썸네일 이미지 (jpg, jpeg, png, gif, webp)
       responses:
         '201':
           description: 강의 개설 성공
@@ -735,6 +892,75 @@ paths:
           description: 권한 없음
         '404':
           description: 강좌 또는 클래스를 찾을 수 없음
+
+  # ==================== 화이트보드 API ====================
+  /api/lectures/{lectureId}/classes/{classId}/whiteboard/snapshot:
+    post:
+      tags: [Whiteboard]
+      summary: 화이트보드 스냅샷 업로드
+      description: >
+        강의자의 필기 화면 스냅샷을 업로드하여 Cloud Vision을 이용해 텍스트를 분석하고
+        페이지 변경 또는 필기 삭제를 감지합니다.
+        <br/> - 유사도가 높으면 현재 페이지를 업데이트합니다.
+        <br/> - 유사도가 낮거나 텍스트가 크게 줄어들면 이전 페이지를 PDF로 저장하고 새로운 페이지를 시작합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: CLASS-01
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [snapshot]
+              properties:
+                snapshot:
+                  type: string
+                  format: binary
+                  description: 화이트보드 화면 캡처 이미지 (jpg, jpeg, png, gif, webp)
+      responses:
+        '200':
+          description: 스냅샷 처리 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  action:
+                    type: string
+                    description: 처리 결과 (draft_created, draft_updated, finalized_and_new_draft)
+                    example: draft_updated
+                  page:
+                    $ref: '#/components/schemas/WhiteboardPage'
+                  finalized_page:
+                    $ref: '#/components/schemas/WhiteboardPage'
+                  draft_page:
+                    $ref: '#/components/schemas/WhiteboardPage'
+        '201':
+          description: 새 페이지 초안 생성
+        '400':
+          description: 잘못된 요청 (이미지 미업로드 등)
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 교수만 업로드 가능
+        '500':
+          description: 서버 오류
 
   /api/professor/lectures/{lectureId}/classes/{classId}/report:
     get:

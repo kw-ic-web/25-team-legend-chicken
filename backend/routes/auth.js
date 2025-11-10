@@ -3,6 +3,8 @@ const router = express.Router();
 const User = require("../models/user");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { authenticateToken } = require("../middleware/auth");
+const { uploadProfileImage } = require("../config/uploadImage");
 
 // 회원가입
 router.post("/register", async (req, res) => {
@@ -212,5 +214,137 @@ router.get("/verify", async (req, res) => {
     });
   }
 });
+
+// 로그아웃
+router.post("/logout", authenticateToken, async (req, res) => {
+  try {
+    // JWT는 stateless이므로 서버 측에서 토큰을 무효화할 수 없습니다.
+    // 클라이언트에서 토큰을 삭제하도록 안내합니다.
+    // 향후 토큰 블랙리스트 기능을 추가할 수 있습니다.
+    
+    console.log("로그아웃 요청:", { email: req.user.email });
+
+    return res.json({
+      success: true,
+      message: "로그아웃이 완료되었습니다.",
+    });
+  } catch (error) {
+    console.error("로그아웃 오류:", error);
+    return res.status(500).json({
+      success: false,
+      message: "서버 오류가 발생했습니다.",
+    });
+  }
+});
+
+// 내 정보 조회
+router.get("/myinfo", authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "사용자를 찾을 수 없습니다.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        user_type: user.user_type,
+        profile_image: user.profile_image || "",
+      },
+    });
+  } catch (error) {
+    console.error("내 정보 조회 오류:", error);
+    return res.status(500).json({
+      success: false,
+      message: "서버 오류가 발생했습니다.",
+    });
+  }
+});
+
+// 내 정보 수정
+router.put(
+  "/myinfo",
+  authenticateToken,
+  uploadProfileImage.single("profile_image"),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "사용자를 찾을 수 없습니다.",
+        });
+      }
+
+      // 요청 본문에서 수정할 정보 추출
+      const { name, email, phone, password } = req.body;
+
+      // 이름 수정
+      if (name !== undefined) {
+        user.name = name;
+      }
+
+      // 이메일 수정
+      if (email !== undefined && email !== user.email) {
+        const existingUser = await User.findOne({ email });
+        if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+          return res.status(400).json({
+            success: false,
+            message: "이미 사용 중인 이메일입니다.",
+          });
+        }
+
+        user.email = email;
+      }
+
+      // 전화번호 수정
+      if (phone !== undefined) {
+        user.phone = phone;
+      }
+
+      // 비밀번호 수정
+      if (password) {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(password, salt);
+      }
+
+      // 프로필 사진 업로드
+      if (req.file) {
+        const profileImageUrl = `/uploads/images/${req.file.filename}`;
+        user.profile_image = profileImageUrl;
+      }
+
+      await user.save();
+
+      return res.json({
+        success: true,
+        message: "정보가 성공적으로 수정되었습니다.",
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          user_type: user.user_type,
+          profile_image: user.profile_image || "",
+        },
+      });
+    } catch (error) {
+      console.error("내 정보 수정 오류:", error);
+      return res.status(500).json({
+        success: false,
+        message: "서버 오류가 발생했습니다.",
+      });
+    }
+  }
+);
 
 module.exports = router;
