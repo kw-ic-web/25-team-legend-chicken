@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getMyInfo, updateMyInfo } from "../../api/auth";
+import { useNavigate } from "react-router-dom";
+import { getMyInfo, updateMyInfo, logoutUser } from "../../api/auth";
 import { getBaseUrl } from "../../api/auth/client";
 import Toast from "../../components/common/Toast";
+import { useAuth } from "../../contexts/AuthContext";
 
 type ToastState = {
   message: string;
@@ -11,7 +13,11 @@ type ToastState = {
 const ProfessorProfile: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
+
+  const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -117,6 +123,28 @@ const ProfessorProfile: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logoutUser();
+    } catch (error) {
+      console.error("로그아웃 실패:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "로그아웃 중 오류가 발생했습니다.";
+      setToast({ message, type: "error" });
+      setIsLoggingOut(false);
+      return;
+    }
+
+    localStorage.removeItem("lecq.token");
+    logout();
+    setIsLoggingOut(false);
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -242,28 +270,38 @@ const ProfessorProfile: React.FC = () => {
               </div>
             </section>
 
-            <div className="flex justify-end space-x-3">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <button
-                type="reset"
-                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition"
-                onClick={() => {
-                  setPassword("");
-                  setSelectedImage(null);
-                  if (previewUrl) {
-                    URL.revokeObjectURL(previewUrl);
-                    setPreviewUrl(null);
-                  }
-                }}
+                type="button"
+                onClick={handleLogout}
+                className="px-4 py-2 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isLoggingOut}
               >
-                변경 취소
+                {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
               </button>
-              <button
-                type="submit"
-                className="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={isSaving}
-              >
-                {isSaving ? "저장 중..." : "저장하기"}
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  type="reset"
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition"
+                  onClick={() => {
+                    setPassword("");
+                    setSelectedImage(null);
+                    if (previewUrl) {
+                      URL.revokeObjectURL(previewUrl);
+                      setPreviewUrl(null);
+                    }
+                  }}
+                >
+                  변경 취소
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={isSaving}
+                >
+                  {isSaving ? "저장 중..." : "저장하기"}
+                </button>
+              </div>
             </div>
           </form>
         )}
