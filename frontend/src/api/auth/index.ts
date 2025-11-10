@@ -70,3 +70,29 @@ export async function verifyToken(token: string) {
     },
   });
 }
+
+export type MyInfoResponse = {
+  success: boolean;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    user_type: string;
+    profile_image: string;
+  };
+};
+
+export async function getMyInfo(): Promise<MyInfoResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<MyInfoResponse>("/api/myinfo", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}

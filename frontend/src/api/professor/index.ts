@@ -34,6 +34,7 @@ export type Lecture = {
   name: string;
   schedule: string;
   student_count: number;
+  thumbnail?: string;
   professor_name: string;
   professor_email: string;
   professor_phone: string;

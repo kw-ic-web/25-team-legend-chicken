@@ -78,25 +78,30 @@ const ProfessorClass: React.FC = () => {
         }
 
         // 클래스를 weeks 형식으로 변환
-        const transformedWeeks = classesResponse.classes.map((cls, index) => {
-          // materials URL에서 파일명 추출
-          const items = cls.materials.map((materialUrl) => {
-            const urlParts = materialUrl.split("/");
-            const fileName = urlParts[urlParts.length - 1] || "파일";
-            // 파일 크기는 API에 없으므로 기본값 사용
-            return {
-              name: fileName,
-              size: "파일",
-              url: materialUrl,
-            };
-          });
+        const transformedWeeks =
+          classesResponse.classes && classesResponse.classes.length > 0
+            ? classesResponse.classes.map((cls, index) => {
+                // materials URL에서 파일명 추출
+                const items = cls.materials
+                  ? cls.materials.map((materialUrl) => {
+                      const urlParts = materialUrl.split("/");
+                      const fileName = urlParts[urlParts.length - 1] || "파일";
+                      // 파일 크기는 API에 없으므로 기본값 사용
+                      return {
+                        name: fileName,
+                        size: "파일",
+                        url: materialUrl,
+                      };
+                    })
+                  : [];
 
-          return {
-            week: cls.id || index + 1,
-            title: cls.title || `${index + 1}주차`,
-            items: items.length > 0 ? items : [],
-          };
-        });
+                return {
+                  week: cls.id || index + 1,
+                  title: cls.title || `${index + 1}주차`,
+                  items: items.length > 0 ? items : [],
+                };
+              })
+            : [];
 
         setWeeks(transformedWeeks);
       } catch (error) {
@@ -288,9 +293,15 @@ const ProfessorClass: React.FC = () => {
           <div className="flex items-center justify-center h-64">
             <div className="text-gray-500">클래스 목록을 불러오는 중...</div>
           </div>
-        ) : weeks.length === 0 ? (
+        ) : weeks.length === 0 && course.title ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-gray-500">등록된 클래스가 없습니다.</div>
+          </div>
+        ) : weeks.length === 0 ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">
+              클래스 목록을 불러올 수 없습니다. 페이지를 새로고침해주세요.
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
