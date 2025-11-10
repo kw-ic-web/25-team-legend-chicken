@@ -111,6 +111,61 @@ export async function getClasses(
   );
 }
 
+export type GetClassDetailResponse = {
+  lecture_id: string;
+  lecture_name: string;
+  class: LectureClass;
+};
+
+export async function getClassDetail(
+  lectureId: string,
+  classId: number
+): Promise<GetClassDetailResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<GetClassDetailResponse>(
+    `/api/professor/lectures/${lectureId}/classes/${classId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export type GetClassPdfsResponse = {
+  lecture_id: string;
+  lecture_name: string;
+  class_id: number;
+  class_title: string;
+  pdf_count: number;
+  pdfs: string[];
+};
+
+export async function getClassPdfs(
+  lectureId: string,
+  classId: number
+): Promise<GetClassPdfsResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<GetClassPdfsResponse>(
+    `/api/professor/lectures/${lectureId}/classes/${classId}/pdf`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
 export type Student = {
   id: string;
   name: string;
