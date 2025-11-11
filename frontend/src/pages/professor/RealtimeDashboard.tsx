@@ -609,8 +609,7 @@ const RealtimeDashboard: React.FC = () => {
         <LecturePersonnelModal
           isOpen={isPersonnelOpen}
           onClose={closePersonnel}
-          students={students}
-        />
+          students={students} lectureId={""}        />
         {toast && (
           <Toast
             message={toast.message}
