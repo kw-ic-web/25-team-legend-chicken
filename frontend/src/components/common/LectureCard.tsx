@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 interface LectureCardProps {
-  id: number;
+  id: number | string;
   title: string;
   instructor: string;
   participants: number;
@@ -31,6 +31,7 @@ const LectureCard: React.FC<LectureCardProps> = ({
   newQuestions = 0,
   level = "Level. 1",
   subject = "Python",
+  image,
 }) => {
   const getStatusTag = () => {
     switch (status) {
@@ -95,36 +96,44 @@ const LectureCard: React.FC<LectureCardProps> = ({
     >
       {/* 상단 섹션 - 강의 이미지 영역 */}
       <div className="relative h-48 bg-gray-100 flex items-center justify-center">
-        {/* 그리드 패턴 배경 */}
-        <div className="absolute inset-0 opacity-10">
-          <div
-            className="w-full h-full"
-            style={{
-              backgroundImage: `radial-gradient(circle, #000 1px, transparent 1px)`,
-              backgroundSize: "20px 20px",
-            }}
+        {image ? (
+          <img
+            src={image}
+            alt={title}
+            className="absolute inset-0 w-full h-full object-cover"
           />
-        </div>
-
-        {/* 강의 아이콘 */}
-        <div className="relative z-10 flex flex-col items-center space-y-3">
-          <div className="w-16 h-16 flex items-center justify-center">
-            {getSubjectIcon()}
-          </div>
-          <div className="text-center">
-            <h3 className="text-lg font-bold text-gray-900">{subject}</h3>
-            <span className="text-xs bg-yellow-200 text-gray-800 px-2 py-1 rounded">
-              {level}
-            </span>
-          </div>
-        </div>
-
+        ) : (
+          <>
+            {/* 그리드 패턴 배경 */}
+            <div className="absolute inset-0 opacity-10">
+              <div
+                className="w-full h-full"
+                style={{
+                  backgroundImage: `radial-gradient(circle, #000 1px, transparent 1px)`,
+                  backgroundSize: "20px 20px",
+                }}
+              />
+            </div>
+            {/* 강의 아이콘 */}
+            <div className="relative z-10 flex flex-col items-center space-y-3">
+              <div className="w-16 h-16 flex items-center justify-center">
+                {getSubjectIcon()}
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-gray-900">{subject}</h3>
+                <span className="text-xs bg-yellow-200 text-gray-800 px-2 py-1 rounded">
+                  {level}
+                </span>
+              </div>
+            </div>
+          </>
+        )}
         {/* 상태 태그 */}
         {getStatusTag()}
       </div>
 
       {/* 하단 섹션 - 강의 정보 */}
-      <div className="p-4 bg-gray-50">
+      <div className="p-4 ">
         <h4 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2">
           {title}
         </h4>

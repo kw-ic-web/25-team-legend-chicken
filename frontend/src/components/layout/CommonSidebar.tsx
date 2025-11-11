@@ -88,33 +88,46 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
                   time?: string;
                   participants?: number;
                 }> = [];
-                const seen = new Set<string>();
+                const indexByTitle = new Map<string, number>();
                 for (const up of upcomingLectures) {
-                  if (!seen.has(up.title)) {
-                    merged.push({
-                      title: up.title,
-                      countdown: up.countdown,
-                      time: up.time,
-                    });
-                    seen.add(up.title);
-                  }
+                  if (indexByTitle.has(up.title)) continue;
+                  merged.push({
+                    title: up.title,
+                    countdown: up.countdown,
+                    time: up.time,
+                  });
+                  indexByTitle.set(up.title, merged.length - 1);
                 }
                 for (const mine of myLectures) {
-                  if (!seen.has(mine.title)) {
+                  if (indexByTitle.has(mine.title)) {
+                    const idx = indexByTitle.get(mine.title)!;
+                    merged[idx] = {
+                      ...merged[idx],
+                      participants: mine.participants,
+                    };
+                  } else {
                     merged.push({
                       title: mine.title,
                       participants: mine.participants,
                     });
-                    seen.add(mine.title);
+                    indexByTitle.set(mine.title, merged.length - 1);
                   }
                 }
                 // 2) 렌더링
                 return merged.map((item, idx) => (
                   <div key={`${item.title}-${idx}`} className="">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {item.title}
-                      </p>
+                      <div className="flex items-center space-x-2 min-w-0">
+                        {(item.countdown && item.time) ||
+                        typeof item.participants !== "number" ? (
+                          <Clock className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <Users className="w-4 h-4 text-gray-400" />
+                        )}
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {item.title}
+                        </p>
+                      </div>
                       {typeof item.participants === "number" && (
                         <div className="flex items-center space-x-1">
                           <Users className="w-4 h-4 text-gray-400" />

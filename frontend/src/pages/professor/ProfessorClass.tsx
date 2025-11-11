@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Play, Users, Download, ChevronDown, ChevronUp } from "lucide-react";
 import CommonSidebar from "../../components/layout/CommonSidebar";
@@ -6,6 +6,15 @@ import BroadcastAgreementModal from "../../components/modal/startBroadcast/Broad
 import LectureReservationModal from "../../components/modal/reserveBroadcast/LectureReservationModal";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
 import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
+import {
+  getClassDetail,
+  getClassPdfs,
+  getClasses,
+  getMembers,
+  type GetClassDetailResponse,
+} from "../../api/professor";
+import Toast from "../../components/common/Toast";
+import { getBaseUrl } from "../../api/auth/client";
 
 const ProfessorClass: React.FC = () => {
   const { id } = useParams();
@@ -18,36 +27,121 @@ const ProfessorClass: React.FC = () => {
     fileName: string;
     fileSize: string;
   } | null>(null);
+  const [isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
   const [isPersonnelModalOpen, setIsPersonnelModalOpen] = useState(false);
+  const [course, setCourse] = useState({
+    id: id || "",
+    title: "",
+    instructor: "",
+    description: "",
+    participants: 0,
+  });
+  const [weeks, setWeeks] = useState<
+    Array<{
+      week: number;
+      title: string;
+      items: Array<{ name: string; size: string; url?: string }>;
+    }>
+  >([]);
+  const [students, setStudents] = useState<
+    Array<{ id: number | string; name: string; email: string }>
+  >([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPdfLoadingFor, setIsPdfLoadingFor] = useState<number | null>(null);
+  const [loadedClassIds, setLoadedClassIds] = useState<number[]>([]);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
 
-  // mock: 강좌 정보 및 주차/자료
-  const course = {
-    id,
-    title: "프로그래밍 시작하기: 파이썬 입문",
-    instructor: "김철수",
-    description:
-      "이미 12명 이상이 학습하고 만족한 최고의 프로그래밍 입문 강의입니다.",
-    participants: 12,
-  };
+  const resolveUrl = useCallback((url: string) => {
+    if (!url) return url;
+    return url.startsWith("http") ? url : `${getBaseUrl()}${url}`;
+  }, []);
 
-  const weeks = Array.from({ length: 6 }).map((_, i) => ({
-    week: i + 1,
-    title: `${i + 1}주차. 파이썬 ${i === 0 ? "시작해봐요" : "완전 기초"}`,
-    items: [
-      {
-        name: "파이썬 & 프로그래밍 소개 (1-1): 파이썬으로 많은 것을 할 수 있어요.pdf",
-        size: "960.37 KB",
-      },
-      {
-        name: "파이썬 & 프로그래밍 소개 (1-1): 파이썬으로 많은 것을 할 수 있어요.pdf",
-        size: "960.37 KB",
-      },
-      {
-        name: "파이썬 & 프로그래밍 소개 (1-1): 파이썬으로 많은 것을 할 수 있어요.pdf",
-        size: "960.37 KB",
-      },
-    ],
-  }));
+  // 클래스 목록 및 강좌 정보 조회
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!id) return;
+
+      setIsLoading(true);
+      try {
+        // 클래스 목록과 멤버 정보를 병렬로 조회
+        const [classesResponse, membersResponse] = await Promise.all([
+          getClasses(id),
+          getMembers(id).catch(() => null), // 실패해도 계속 진행
+        ]);
+
+        // 강좌 정보 업데이트
+        setCourse({
+          id: classesResponse.lecture_id,
+          title: classesResponse.lecture_name,
+          instructor: "", // API 응답에 교수자명이 없으므로 나중에 별도 API로 가져와야 함
+          description: "",
+          participants: membersResponse?.student_count || 0,
+        });
+
+        // 학생 목록 업데이트
+        if (membersResponse) {
+          setStudents(
+            membersResponse.students.map((student) => ({
+              id: student.id,
+              name: student.name,
+              email: student.email,
+            }))
+          );
+        }
+
+        // 클래스를 weeks 형식으로 변환
+        const transformedWeeks =
+          classesResponse.classes && classesResponse.classes.length > 0
+            ? classesResponse.classes.map((cls, index) => {
+                const classId = Number(
+                  cls.id !== undefined && cls.id !== null ? cls.id : index + 1
+                );
+                // materials URL에서 파일명 추출
+                const items = cls.materials
+                  ? cls.materials.map((materialUrl) => {
+                      const resolvedUrl = resolveUrl(materialUrl);
+                      const urlParts = resolvedUrl.split("/");
+                      const fileName = urlParts[urlParts.length - 1] || "파일";
+                      // 파일 크기는 API에 없으므로 기본값 사용
+                      return {
+                        name: fileName,
+                        size: "파일",
+                        url: resolvedUrl,
+                      };
+                    })
+                  : [];
+
+                return {
+                  week: classId,
+                  title: cls.title || `${index + 1}주차`,
+                  items: items.length > 0 ? items : [],
+                };
+              })
+            : [];
+
+        setWeeks(transformedWeeks);
+        setLoadedClassIds([]);
+        setIsPdfLoadingFor(null);
+      } catch (error) {
+        console.error("데이터 조회 오류:", error);
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "데이터를 불러오는 중 오류가 발생했습니다.";
+        setToast({ message: errorMessage, type: "error" });
+        setWeeks([]);
+        setLoadedClassIds([]);
+        setIsPdfLoadingFor(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id, resolveUrl]);
 
   const latestQuestions = [
     { q: "과목에 대한 질문을 해도 되나요?", a: "네, 얼마든지요..." },
@@ -95,14 +189,91 @@ const ProfessorClass: React.FC = () => {
     );
   };
 
-  const handleLessonQuestionModalOpen = (lesson: {
-    title: string;
-    fileName: string;
-    fileSize: string;
-  }) => {
-    setSelectedLesson(lesson);
-    setIsLessonQuestionModalOpen(true);
+  const handleLessonQuestionModalOpen = async (
+    classId: number,
+    defaultTitle: string,
+    material?: { name: string; size: string }
+  ) => {
+    if (!course.id) return;
+    setIsLessonDetailLoading(true);
+    try {
+      const detail: GetClassDetailResponse = await getClassDetail(
+        course.id,
+        classId
+      );
+      const materials = detail.class?.materials ?? [];
+      const firstMaterialName =
+        material?.name ||
+        (materials.length > 0
+          ? materials[0].split("/").pop() || "자료"
+          : "자료");
+      const firstMaterialSize = material?.size || "파일";
+
+      setSelectedLesson({
+        title: detail.class?.title || defaultTitle,
+        fileName: firstMaterialName,
+        fileSize: firstMaterialSize,
+      });
+      setIsLessonQuestionModalOpen(true);
+    } catch (error) {
+      console.error("클래스 정보 조회 실패:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "클래스 정보를 불러오는 중 오류가 발생했습니다.";
+      setToast({ message, type: "error" });
+    } finally {
+      setIsLessonDetailLoading(false);
+    }
   };
+
+  const fetchClassPdfs = useCallback(
+    async (classId: number, defaultTitle: string) => {
+      if (!course.id) return;
+      setIsPdfLoadingFor(classId);
+      try {
+        const resp = await getClassPdfs(course.id, classId);
+        const newItems = (resp.pdfs || []).map((pdfUrl) => {
+          const url = resolveUrl(pdfUrl);
+          const name = url.split("/").pop() || "자료";
+          return { name, size: "파일", url };
+        });
+        setWeeks((prev) =>
+          prev.map((w) =>
+            Number(w.week) === Number(classId)
+              ? {
+                  ...w,
+                  title: resp.class_title || defaultTitle || w.title,
+                  items: newItems,
+                }
+              : w
+          )
+        );
+        setLoadedClassIds((prev) =>
+          prev.includes(classId) ? prev : [...prev, classId]
+        );
+      } catch (error) {
+        console.error("PDF 목록 조회 실패:", error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "PDF 목록을 불러오는 중 오류가 발생했습니다.";
+        setToast({ message, type: "error" });
+      } finally {
+        setIsPdfLoadingFor((current) => (current === classId ? null : current));
+      }
+    },
+    [course.id, resolveUrl]
+  );
+
+  const handleToggleWeek = useCallback(
+    (classId: number, defaultTitle: string, isOpen: boolean) => {
+      if (!isOpen) return;
+      if (loadedClassIds.includes(classId)) return;
+      fetchClassPdfs(classId, defaultTitle);
+    },
+    [fetchClassPdfs, loadedClassIds]
+  );
 
   const handleLessonQuestionModalClose = () => {
     setIsLessonQuestionModalOpen(false);
@@ -200,7 +371,7 @@ const ProfessorClass: React.FC = () => {
       <section className="flex-1 p-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-extrabold text-gray-900">
-            {course.title}
+            {course.title || "강좌 정보를 불러오는 중..."}
           </h1>
           <div className="flex items-center space-x-2">
             <button
@@ -218,70 +389,117 @@ const ProfessorClass: React.FC = () => {
           </div>
         </div>
 
-        <div className="space-y-3">
-          {weeks.map((w) => (
-            <details
-              key={w.week}
-              className="bg-white border border-gray-200 rounded-lg group"
-            >
-              <summary className="list-none cursor-pointer select-none px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 flex items-center justify-center">
-                    <ChevronDown className="w-4 h-4 text-gray-500 group-open:hidden" />
-                    <ChevronUp className="w-4 h-4 text-gray-500 hidden group-open:block" />
-                  </div>
-                  <div className="font-semibold">{w.title}</div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="text-sm text-gray-600">
-                    {w.items.length}개
-                  </div>
-                  <button
-                    className="flex items-center space-x-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm transition-colors duration-200"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // 전체 다운로드 로직 구현
-                      console.log(`${w.title} 전체 다운로드`);
-                    }}
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>전체 다운로드</span>
-                  </button>
-                </div>
-              </summary>
-              <div className="divide-y">
-                {w.items.map((it, idx) => (
-                  <div
-                    key={idx}
-                    className="px-4 py-3 flex items-center justify-between"
-                  >
-                    <div className="text-sm text-gray-800 truncate pr-4">
-                      {idx + 1}. {it.name} [ {it.size} ]
-                    </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">클래스 목록을 불러오는 중...</div>
+          </div>
+        ) : weeks.length === 0 && course.title ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">등록된 클래스가 없습니다.</div>
+          </div>
+        ) : weeks.length === 0 ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">
+              클래스 목록을 불러올 수 없습니다. 페이지를 새로고침해주세요.
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {weeks.map((w) => {
+              const classId = Number(w.week);
+              return (
+                <details
+                  key={w.week}
+                  className="bg-white border border-gray-200 rounded-lg group"
+                  onToggle={(event) =>
+                    handleToggleWeek(classId, w.title, event.currentTarget.open)
+                  }
+                >
+                  <summary className="list-none cursor-pointer select-none px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() =>
-                          handleLessonQuestionModalOpen({
-                            title: w.title,
-                            fileName: it.name,
-                            fileSize: it.size,
-                          })
-                        }
-                        className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200 transition-colors duration-200"
-                      >
-                        교안 및 질문 보기
-                      </button>
-                      <button className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200 transition-colors duration-200">
-                        다운로드
-                      </button>
+                      <div className="w-4 h-4 flex items-center justify-center">
+                        <ChevronDown className="w-4 h-4 text-gray-500 group-open:hidden" />
+                        <ChevronUp className="w-4 h-4 text-gray-500 hidden group-open:block" />
+                      </div>
+                      <div className="font-semibold">{w.title}</div>
                     </div>
+                    <div className="flex items-center space-x-3">
+                      <div className="text-sm text-gray-600">
+                        {w.items.length}개
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          className="flex items-center space-x-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm transition-colors duration-200"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            w.items.forEach((it) => {
+                              if (it.url) {
+                                window.open(resolveUrl(it.url), "_blank");
+                              }
+                            });
+                          }}
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>전체 다운로드</span>
+                        </button>
+                      </div>
+                    </div>
+                  </summary>
+                  <div className="divide-y">
+                    {isPdfLoadingFor === classId ? (
+                      <div className="px-4 py-3 text-sm text-gray-500">
+                        PDF 목록을 불러오는 중...
+                      </div>
+                    ) : w.items.length > 0 ? (
+                      w.items.map((it, idx) => (
+                        <div
+                          key={idx}
+                          className="px-4 py-3 flex items-center justify-between"
+                        >
+                          <div className="text-sm text-gray-800 truncate pr-4">
+                            {idx + 1}. {it.name} [ {it.size} ]
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() =>
+                                handleLessonQuestionModalOpen(
+                                  classId,
+                                  w.title,
+                                  it
+                                )
+                              }
+                              disabled={isLessonDetailLoading}
+                              className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200 transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {isLessonDetailLoading
+                                ? "불러오는 중..."
+                                : "교안 및 질문 보기"}
+                            </button>
+                            <button
+                              className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200 transition-colors duration-200"
+                              onClick={() => {
+                                if (it.url) {
+                                  window.open(resolveUrl(it.url), "_blank");
+                                }
+                              }}
+                            >
+                              다운로드
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-sm text-gray-500">
+                        등록된 PDF가 없습니다.
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            </details>
-          ))}
-        </div>
+                </details>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* 실시간 방송 시작 모달 */}
@@ -365,21 +583,19 @@ const ProfessorClass: React.FC = () => {
         isOpen={isPersonnelModalOpen}
         onClose={handlePersonnelModalClose}
         lectureId={id || ""}
-        students={[
-          { id: 1, name: "천성윤", email: "sample@naver.com" },
-          { id: 2, name: "박현우", email: "sample@naver.com" },
-          { id: 3, name: "지민서", email: "sample@naver.com" },
-          { id: 4, name: "유아름", email: "sample@naver.com" },
-          { id: 5, name: "천현서", email: "sample@naver.com" },
-          { id: 6, name: "박민윤", email: "sample@naver.com" },
-          { id: 7, name: "지성우", email: "sample@naver.com" },
-          { id: 8, name: "김철수", email: "sample@naver.com" },
-          { id: 9, name: "이영희", email: "sample@naver.com" },
-          { id: 10, name: "정민수", email: "sample@naver.com" },
-        ]}
+        students={students}
         onInviteByLink={handleInviteByLink}
         onInviteById={handleInviteById}
       />
+
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };
