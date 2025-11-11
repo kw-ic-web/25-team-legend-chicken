@@ -25,6 +25,7 @@ import ManageLectures from "./pages/professor/ManageLectures";
 import RealtimeDashboard from "./pages/professor/RealtimeDashboard";
 import LectureAnalysis from "./pages/professor/LectureAnalysis";
 import ProfessorClass from "./pages/professor/ProfessorClass";
+import ProfessorProfile from "./pages/professor/ProfessorProfile";
 
 function App() {
   return (
@@ -67,6 +68,7 @@ function App() {
                 path="professor/realtime-dashboard"
                 element={<RealtimeDashboard />}
               />
+              <Route path="professor/profile" element={<ProfessorProfile />} />
               <Route path="professor/analysis" element={<LectureAnalysis />} />
               <Route
                 path="professor/courses/:id"
