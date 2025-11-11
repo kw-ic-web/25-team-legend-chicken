@@ -286,11 +286,24 @@ router.put(
       }
 
       // 요청 본문에서 수정할 정보 추출
-      const { name, phone, password } = req.body;
+      const { name, email, phone, password } = req.body;
 
       // 이름 수정
       if (name !== undefined) {
         user.name = name;
+      }
+
+      // 이메일 수정
+      if (email !== undefined && email !== user.email) {
+        const existingUser = await User.findOne({ email });
+        if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+          return res.status(400).json({
+            success: false,
+            message: "이미 사용 중인 이메일입니다.",
+          });
+        }
+
+        user.email = email;
       }
 
       // 전화번호 수정
