@@ -13,8 +13,12 @@ const studentRouter = require("./routes/student"); // student 랜딩페이지 �
 const professorRouter = require("./routes/professor"); // professor 랜딩페이지 관련 API
 const lecturesRouter = require("./routes/lectures"); // 강의 공통 API
 const whiteboardRouter = require("./routes/whiteboard"); // 화이트보드 스냅샷 API
-// const questionsRouter = require("./routes/questions"); // 질문 관련 API
+const questionsRouter = require("./routes/questions"); // 질문 관련 API
+const chatRouter = require("./routes/chat"); // 채팅 관련 API
 // const reportsRouter = require("./routes/reports"); // 리포트 관련 API
+
+const http = require("http");
+const { attachSocket } = require("./socket");
 
 // 기본 설정
 const app = express();
@@ -43,10 +47,9 @@ app.use("/api/student", studentRouter);
 app.use("/api/professor", professorRouter);
 app.use("/api", lecturesRouter); // 강의 공통 라우트
 app.use("/api", whiteboardRouter);
-// app.use("/api/questions", questionsRouter);
+app.use("/api/questions", questionsRouter); 
+app.use("/api/chat", chatRouter); 
 // app.use("/api/reports", reportsRouter);
-
-
 
 app.get("/", (req, res) => {
   // GET 메서드로 명확히 지정
@@ -61,13 +64,17 @@ app.use((req, res, next) => {
 // ---------------------------------------------------- //
 
 // 모든 에러를 처리하는 미들웨어 (가장 마지막에 위치해야 함)
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ error: "서버 오류가 발생했습니다." });
 });
 
-// 서버 실행
-app.listen(PORT, () => {
+// 수정된 부분 시작
+const server = http.createServer(app);
+const io = attachSocket(server, process.env.CORS_ORIGIN || "*");
+app.set("io", io);
+
+server.listen(PORT, () => {
   console.log(`🚀 Lec-Q 서버가 ${PORT}번 포트에서 실행 중입니다.`);
 });
-// git check
