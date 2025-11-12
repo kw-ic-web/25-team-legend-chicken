@@ -70,3 +70,4 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`🚀 Lec-Q 서버가 ${PORT}번 포트에서 실행 중입니다.`);
 });
+// git check
