@@ -206,13 +206,18 @@ const ClassAnalysis: React.FC = () => {
   ];
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-50">
-      <div className="p-6 space-y-6">
+    <div className="flex-1 flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="p-8 space-y-8">
         {/* 페이지 제목 및 주차 필터 */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">
-            강의 분석 및 리포트
-          </h1>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-1">
+              강의 분석 및 리포트
+            </h1>
+            <p className="text-sm text-gray-500">
+              학생들의 학습 패턴과 어려움을 분석하여 강의를 개선하세요
+            </p>
+          </div>
           <WeekFilter
             weeks={availableWeeks}
             selectedWeek={selectedWeek}
@@ -224,7 +229,7 @@ const ClassAnalysis: React.FC = () => {
         <StatsSection stats={stats} />
 
         {/* 메인 콘텐츠: PDF 뷰어와 피드백 리스트 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* 왼쪽: PDF 뷰어 */}
           <div className="flex flex-col">
             <PdfViewer
@@ -239,11 +244,16 @@ const ClassAnalysis: React.FC = () => {
         </div>
 
         {/* 분석 차트 섹션 */}
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold text-gray-900">상세 분석</h2>
+        <div className="space-y-8">
+          <div className="border-b border-gray-200 pb-4">
+            <h2 className="text-2xl font-bold text-gray-900">상세 분석</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              다양한 시각화를 통해 학생들의 학습 패턴을 파악하세요
+            </p>
+          </div>
 
           {/* 첫 번째 행: 질문 카테고리, 리더보드 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <QuestionCategoryChart
               data={questionCategoryData}
               totalText='"클로저 관련 질문이 전체의 35%로 가장 많음"'
@@ -255,7 +265,7 @@ const ClassAnalysis: React.FC = () => {
           </div>
 
           {/* 두 번째 행: 상호작용 타임라인, 질문 트렌드 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <InteractionTimelineChart
               data={timelineData}
               annotation="15분 구간에서 질문과 궁금해요 급증 → 비동기 처리 개념 혼동 구간으로 추정"
@@ -267,7 +277,7 @@ const ClassAnalysis: React.FC = () => {
           </div>
 
           {/* 세 번째 행: 개념 네트워크, 지난 강의와 비교 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <ConceptNetworkChart
               nodes={conceptNodes}
               connections={conceptConnections}
