@@ -1,4 +1,5 @@
 import React from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 interface CategoryData {
   name: string;
@@ -16,53 +17,38 @@ const QuestionCategoryChart: React.FC<QuestionCategoryChartProps> = ({
   data,
   totalText,
 }) => {
-  // 파이 차트 계산
-  let currentAngle = -90; // 시작 각도 (12시 방향)
-  const radius = 80;
-  const centerX = 120;
-  const centerY = 120;
+  const chartData = data.map((item) => ({
+    name: item.name,
+    value: item.value,
+    fill: item.color,
+  }));
 
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const renderCustomLabel = ({
+    cx,
+    cy,
+    midAngle,
+    innerRadius,
+    outerRadius,
+    value,
+  }: any) => {
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
-  const paths = data.map((item, index) => {
-    const percentage = (item.value / total) * 100;
-    const angle = (item.value / total) * 360;
-
-    const startAngle = currentAngle;
-    const endAngle = currentAngle + angle;
-
-    const x1 = centerX + radius * Math.cos((startAngle * Math.PI) / 180);
-    const y1 = centerY + radius * Math.sin((startAngle * Math.PI) / 180);
-    const x2 = centerX + radius * Math.cos((endAngle * Math.PI) / 180);
-    const y2 = centerY + radius * Math.sin((endAngle * Math.PI) / 180);
-
-    const largeArcFlag = angle > 180 ? 1 : 0;
-
-    const pathData = [
-      `M ${centerX} ${centerY}`,
-      `L ${x1} ${y1}`,
-      `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-      "Z",
-    ].join(" ");
-
-    // 레이블 위치 계산
-    const labelAngle = (startAngle + endAngle) / 2;
-    const labelRadius = radius + 20;
-    const labelX = centerX + labelRadius * Math.cos((labelAngle * Math.PI) / 180);
-    const labelY = centerY + labelRadius * Math.sin((labelAngle * Math.PI) / 180);
-
-    currentAngle = endAngle;
-
-    return {
-      path: pathData,
-      color: item.color,
-      value: item.value,
-      labelX,
-      labelY,
-      name: item.name,
-      percentage,
-    };
-  });
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="white"
+        textAnchor={x > cx ? "start" : "end"}
+        dominantBaseline="central"
+        className="text-sm font-semibold"
+      >
+        {value}
+      </text>
+    );
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -73,29 +59,25 @@ const QuestionCategoryChart: React.FC<QuestionCategoryChartProps> = ({
         <h2 className="text-lg font-semibold text-gray-900">질문 카테고리</h2>
       </div>
 
-      <div className="flex items-center justify-center">
-        <svg width="240" height="240" className="mx-auto">
-          {paths.map((path, index) => (
-            <g key={index}>
-              <path
-                d={path.path}
-                fill={path.color}
-                stroke="white"
-                strokeWidth="2"
-              />
-              <text
-                x={path.labelX}
-                y={path.labelY}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                className="text-sm font-semibold fill-gray-900"
-              >
-                {path.value}
-              </text>
-            </g>
-          ))}
-        </svg>
-      </div>
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          <Tooltip />
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="50%"
+            labelLine={false}
+            label={renderCustomLabel}
+            outerRadius={100}
+            fill="#8884d8"
+            dataKey="value"
+          >
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.fill} />
+            ))}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
 
       <p className="text-sm text-gray-600 mt-4 text-center">{totalText}</p>
     </div>

@@ -1,4 +1,13 @@
 import React from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 interface TrendData {
   time: string;
@@ -14,96 +23,32 @@ const QuestionTrendChart: React.FC<QuestionTrendChartProps> = ({
   data,
   annotation,
 }) => {
-  const maxValue = Math.max(...data.map((d) => d.value));
-  const chartHeight = 200;
-  const chartWidth = 500;
-  const padding = 40;
-
-  const getY = (value: number) => {
-    return chartHeight - padding - (value / maxValue) * (chartHeight - padding * 2);
-  };
-
-  const getX = (index: number) => {
-    return padding + (index / (data.length - 1)) * (chartWidth - padding * 2);
-  };
-
-  const path = data
-    .map((d, i) => {
-      const x = getX(i);
-      const y = getY(d.value);
-      return i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`;
-    })
-    .join(" ");
+  const chartData = data.map((item) => ({
+    time: item.time,
+    질문수: item.value,
+  }));
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-6">질문 트렌드</h2>
-      <div className="overflow-x-auto">
-        <svg width={chartWidth} height={chartHeight + 60} className="mx-auto">
-          {/* 그리드 라인 */}
-          {[0, 2, 4, 6, 8].map((value) => {
-            const y = getY(value);
-            return (
-              <g key={value}>
-                <line
-                  x1={padding}
-                  y1={y}
-                  x2={chartWidth - padding}
-                  y2={y}
-                  stroke="#e5e7eb"
-                  strokeWidth="1"
-                />
-                <text
-                  x={padding - 10}
-                  y={y + 4}
-                  textAnchor="end"
-                  className="text-xs fill-gray-500"
-                >
-                  {value}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* X축 라벨 */}
-          {data.map((d, i) => {
-            const x = getX(i);
-            return (
-              <text
-                key={i}
-                x={x}
-                y={chartHeight - padding + 20}
-                textAnchor="middle"
-                className="text-xs fill-gray-500"
-              >
-                {d.time}
-              </text>
-            );
-          })}
-
-          {/* 라인 */}
-          <path
-            d={path}
-            fill="none"
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart
+          data={chartData}
+          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="time" />
+          <YAxis />
+          <Tooltip />
+          <Line
+            type="monotone"
+            dataKey="질문수"
             stroke="#a855f7"
-            strokeWidth="2"
+            strokeWidth={2}
+            dot={{ fill: "#a855f7", r: 4 }}
           />
-
-          {/* 데이터 포인트 */}
-          {data.map((d, i) => {
-            const x = getX(i);
-            return (
-              <circle
-                key={i}
-                cx={x}
-                cy={getY(d.value)}
-                r="4"
-                fill="#a855f7"
-              />
-            );
-          })}
-        </svg>
-      </div>
+        </LineChart>
+      </ResponsiveContainer>
 
       <p className="text-sm text-gray-600 mt-4 text-center">{annotation}</p>
     </div>
