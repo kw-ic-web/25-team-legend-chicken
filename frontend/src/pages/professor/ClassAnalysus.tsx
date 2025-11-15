@@ -4,6 +4,12 @@ import StatsSection from "../../components/professor/analysis/class/StatsSection
 import PdfViewer from "../../components/professor/analysis/class/PdfViewer";
 import DifficultyFeedbackList from "../../components/professor/analysis/class/DifficultyFeedbackList";
 import WeekFilter from "../../components/professor/analysis/class/WeekFilter";
+import QuestionCategoryChart from "../../components/professor/analysis/class/charts/QuestionCategoryChart";
+import LeaderboardChart from "../../components/professor/analysis/class/charts/LeaderboardChart";
+import InteractionTimelineChart from "../../components/professor/analysis/class/charts/InteractionTimelineChart";
+import QuestionTrendChart from "../../components/professor/analysis/class/charts/QuestionTrendChart";
+import ConceptNetworkChart from "../../components/professor/analysis/class/charts/ConceptNetworkChart";
+import ComparisonChart from "../../components/professor/analysis/class/charts/ComparisonChart";
 import type {
   ClassData,
   DifficultyFeedback,
@@ -144,23 +150,78 @@ const ClassAnalysis: React.FC = () => {
     return mostDifficultClass;
   }, [selectedWeek, classes, mostDifficultClass]);
 
+  // 차트 데이터
+  const questionCategoryData = [
+    { name: "클로저", value: 20, color: "#7c3aed", percentage: 35 },
+    { name: "스코프", value: 15, color: "#3b82f6", percentage: 26 },
+    { name: "호이스팅", value: 10, color: "#8b5cf6", percentage: 18 },
+    { name: "비동기", value: 8, color: "#c4b5fd", percentage: 15 },
+  ];
+
+  const leaderboardData = [
+    { name: "김지훈", curious: 45, questions: 10 },
+    { name: "박민서", curious: 38, questions: 12 },
+    { name: "이수현", curious: 30, questions: 8 },
+    { name: "익명", curious: 20, questions: 7 },
+  ];
+
+  const timelineData = [
+    { time: 0, curious: 4, questions: 2 },
+    { time: 5, curious: 12, questions: 8 },
+    { time: 10, curious: 9, questions: 6 },
+    { time: 15, curious: 20, questions: 15 },
+    { time: 20, curious: 13, questions: 7 },
+    { time: 25, curious: 6, questions: 4 },
+  ];
+
+  const trendData = [
+    { time: "10", value: 5 },
+    { time: "20", value: 8 },
+    { time: "10", value: 2 },
+    { time: "20", value: 6 },
+    { time: "10", value: 3 },
+    { time: "20", value: 5 },
+  ];
+
+  const conceptNodes = [
+    { id: "closure", label: "클로저", x: 200, y: 80 },
+    { id: "let", label: "let", x: 300, y: 80 },
+    { id: "scope", label: "스코프", x: 150, y: 150 },
+    { id: "hoisting", label: "호이스팅", x: 320, y: 150 },
+    { id: "async", label: "비동기", x: 200, y: 220 },
+  ];
+
+  const conceptConnections = [
+    { from: "closure", to: "scope", thickness: 3 },
+    { from: "closure", to: "let", thickness: 1 },
+    { from: "let", to: "scope", thickness: 1 },
+    { from: "let", to: "hoisting", thickness: 1 },
+    { from: "scope", to: "async", thickness: 1 },
+  ];
+
+  const comparisonData = [
+    { category: "질문 수", current: 85, previous: 68 },
+    { category: "참여도", current: 78, previous: 69 },
+    { category: "이해도", current: 80, previous: 74 },
+  ];
+
   return (
     <div className="flex-1 flex flex-col bg-gray-50">
       <div className="p-6 space-y-6">
-        {/* 페이지 제목 */}
-        <h1 className="text-2xl font-bold text-gray-900">
-          강의 분석 및 리포트
-        </h1>
+        {/* 페이지 제목 및 주차 필터 */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">
+            강의 분석 및 리포트
+          </h1>
+          <WeekFilter
+            weeks={availableWeeks}
+            selectedWeek={selectedWeek}
+            onWeekChange={setSelectedWeek}
+          />
+        </div>
 
         {/* 상단 통계 카드 섹션 */}
         <StatsSection stats={stats} />
-
-        {/* 주차 필터 */}
-        <WeekFilter
-          weeks={availableWeeks}
-          selectedWeek={selectedWeek}
-          onWeekChange={setSelectedWeek}
-        />
 
         {/* 메인 콘텐츠: PDF 뷰어와 피드백 리스트 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -175,6 +236,48 @@ const ClassAnalysis: React.FC = () => {
 
           {/* 오른쪽: 어려움 피드백 리스트 */}
           <DifficultyFeedbackList feedbacks={filteredFeedbacks} />
+        </div>
+
+        {/* 분석 차트 섹션 */}
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold text-gray-900">상세 분석</h2>
+
+          {/* 첫 번째 행: 질문 카테고리, 리더보드 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <QuestionCategoryChart
+              data={questionCategoryData}
+              totalText='"클로저 관련 질문이 전체의 35%로 가장 많음"'
+            />
+            <LeaderboardChart
+              data={leaderboardData}
+              description="질문과 반응이 활발한 상위 참여자 식별 - 가산점 부여 또는 피드백 관리 가능"
+            />
+          </div>
+
+          {/* 두 번째 행: 상호작용 타임라인, 질문 트렌드 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <InteractionTimelineChart
+              data={timelineData}
+              annotation="15분 구간에서 질문과 궁금해요 급증 → 비동기 처리 개념 혼동 구간으로 추정"
+            />
+            <QuestionTrendChart
+              data={trendData}
+              annotation='"20분 구간에서 클로저 관련 질문 급증 - 개념 혼동 지점"'
+            />
+          </div>
+
+          {/* 세 번째 행: 개념 네트워크, 지난 강의와 비교 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ConceptNetworkChart
+              nodes={conceptNodes}
+              connections={conceptConnections}
+              description='"클로저와 스코프의 연결이 두꺼울수록 학생들이 두 개념을 혼동한다는 의미"'
+            />
+            <ComparisonChart
+              data={comparisonData}
+              summary="전반적으로 질문 수, 참여도, 이해도가 모두 지난 강의보다 향상됨"
+            />
+          </div>
         </div>
       </div>
     </div>
