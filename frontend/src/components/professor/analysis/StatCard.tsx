@@ -1,8 +1,7 @@
 import React from "react";
-import { LucideIcon } from "lucide-react";
 
 interface StatCardProps {
-  icon: LucideIcon;
+  icon: React.ComponentType<{ className?: string }>;
   iconBgColor: string;
   iconColor: string;
   title: string;
@@ -34,4 +33,3 @@ const StatCard: React.FC<StatCardProps> = ({
 };
 
 export default StatCard;
-
