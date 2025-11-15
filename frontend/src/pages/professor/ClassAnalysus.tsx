@@ -1,13 +1,13 @@
 import React, { useState } from "react";
-import StatsSection from "../../components/professor/analysis/lecture/StatsSection";
-import LectureList from "../../components/professor/analysis/lecture/LectureList";
-import QuestionRankings from "../../components/professor/analysis/lecture/QuestionRankings";
+import StatsSection from "../../components/professor/analysis/class/StatsSection";
+import ClassList from "../../components/professor/analysis/class/classList";
+import QuestionRankings from "../../components/professor/analysis/class/QuestionRankings";
 import type {
-  LectureData,
+  ClassData,
   QuestionRanking,
-} from "../../components/professor/analysis/lecture/types";
+} from "../../components/professor/analysis/class/types";
 
-const LectureAnalysis: React.FC = () => {
+const ClassAnalysis: React.FC = () => {
   // 페이지네이션 상태
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -20,8 +20,8 @@ const LectureAnalysis: React.FC = () => {
     mostDifficultConcept: "네트워크",
   });
 
-  // 강좌 리스트 데이터
-  const [lectures] = useState<LectureData[]>([
+  // 강의 리스트 데이터
+  const [Classs] = useState<ClassData[]>([
     {
       id: 1,
       title: "데이터베이스 개론 - 1주차",
@@ -171,23 +171,23 @@ const LectureAnalysis: React.FC = () => {
       <div className="p-6 space-y-6">
         {/* 페이지 제목 */}
         <h1 className="text-2xl font-bold text-gray-900">
-          강좌 분석 및 리포트
+          강의 분석 및 리포트
         </h1>
 
         {/* 상단 통계 카드 섹션 */}
         <StatsSection stats={stats} />
 
-        {/* 하단 섹션: 강좌 리스트와 질문 순위 */}
+        {/* 하단 섹션: 강의 리스트와 질문 순위 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 왼쪽: 강좌 리스트 */}
-          <LectureList
-            lectures={lectures}
+          {/* 왼쪽: 강의 리스트 */}
+          <ClassList
+            Classs={Classs}
             currentPage={currentPage}
             itemsPerPage={itemsPerPage}
             onPageChange={setCurrentPage}
           />
 
-          {/* 오른쪽: 강좌 질문 순위 */}
+          {/* 오른쪽: 강의 질문 순위 */}
           <QuestionRankings rankings={questionRankings} maxItems={5} />
         </div>
       </div>
@@ -195,4 +195,4 @@ const LectureAnalysis: React.FC = () => {
   );
 };
 
-export default LectureAnalysis;
+export default ClassAnalysis;
