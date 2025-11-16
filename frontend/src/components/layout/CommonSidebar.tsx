@@ -41,7 +41,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
     return seen.size;
   }, [upcomingLectures, myLectures]);
   return (
-    <div className="w-80 bg-white shadow-lg h-[calc(100vh-4rem)] overflow-y-auto flex flex-col">
+    <div className="fixed top-20 left-0 w-80 bg-white shadow-lg h-[calc(100vh-5rem)] overflow-y-auto flex flex-col z-10">
       {/* 사용자 프로필 섹션 */}
       <div className="pt-10 p-6 border-b border-gray-200">
         <div className="flex items-center space-x-4 mb-4">
