@@ -219,13 +219,18 @@ async function handleUploadPdfSplit(req, res) {
       return res.status(404).json({ success: false, message: "해당 클래스를 찾을 수 없습니다." });
     }
 
-    // 분할
+    // 원본 PDF 경로 (프론트에는 원본만 노출)
+    const originalPdfUrl = `/uploads/pdfs/${req.file.filename}`;
+
+    // 분할은 내부 처리만 하고, materials에는 원본만 추가
     const splitted = await splitPdfIntoPages(req.file.path, { lectureId, classId });
     if (!Array.isArray(lecture.classes[idx].materials)) {
       lecture.classes[idx].materials = [];
     }
-    // 클래스 materials에 페이지별 PDF 등록
-    lecture.classes[idx].materials.push(...splitted.map((p) => p.pdfPath));
+    // 이미 동일 파일이 없을 때만 원본 추가
+    if (!lecture.classes[idx].materials.includes(originalPdfUrl)) {
+      lecture.classes[idx].materials.push(originalPdfUrl);
+    }
     await lecture.save();
 
     // OCR + WhiteboardPage 저장 (page_number는 기존 마지막 다음부터 연속 증가)
@@ -255,12 +260,13 @@ async function handleUploadPdfSplit(req, res) {
 
     return res.status(201).json({
       success: true,
-      message: "PDF가 페이지별로 분할되어 저장되었습니다.",
+      message: "PDF가 업로드되었고, 내부적으로 페이지별 분할 저장되었습니다.",
       lecture_id: lecture.lecture_id,
       class_id: Number(classId),
       total_pages: splitted.length,
       pages: splitted, // { pageNumber, pdfPath, filename }
       materials_count: lecture.classes[idx].materials.length,
+      original_pdf_url: originalPdfUrl,
     });
   } catch (error) {
     console.error("PDF 분할 업로드 오류:", error);
