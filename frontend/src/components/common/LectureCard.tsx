@@ -17,7 +17,6 @@ interface LectureCardProps {
   participants: number;
   status: "broadcasting" | "scheduled" | "completed";
   newQuestions?: number;
-  level?: string;
   subject?: string;
   image?: string;
 }
@@ -29,10 +28,27 @@ const LectureCard: React.FC<LectureCardProps> = ({
   participants,
   status,
   newQuestions = 0,
-  level = "Level. 1",
   subject = "Python",
   image,
 }) => {
+  const [imageError, setImageError] = React.useState(false);
+  const [imageLoaded, setImageLoaded] = React.useState(false);
+
+  // 이미지 prop이 변경되면 상태 리셋
+  React.useEffect(() => {
+    setImageError(false);
+    setImageLoaded(false);
+  }, [image]);
+
+  const handleImageError = () => {
+    setImageError(true);
+    setImageLoaded(false);
+  };
+
+  const handleImageLoad = () => {
+    setImageLoaded(true);
+    setImageError(false);
+  };
   const getStatusTag = () => {
     switch (status) {
       case "broadcasting":
@@ -95,13 +111,24 @@ const LectureCard: React.FC<LectureCardProps> = ({
       className="block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
     >
       {/* 상단 섹션 - 강의 이미지 영역 */}
-      <div className="relative h-48 bg-gray-100 flex items-center justify-center">
-        {image ? (
-          <img
-            src={image}
-            alt={title}
-            className="absolute inset-0 w-full h-full object-cover"
-          />
+      <div className="relative h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
+        {image && !imageError ? (
+          <>
+            <img
+              src={image}
+              alt={title}
+              className={`absolute inset-0 w-full h-full object-cover ${
+                imageLoaded ? "opacity-100" : "opacity-0"
+              } transition-opacity duration-300`}
+              onError={handleImageError}
+              onLoad={handleImageLoad}
+            />
+            {!imageLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
+              </div>
+            )}
+          </>
         ) : (
           <>
             {/* 그리드 패턴 배경 */}
@@ -121,9 +148,6 @@ const LectureCard: React.FC<LectureCardProps> = ({
               </div>
               <div className="text-center">
                 <h3 className="text-lg font-bold text-gray-900">{subject}</h3>
-                <span className="text-xs bg-yellow-200 text-gray-800 px-2 py-1 rounded">
-                  {level}
-                </span>
               </div>
             </div>
           </>
