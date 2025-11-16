@@ -314,8 +314,7 @@ const ProfessorClass: React.FC = () => {
           affiliation: "광운대학교 정보융합학부",
           currentLectures: 13,
         }}
-        showBroadcastControls={true}
-        onStartBroadcast={handleStartBroadcast}
+        showBroadcastControls={false}
         additionalContent={
           <div className="p-6 border-t border-gray-200 space-y-6">
             <div>
