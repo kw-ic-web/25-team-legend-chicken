@@ -15,6 +15,7 @@ import RegisterStep3 from "./components/auth/register/RegisterStep3";
 
 // Student pages
 import StudentDashboard from "./pages/student/StudentDashboard";
+import StudentClass from "./pages/student/StudentClass";
 import LiveWatching from "./pages/student/LiveWatching";
 import MyQuestions from "./pages/student/MyQuestions";
 import LectureSummaryReport from "./pages/student/LectureSummaryReport";
@@ -46,6 +47,7 @@ function App() {
             <Route element={<Layout />}>
               {/* Student routes */}
               <Route path="student/dashboard" element={<StudentDashboard />} />
+              <Route path="student/courses/:id" element={<StudentClass />} />
               <Route path="student/participate" element={<LiveWatching />} />
               <Route path="student/questions" element={<MyQuestions />} />
               <Route
