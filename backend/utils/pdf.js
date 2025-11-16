@@ -2,7 +2,20 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs-extra");
 const path = require("path");
 const PDFLib = require("pdf-lib");
-const pdfParse = require("pdf-parse");
+let pdfParse = null;
+try {
+  // 동적 로드: ESM/CJS 호환 처리
+  // eslint-disable-next-line global-require
+  const pdfParseLib = require("pdf-parse");
+  pdfParse =
+    typeof pdfParseLib === "function"
+      ? pdfParseLib
+      : typeof pdfParseLib?.default === "function"
+      ? pdfParseLib.default
+      : null;
+} catch (_) {
+  pdfParse = null;
+}
 
 const pdfBaseDir = "uploads/pdfs/whiteboard";
 
@@ -104,7 +117,10 @@ module.exports = {
    */
   async extractTextFromPdf(filePath) {
     const buffer = await fs.readFile(filePath);
-    const result = await pdfParse(buffer);
+    if (!pdfParse) {
+      return "";
+    }
+    const result = await pdfParse(buffer).catch(() => null);
     return result?.text || "";
   },
 };
