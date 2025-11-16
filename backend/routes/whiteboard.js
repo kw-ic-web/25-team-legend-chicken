@@ -7,7 +7,13 @@ const { uploadWhiteboardSnapshot } = require("../config/uploadImage");
 const uploadPdf = require("../config/upload");
 const WhiteboardPage = require("../models/whiteboardPage");
 const { extractTextFromImage } = require("../services/vision");
-const { createPdfFromImage, toAbsolutePath, splitPdfIntoPages, extractTextFromPdf } = require("../utils/pdf");
+const {
+  createPdfFromImage,
+  toAbsolutePath,
+  splitPdfIntoPages,
+  extractTextFromPdf,
+  convertPdfPageToImage,
+} = require("../utils/pdf");
 const Lecture = require("../models/lectures");
 
 const tokenize = (text = "") =>
@@ -219,13 +225,18 @@ async function handleUploadPdfSplit(req, res) {
       return res.status(404).json({ success: false, message: "해당 클래스를 찾을 수 없습니다." });
     }
 
-    // 분할
+    // 원본 PDF 경로 (프론트에는 원본만 노출)
+    const originalPdfUrl = `/uploads/pdfs/${req.file.filename}`;
+
+    // 분할은 내부 처리만 하고, materials에는 원본만 추가
     const splitted = await splitPdfIntoPages(req.file.path, { lectureId, classId });
     if (!Array.isArray(lecture.classes[idx].materials)) {
       lecture.classes[idx].materials = [];
     }
-    // 클래스 materials에 페이지별 PDF 등록
-    lecture.classes[idx].materials.push(...splitted.map((p) => p.pdfPath));
+    // 이미 동일 파일이 없을 때만 원본 추가
+    if (!lecture.classes[idx].materials.includes(originalPdfUrl)) {
+      lecture.classes[idx].materials.push(originalPdfUrl);
+    }
     await lecture.save();
 
     // OCR + WhiteboardPage 저장 (page_number는 기존 마지막 다음부터 연속 증가)
@@ -235,12 +246,25 @@ async function handleUploadPdfSplit(req, res) {
     }).sort({ page_number: -1 });
     const basePageNumber = lastPage ? lastPage.page_number : 0;
 
+    const createdPages = [];
+
     for (let i = 0; i < splitted.length; i++) {
       const page = splitted[i];
       const absolutePdfPath = toAbsolutePath(page.pdfPath);
-      const text = await extractTextFromPdf(absolutePdfPath);
+      let text = "";
+      try {
+        // 1) PDF → 이미지 변환
+        const imageAbsolutePath = await convertPdfPageToImage(absolutePdfPath);
+        // 2) Vision OCR 재사용 (snapshot과 동일한 경로)
+        const { text: ocrText } = await extractTextFromImage(imageAbsolutePath);
+        text = ocrText || "";
+      } catch (e) {
+        console.error("PDF 페이지 OCR 실패, 빈 텍스트로 진행:", e?.message || e);
+        // 최악의 경우 텍스트 없이 저장
+        text = "";
+      }
 
-      await WhiteboardPage.create({
+      const created = await WhiteboardPage.create({
         lecture_id: lectureId,
         class_id: String(classId),
         page_number: basePageNumber + i + 1,
@@ -251,16 +275,26 @@ async function handleUploadPdfSplit(req, res) {
         pdf_path: page.pdfPath,
         status: "finalized",
       });
+
+      createdPages.push({
+        page_number: created.page_number,
+        image_path: created.image_path,
+        pdf_path: created.pdf_path,
+        text: created.text,
+        status: created.status,
+      });
     }
 
     return res.status(201).json({
       success: true,
-      message: "PDF가 페이지별로 분할되어 저장되었습니다.",
+      message: "PDF가 업로드되었고, 내부적으로 페이지별 분할 저장되었습니다.",
       lecture_id: lecture.lecture_id,
       class_id: Number(classId),
       total_pages: splitted.length,
-      pages: splitted, // { pageNumber, pdfPath, filename }
+      // snapshot 업로드 후 최종본이 저장된 것과 유사한 형태로 반환
+      pages: createdPages,
       materials_count: lecture.classes[idx].materials.length,
+      original_pdf_url: originalPdfUrl,
     });
   } catch (error) {
     console.error("PDF 분할 업로드 오류:", error);
