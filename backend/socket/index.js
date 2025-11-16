@@ -127,5 +127,5 @@ function attachSocket(server, corsOrigin = "*") {
 
 
 
-module.exports = attachSocket;
+module.exports = { attachSocket };
 
