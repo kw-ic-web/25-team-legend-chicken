@@ -2,6 +2,8 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs-extra");
 const path = require("path");
 const PDFLib = require("pdf-lib");
+const { execFile } = require("child_process");
+const util = require("util");
 let pdfParse = null;
 try {
   // 동적 로드: ESM/CJS 호환 처리
@@ -20,6 +22,7 @@ try {
 const pdfBaseDir = "uploads/pdfs/whiteboard";
 
 fs.ensureDirSync(pdfBaseDir);
+const execFileAsync = util.promisify(execFile);
 
 /**
  * 이미지 한 장을 PDF로 변환합니다.
@@ -122,6 +125,20 @@ module.exports = {
     }
     const result = await pdfParse(buffer).catch(() => null);
     return result?.text || "";
+  },
+  /**
+   * 단일 페이지 PDF를 PNG 이미지로 변환합니다.
+   * (poppler의 pdftoppm 사용, Ghostscript 불필요)
+   * @param {string} pdfAbsolutePath
+   * @returns {Promise<string>} 생성된 이미지 파일의 절대 경로
+   */
+  async convertPdfPageToImage(pdfAbsolutePath) {
+    // pdftoppm -singlefile -png -r 150 input.pdf output_base
+    const outputBase = pdfAbsolutePath.replace(/\.pdf$/i, "");
+    const args = ["-singlefile", "-png", "-r", "150", pdfAbsolutePath, outputBase];
+    await execFileAsync("pdftoppm", args);
+    const imagePath = `${outputBase}.png`;
+    return imagePath;
   },
 };
 
