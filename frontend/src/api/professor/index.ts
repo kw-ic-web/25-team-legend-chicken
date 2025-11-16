@@ -200,3 +200,65 @@ export async function getMembers(
     }
   );
 }
+
+export type CreateLectureRequest = {
+  name: string;
+  schedule: string;
+  student_count: number;
+  professor_name: string;
+  professor_email: string;
+  professor_phone: string;
+  lecture_description: string;
+  learning_method?: string;
+  target_audience?: string;
+  references?: LectureReference[];
+  classes?: LectureClass[];
+  thumbnail?: File | null;
+};
+
+export type CreateLectureResponse = {
+  message: string;
+  lecture: Lecture;
+};
+
+export async function createLecture(
+  payload: CreateLectureRequest
+): Promise<CreateLectureResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const formData = new FormData();
+  formData.append("name", payload.name);
+  formData.append("schedule", payload.schedule);
+  formData.append("student_count", payload.student_count.toString());
+  formData.append("professor_name", payload.professor_name);
+  formData.append("professor_email", payload.professor_email);
+  formData.append("professor_phone", payload.professor_phone);
+  formData.append("lecture_description", payload.lecture_description);
+
+  if (payload.learning_method) {
+    formData.append("learning_method", payload.learning_method);
+  }
+  if (payload.target_audience) {
+    formData.append("target_audience", payload.target_audience);
+  }
+  if (payload.references) {
+    formData.append("references", JSON.stringify(payload.references));
+  }
+  if (payload.classes) {
+    formData.append("classes", JSON.stringify(payload.classes));
+  }
+  if (payload.thumbnail) {
+    formData.append("thumbnail", payload.thumbnail);
+  }
+
+  return apiFetch<CreateLectureResponse>("/api/professor/lectures/create", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+}

@@ -5,12 +5,20 @@ const ProfessorHeader: React.FC = () => {
   const location = useLocation();
 
   const navItems = [
-    { path: "/professor/dashboard", label: "대시보드" },
-    { path: "/professor/analysis", label: "분석리포트" },
+    {
+      path: "/professor/dashboard",
+      label: "대시보드",
+      relatedPaths: [],
+    },
+    {
+      path: "/professor/analysis",
+      label: "분석리포트",
+      relatedPaths: ["/professor/class-analysis"],
+    },
   ];
 
   return (
-    <header className="relative h-20 shadow-lg">
+    <header className="fixed top-0 left-0 right-0 h-20 shadow-lg z-50">
       {/* 배경 색상: 60도 대각선 구분 (70% / 5% / 25%) */}
       <div
         className="absolute inset-0"
@@ -33,19 +41,27 @@ const ProfessorHeader: React.FC = () => {
 
         {/* 네비게이션 */}
         <nav className="flex space-x-8">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`text-white font-medium px-4 py-2 rounded-lg inline-flex items-center h-10 transition-transform duration-200 hover:bg-white/20 ${
-                location.pathname === item.path
-                  ? "bg-white/30 font-semibold scale-105"
-                  : "hover:bg-white/10"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const isActive =
+              location.pathname === item.path ||
+              location.pathname.startsWith(item.path + "/") ||
+              item.relatedPaths?.some(
+                (relatedPath) =>
+                  location.pathname === relatedPath ||
+                  location.pathname.startsWith(relatedPath + "/")
+              );
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`text-white font-semibold px-4 py-2 rounded-lg inline-flex items-center justify-center h-10 min-w-[120px] transition-colors duration-200 hover:bg-white/20 ${
+                  isActive ? "bg-white/30" : "hover:bg-white/10"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       </div>
     </header>

@@ -11,7 +11,7 @@ interface CreateClassModalProps {
     startDate: string;
     endDate: string;
     thumbnailFile?: File | null;
-  }) => void;
+  }) => void | Promise<void>;
 }
 
 const CreateClassModal: React.FC<CreateClassModalProps> = ({

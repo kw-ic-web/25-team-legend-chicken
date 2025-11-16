@@ -1,23 +1,26 @@
 import React, { useState } from "react";
-
-interface LectureData {
-  id: number;
-  title: string;
-  date: string;
-  attendance: number;
-  totalQuestions: number;
-  avgEngagement: number;
-  keyTopics: string[];
-}
-
-interface AnalysisChart {
-  type: "attendance" | "questions" | "engagement";
-  data: { label: string; value: number }[];
-}
+import StatsSection from "../../components/professor/analysis/lecture/StatsSection";
+import LectureList from "../../components/professor/analysis/lecture/LectureList";
+import QuestionRankings from "../../components/professor/analysis/lecture/QuestionRankings";
+import type {
+  LectureData,
+  QuestionRanking,
+} from "../../components/professor/analysis/lecture/types";
 
 const LectureAnalysis: React.FC = () => {
-  const [selectedLecture, setSelectedLecture] = useState<number | null>(null);
+  // 페이지네이션 상태
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
+  // 통계 데이터
+  const [stats] = useState({
+    totalQuestions: 75,
+    totalUpvotes: 75,
+    participationRate: 75,
+    mostDifficultConcept: "네트워크",
+  });
+
+  // 강좌 리스트 데이터
   const [lectures] = useState<LectureData[]>([
     {
       id: 1,
@@ -46,170 +49,146 @@ const LectureAnalysis: React.FC = () => {
       avgEngagement: 9.1,
       keyTopics: ["HTML/CSS", "JavaScript", "DOM 조작"],
     },
+    {
+      id: 4,
+      title: "네트워크 프로그래밍 - 1주차",
+      date: "2024-02-08",
+      attendance: 42,
+      totalQuestions: 20,
+      avgEngagement: 8.8,
+      keyTopics: ["TCP/IP", "HTTP", "소켓 프로그래밍"],
+    },
+    {
+      id: 5,
+      title: "알고리즘 - 1주차",
+      date: "2024-02-15",
+      attendance: 40,
+      totalQuestions: 10,
+      avgEngagement: 7.5,
+      keyTopics: ["정렬", "탐색", "동적 프로그래밍"],
+    },
+    {
+      id: 6,
+      title: "운영체제 - 1주차",
+      date: "2024-02-22",
+      attendance: 39,
+      totalQuestions: 14,
+      avgEngagement: 8.2,
+      keyTopics: ["프로세스", "스레드", "동기화"],
+    },
+    {
+      id: 7,
+      title: "컴퓨터 네트워크 - 1주차",
+      date: "2024-03-01",
+      attendance: 44,
+      totalQuestions: 18,
+      avgEngagement: 8.9,
+      keyTopics: ["OSI 모델", "라우팅", "전송 계층"],
+    },
+    {
+      id: 8,
+      title: "자료구조 - 1주차",
+      date: "2024-03-08",
+      attendance: 41,
+      totalQuestions: 11,
+      avgEngagement: 7.8,
+      keyTopics: ["배열", "연결 리스트", "스택"],
+    },
+    {
+      id: 9,
+      title: "소프트웨어 공학 - 1주차",
+      date: "2024-03-15",
+      attendance: 37,
+      totalQuestions: 9,
+      avgEngagement: 7.3,
+      keyTopics: ["요구사항", "설계", "테스팅"],
+    },
+    {
+      id: 10,
+      title: "인공지능 기초 - 1주차",
+      date: "2024-03-22",
+      attendance: 46,
+      totalQuestions: 22,
+      avgEngagement: 9.3,
+      keyTopics: ["머신러닝", "딥러닝", "신경망"],
+    },
+    {
+      id: 11,
+      title: "보안 프로그래밍 - 1주차",
+      date: "2024-03-29",
+      attendance: 35,
+      totalQuestions: 13,
+      avgEngagement: 8.0,
+      keyTopics: ["암호화", "인증", "보안 취약점"],
+    },
+    {
+      id: 12,
+      title: "모바일 앱 개발 - 1주차",
+      date: "2024-04-05",
+      attendance: 43,
+      totalQuestions: 16,
+      avgEngagement: 8.6,
+      keyTopics: ["React Native", "네이티브", "API 연동"],
+    },
   ]);
 
-  const [charts] = useState<AnalysisChart[]>([
+  // 질문 순위 데이터 (상위 5개만)
+  const [questionRankings] = useState<QuestionRanking[]>([
     {
-      type: "attendance",
-      data: [
-        { label: "1주차", value: 45 },
-        { label: "2주차", value: 43 },
-        { label: "3주차", value: 41 },
-        { label: "4주차", value: 44 },
-      ],
+      id: 1,
+      question: "네트워크 계층 구조에 대해 더 자세히 설명해주세요",
+      upvotes: 25,
+      rank: 1,
     },
     {
-      type: "questions",
-      data: [
-        { label: "1주차", value: 12 },
-        { label: "2주차", value: 8 },
-        { label: "3주차", value: 15 },
-        { label: "4주차", value: 11 },
-      ],
+      id: 2,
+      question: "TCP와 UDP의 차이점은 무엇인가요?",
+      upvotes: 18,
+      rank: 2,
     },
     {
-      type: "engagement",
-      data: [
-        { label: "1주차", value: 8.5 },
-        { label: "2주차", value: 7.2 },
-        { label: "3주차", value: 9.1 },
-        { label: "4주차", value: 8.8 },
-      ],
+      id: 3,
+      question: "HTTP와 HTTPS의 차이점을 알고 싶습니다",
+      upvotes: 15,
+      rank: 3,
+    },
+    {
+      id: 4,
+      question: "라우팅 프로토콜의 동작 원리를 설명해주세요",
+      upvotes: 12,
+      rank: 4,
+    },
+    {
+      id: 5,
+      question: "소켓 프로그래밍에서 비동기 처리는 어떻게 하나요?",
+      upvotes: 10,
+      rank: 5,
     },
   ]);
-
-  const selectedLectureData = lectures.find(
-    (lecture) => lecture.id === selectedLecture
-  );
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="lecture-analysis p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">
-          강의 분석 및 리포트
+    <div className="flex-1 flex flex-col bg-gray-50">
+      <div className="p-6 space-y-6">
+        {/* 페이지 제목 */}
+        <h1 className="text-2xl font-bold text-gray-900">
+          강좌 분석 및 리포트
         </h1>
 
-        <div className="analysis-content">
-          <div className="lecture-selector">
-            <h2>강의 선택</h2>
-            <select
-              value={selectedLecture || ""}
-              onChange={(e) => setSelectedLecture(Number(e.target.value))}
-              className="lecture-select"
-            >
-              <option value="">강의를 선택하세요</option>
-              {lectures.map((lecture) => (
-                <option key={lecture.id} value={lecture.id}>
-                  {lecture.title}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* 상단 통계 카드 섹션 */}
+        <StatsSection stats={stats} />
 
-          {selectedLectureData && (
-            <div className="analysis-details">
-              <div className="lecture-overview">
-                <h2>강의 개요</h2>
-                <div className="overview-grid">
-                  <div className="overview-item">
-                    <h3>강의명</h3>
-                    <p>{selectedLectureData.title}</p>
-                  </div>
-                  <div className="overview-item">
-                    <h3>날짜</h3>
-                    <p>{selectedLectureData.date}</p>
-                  </div>
-                  <div className="overview-item">
-                    <h3>출석률</h3>
-                    <p>{selectedLectureData.attendance}명</p>
-                  </div>
-                  <div className="overview-item">
-                    <h3>총 질문 수</h3>
-                    <p>{selectedLectureData.totalQuestions}개</p>
-                  </div>
-                  <div className="overview-item">
-                    <h3>평균 참여도</h3>
-                    <p>{selectedLectureData.avgEngagement}/10</p>
-                  </div>
-                </div>
-              </div>
+        {/* 하단 섹션: 강좌 리스트와 질문 순위 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* 왼쪽: 강좌 리스트 */}
+          <LectureList
+            lectures={lectures}
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
 
-              <div className="key-topics">
-                <h2>핵심 주제</h2>
-                <div className="topics-list">
-                  {selectedLectureData.keyTopics.map((topic, index) => (
-                    <span key={index} className="topic-tag">
-                      {topic}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="charts-section">
-                <h2>분석 차트</h2>
-                <div className="charts-grid">
-                  {charts.map((chart, index) => (
-                    <div key={index} className="chart-container">
-                      <h3>
-                        {chart.type === "attendance" && "출석률"}
-                        {chart.type === "questions" && "질문 수"}
-                        {chart.type === "engagement" && "참여도"}
-                      </h3>
-                      <div className="chart-placeholder">
-                        <p>차트 데이터: {chart.data.length}개 항목</p>
-                        <div className="chart-bars">
-                          {chart.data.map((item, i) => (
-                            <div
-                              key={i}
-                              className="chart-bar"
-                              style={{
-                                height: `${(item.value / Math.max(...chart.data.map((d) => d.value))) * 100}%`,
-                              }}
-                            >
-                              <span className="bar-value">{item.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="recommendations">
-                <h2>개선 제안</h2>
-                <div className="recommendation-list">
-                  <div className="recommendation-item">
-                    <h4>참여도 향상</h4>
-                    <p>
-                      학생들의 질문 수가 평균보다 낮습니다. 더 많은 상호작용을
-                      유도하는 방법을 고려해보세요.
-                    </p>
-                  </div>
-                  <div className="recommendation-item">
-                    <h4>주제별 집중도</h4>
-                    <p>
-                      특정 주제에서 질문이 집중되고 있습니다. 다른 주제들에 대한
-                      설명을 보강해보세요.
-                    </p>
-                  </div>
-                  <div className="recommendation-item">
-                    <h4>출석률 관리</h4>
-                    <p>
-                      출석률이 안정적으로 유지되고 있습니다. 현재 수준을
-                      유지하세요.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!selectedLecture && (
-            <div className="no-selection">
-              <p>분석할 강의를 선택해주세요.</p>
-            </div>
-          )}
+          {/* 오른쪽: 강좌 질문 순위 */}
+          <QuestionRankings rankings={questionRankings} maxItems={5} />
         </div>
       </div>
     </div>

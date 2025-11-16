@@ -5,7 +5,11 @@ import CommonSidebar from "../CommonSidebar";
 import CreateClassModal from "../../modal/createClass/CreateClassModal";
 import CreateClassCompleteModal from "../../modal/createClass/CreateClassCompleteModal";
 import { getMyInfo } from "../../../api/auth";
-import { getLectures, type Lecture } from "../../../api/professor";
+import {
+  getLectures,
+  createLecture,
+  type Lecture,
+} from "../../../api/professor";
 
 const ProfessorSidebar: React.FC = () => {
   // 방송 시작 관련 모달 로직은 추후 필요 시 다시 연결
@@ -170,10 +174,55 @@ const ProfessorSidebar: React.FC = () => {
       <CreateClassModal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        onSubmit={({ title, capacity, startDate, endDate }) => {
-          setCreatedClass({ title, capacity, startDate, endDate });
-          setIsCreateOpen(false);
-          setIsCreateCompleteOpen(true);
+        onSubmit={async ({
+          title,
+          description,
+          capacity,
+          startDate,
+          endDate,
+          thumbnailFile,
+        }) => {
+          try {
+            // 교수 정보 가져오기
+            const myInfo = await getMyInfo();
+            if (!myInfo.success || !myInfo.user) {
+              throw new Error("교수 정보를 불러올 수 없습니다.");
+            }
+
+            // schedule 생성 (시작일-종료일 형식)
+            const schedule = `${startDate} ~ ${endDate}`;
+
+            // API 호출
+            await createLecture({
+              name: title,
+              schedule: schedule,
+              student_count: capacity,
+              professor_name: myInfo.user.name,
+              professor_email: myInfo.user.email,
+              professor_phone: myInfo.user.phone || "",
+              lecture_description: description || "",
+              learning_method: "",
+              target_audience: "",
+              references: [],
+              classes: [],
+              thumbnail: thumbnailFile,
+            });
+
+            // 성공 시 완료 모달 표시
+            setCreatedClass({ title, capacity, startDate, endDate });
+            setIsCreateOpen(false);
+            setIsCreateCompleteOpen(true);
+
+            // 강의 목록 새로고침
+            fetchData();
+          } catch (error) {
+            console.error("강좌 개설 실패:", error);
+            const message =
+              error instanceof Error
+                ? error.message
+                : "강좌 개설 중 오류가 발생했습니다.";
+            alert(message);
+          }
         }}
       />
 
