@@ -7,11 +7,27 @@ const ReferenceSchema = new mongoose.Schema({
 });
 
 const ClassSchema = new mongoose.Schema({
-  id: { type: Number, required: true }, // 1, 2, 3, ...
-  title: { type: String, required: true }, // "파이썬 기초", "반복문", "제어문"
+  id: { type: Number, required: true }, // 주차 번호
+  title: { type: String, required: true },
   description: { type: String },
   date: { type: Date },
-  materials: [{ type: String }], // 강의 자료 URL들
+  materials: [{ type: String }],
+
+  // 현재 진행 중인 라이브 여부
+  isLiveActive: { type: Boolean, default: false },
+
+  // 현재 진행중인 라이브 ID (없으면 null)
+  currentLiveId: { type: Number, default: null },
+
+  // 라이브 세션 기록
+  lives: [
+    {
+      liveId: { type: Number, required: true },       // 1, 2, 3 ...
+      startedAt: { type: Date, required: true },      // 라이브 시작 시간
+      endedAt: { type: Date, default: null },         // 종료 시각 (없으면 진행중)
+      status: { type: String, enum: ["open", "closed"], default: "open" },
+    },
+  ],
 });
 
 const LectureSchema = new mongoose.Schema({
