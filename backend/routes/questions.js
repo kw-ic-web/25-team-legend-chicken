@@ -158,4 +158,45 @@ router.get("/list", authenticateToken, async (req, res) => {
   }
 });
 
+// 강좌/클래스 기준 질문 조회 (교수자 + 수강 학생 공통)
+// GET /api/questions/lectures/:lectureId/classes/:classId?page=1&limit=50
+router.get(
+  "/lectures/:lectureId/classes/:classId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const { lectureId, classId } = req.params;
+      const { page, limit = 50 } = req.query;
+
+      const access = await canAccess(user, lectureId);
+      if (!access.ok) {
+        return res.status(access.code).json({ message: access.msg });
+      }
+
+      const filter = {
+        lecture_id: lectureId,
+        class_id: Number(classId),
+      };
+      if (page) filter.page = Number(page);
+
+      const questions = await Question.find(filter)
+        .sort({ createdAt: -1, created_at: -1 })
+        .limit(Math.min(Number(limit) || 50, 200));
+
+      return res.json({
+        lecture_id: lectureId,
+        class_id: Number(classId),
+        count: questions.length,
+        questions,
+      });
+    } catch (err) {
+      console.error("강좌/클래스 질문 조회 오류:", err);
+      return res
+        .status(500)
+        .json({ message: "서버 오류가 발생했습니다.", error: err.message });
+    }
+  }
+);
+
 module.exports = router;
