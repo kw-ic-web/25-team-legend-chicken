@@ -33,23 +33,20 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path="/" element={<Layout />}>
-            {/* Public routes */}
-            <Route index element={<LandingPage />} />
-            <Route path="login" element={<LoginPage />} />
-            <Route path="register" element={<RegisterPage />} />
-            <Route path="register/step1" element={<RegisterStep1 />} />
-            <Route path="register/step2" element={<RegisterStep2 />} />
-            <Route path="register/step3" element={<RegisterStep3 />} />
+          {/* Public routes (Layout 없음) */}
+          <Route index element={<LandingPage />} />
+          <Route path="login" element={<LoginPage />} />
+          <Route path="register" element={<RegisterPage />} />
+          <Route path="register/step1" element={<RegisterStep1 />} />
+          <Route path="register/step2" element={<RegisterStep2 />} />
+          <Route path="register/step3" element={<RegisterStep3 />} />
 
-            {/* Protected routes */}
-            <Route element={<RequireAuth />}>
+          {/* Protected routes with Layout (사이드바 포함) */}
+          <Route element={<RequireAuth />}>
+            <Route element={<Layout />}>
               {/* Student routes */}
               <Route path="student/dashboard" element={<StudentDashboard />} />
-              <Route
-                path="student/participate"
-                element={<LiveWatching />}
-              />
+              <Route path="student/participate" element={<LiveWatching />} />
               <Route path="student/questions" element={<MyQuestions />} />
               <Route
                 path="student/reports"
