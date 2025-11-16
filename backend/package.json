@@ -23,6 +23,7 @@
     "nodemon": "^3.1.10",
     "openai": "^6.7.0",
     "pdfkit": "^0.17.2",
+    "socket.io": "^4.8.1",
     "swagger-ui-express": "^5.0.1",
     "yamljs": "^0.3.0"
   }
