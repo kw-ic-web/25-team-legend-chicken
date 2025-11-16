@@ -94,7 +94,6 @@ const ProfessorDashboard: React.FC = () => {
       status,
       newQuestions: 0, // API 응답에 없으므로 기본값
       subject,
-      level: `Level. ${Math.min(lecture.classes?.length || 1, 5)}`,
       image: thumbnail,
     };
   };
@@ -199,7 +198,7 @@ const ProfessorDashboard: React.FC = () => {
                   status={lecture.status}
                   newQuestions={lecture.newQuestions}
                   subject={lecture.subject}
-                  level={lecture.level}
+                  image={lecture.image}
                 />
               ))}
             </div>
