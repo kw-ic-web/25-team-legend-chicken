@@ -18,7 +18,7 @@ const chatRouter = require("./routes/chat"); // 채팅 관련 API
 // const reportsRouter = require("./routes/reports"); // 리포트 관련 API
 
 const http = require("http");
-const { attachSocket } = require("./socket");
+const attachSocket = require("./socket");
 
 // 기본 설정
 const app = express();
