@@ -2,8 +2,10 @@ const express = require("express");
 const router = express.Router();
 const Question = require("../models/Question");
 const Lecture = require("../models/lectures");
+const WhiteboardPage = require("../models/whiteboardPage");
 const { authenticateToken } = require("../middleware/auth");
 const mongoose = require("mongoose");
+const OpenAI = require("openai");
 
 // 권한 체크: 강좌/클래스 접근 가능?
 async function canAccess(user, lecture_id) {
@@ -110,6 +112,11 @@ router.post("/", authenticateToken, async (req, res) => {
       io.to(room).emit("question:new", q.toObject());
     }
 
+    // GPT 자동 답변 생성 (비동기, 응답은 먼저 반환)
+    generateGPTAnswer(q._id, lecture_id, class_id, text, io).catch((err) => {
+      console.error("GPT 답변 생성 오류:", err);
+    });
+
     return res
       .status(201)
       .json({ message: "질문이 저장되었습니다.", question: q });
@@ -198,5 +205,97 @@ router.get(
     }
   }
 );
+
+// GPT 자동 답변 생성 함수
+async function generateGPTAnswer(questionId, lectureId, classId, questionText, io = null) {
+  try {
+    // OpenAI API 키 확인
+    const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_API;
+    if (!apiKey) {
+      console.warn("OpenAI API 키가 설정되지 않아 GPT 답변을 생성할 수 없습니다.");
+      return;
+    }
+
+    // 해당 클래스의 교안 텍스트 가져오기 (finalized 상태만)
+    const whiteboardPages = await WhiteboardPage.find({
+      lecture_id: lectureId,
+      class_id: String(classId),
+      status: "finalized",
+    })
+      .sort({ page_number: 1 })
+      .select("text page_number")
+      .lean();
+
+    // 교안 텍스트 합치기
+    const lectureText = whiteboardPages
+      .map((page) => `[페이지 ${page.page_number}]\n${page.text || ""}`)
+      .join("\n\n");
+
+    // 교안이 없으면 답변 생성하지 않음
+    if (!lectureText.trim()) {
+      console.log("교안 텍스트가 없어 GPT 답변을 생성하지 않습니다.");
+      return;
+    }
+
+    // OpenAI 클라이언트 초기화
+    const openai = new OpenAI({ apiKey });
+
+    // GPT 프롬프트 작성 (244-252줄)
+    const prompt = `다음 교안 내용을 참고하여 질문에 대해 간결하게 답변해주세요. 한두 문장으로 핵심만 답변해주세요.
+
+## 교안 내용:
+${lectureText}
+
+## 질문:
+${questionText}
+
+교안 내용을 기반으로 간결하고 명확하게 답변해주세요. 교안에 없는 내용은 언급하지 마세요.`;
+
+    // GPT API 호출
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "교안 내용을 기반으로 질문에 대해 간결하고 명확하게 답변합니다. 한두 문장으로 핵심만 답변합니다.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      max_tokens: 200, // 간결한 답변을 위해 토큰 수 감소
+      temperature: 0.5, // 더 일관된 답변을 위해 온도 낮춤
+    });
+
+    const answer = completion.choices?.[0]?.message?.content?.trim();
+
+    if (answer) {
+      // 질문에 답변 저장
+      const updatedQuestion = await Question.findByIdAndUpdate(
+        questionId,
+        { answer },
+        { new: true }
+      );
+
+      // 실시간으로 답변 업데이트 알림 (Socket.IO)
+      if (io) {
+        const room = `lec:${lectureId}:cls:${classId}`;
+        io.to(room).emit("question:answer", {
+          question_id: questionId,
+          answer: answer,
+          question: updatedQuestion.toObject(),
+        });
+      }
+
+      console.log(`✅ GPT 답변이 생성되었습니다. (질문 ID: ${questionId})`);
+    } else {
+      console.warn("GPT 답변이 생성되지 않았습니다.");
+    }
+  } catch (error) {
+    console.error("GPT 답변 생성 중 오류 발생:", error.message || error);
+    // 에러가 발생해도 질문 생성은 이미 완료되었으므로 무시
+  }
+}
 
 module.exports = router;
