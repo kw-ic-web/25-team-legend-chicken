@@ -29,10 +29,18 @@ const QuestionSchema = new mongoose.Schema({
   text: { type: String, required: true },
   answer: { type: String, default: null }, // GPT 자동 답변
   metadata: { type: MetadataSchema, default: () => ({}) },
+  upvote_count: { type: Number, default: 0 },
+  upvoted_by: [{ type: String }],
 }, {
   timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
 });
 
-QuestionSchema.index({ lecture_id: 1, class_id: 1, page: 1, created_at: -1 });
+QuestionSchema.index({
+  lecture_id: 1,
+  class_id: 1,
+  page: 1,
+  created_at: -1,
+});
 
-module.exports = mongoose.models.Question || mongoose.model("Question", QuestionSchema);
+module.exports =
+  mongoose.models.Question || mongoose.model("Question", QuestionSchema);

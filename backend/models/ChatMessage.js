@@ -18,11 +18,18 @@ const ChatMessageSchema = new mongoose.Schema(
     text:       { type: String, required: true, trim: true },
     sender:     { type: SenderSchema, required: true },
     timestamp:  { type: Date, default: Date.now }, // 실제 전송시각(선택)
+    like_count: { type: Number, default: 0 },
+    liked_by: [{ type: String }],
   },
   { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
 );
 
 // 조회 최적화: 같은 채널 내 시간순 정렬
-ChatMessageSchema.index({ lecture_id: 1, class_id: 1, live_id: 1, created_at: -1 });
+ChatMessageSchema.index({
+  lecture_id: 1,
+  class_id: 1,
+  live_id: 1,
+  created_at: -1,
+});
 
 module.exports = mongoose.model("ChatMessage", ChatMessageSchema);
