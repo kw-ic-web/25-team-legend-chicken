@@ -206,6 +206,61 @@ router.get(
   }
 );
 
+// 강좌 단위 질문 조회 (upvote 기준 top5 포함)
+// GET /api/questions/lectures/:lectureId?page=1&limit=50
+router.get(
+  "/lectures/:lectureId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const { lectureId } = req.params;
+      const { page, limit = 50 } = req.query;
+
+      const access = await canAccess(user, lectureId);
+      if (!access.ok) {
+        return res.status(access.code).json({ message: access.msg });
+      }
+
+      const filter = {
+        lecture_id: lectureId,
+      };
+      if (page) filter.page = Number(page);
+
+      // 모든 질문 조회
+      const allQuestions = await Question.find(filter)
+        .sort({ createdAt: -1, created_at: -1 })
+        .limit(Math.min(Number(limit) || 50, 200));
+
+      // upvote 기준 top5 질문 조회
+      const topQuestions = await Question.find(filter)
+        .sort({ "metadata.likes": -1, createdAt: -1 })
+        .limit(5)
+        .lean();
+
+      return res.json({
+        lecture_id: lectureId,
+        count: allQuestions.length,
+        questions: allQuestions,
+        top_questions_by_upvote: topQuestions.map((q) => ({
+          _id: q._id,
+          text: q.text,
+          author: q.author,
+          upvotes: q.metadata?.likes || 0,
+          class_id: q.class_id,
+          page: q.page,
+          created_at: q.created_at || q.createdAt,
+        })),
+      });
+    } catch (err) {
+      console.error("강좌 질문 조회 오류:", err);
+      return res
+        .status(500)
+        .json({ message: "서버 오류가 발생했습니다.", error: err.message });
+    }
+  }
+);
+
 // GPT 자동 답변 생성 함수
 async function generateGPTAnswer(questionId, lectureId, classId, questionText, io = null) {
   try {
