@@ -218,9 +218,13 @@ router.get("/verify", async (req, res) => {
 // 로그아웃
 router.post("/logout", authenticateToken, async (req, res) => {
   try {
-    // JWT는 stateless이므로 서버 측에서 토큰을 무효화할 수 없습니다.
-    // 클라이언트에서 토큰을 삭제하도록 안내합니다.
-    // 향후 토큰 블랙리스트 기능을 추가할 수 있습니다.
+    const token = req.headers.authorization?.split(" ")[1];
+    
+    if (token) {
+      const { addToBlacklist } = require("../middleware/auth");
+      addToBlacklist(token);
+      console.log("토큰 블랙리스트에 추가됨:", { email: req.user.email });
+    }
     
     console.log("로그아웃 요청:", { email: req.user.email });
 
