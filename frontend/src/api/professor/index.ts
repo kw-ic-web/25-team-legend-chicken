@@ -262,3 +262,91 @@ export async function createLecture(
     body: formData,
   });
 }
+
+export type LiveStatusClass = {
+  class_id: number;
+  class_title: string;
+  isLiveActive: boolean;
+  currentLiveId?: number | null;
+  lives: Array<{
+    liveId: number;
+    status: string;
+    startedAt: string;
+    endedAt: string | null;
+  }>;
+};
+
+export type LiveStatusResponse = {
+  lecture_id: string;
+  lecture_name: string;
+  classes: LiveStatusClass[];
+};
+
+export async function getLiveStatus(
+  lectureId: string
+): Promise<LiveStatusResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<LiveStatusResponse>(
+    `/api/professor/lectures/${lectureId}/live-status`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export type LiveActionResponse = {
+  message: string;
+  lecture_id: string;
+  class_id: number;
+  live_id: number;
+  started_at: string;
+  ended_at?: string | null;
+  live_path?: string;
+};
+
+export async function startLive(
+  lectureId: string,
+  classId: number
+): Promise<LiveActionResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<LiveActionResponse>(
+    `/api/professor/lectures/${lectureId}/classes/${classId}/live/start`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export async function endLive(
+  lectureId: string,
+  classId: number
+): Promise<LiveActionResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<LiveActionResponse>(
+    `/api/professor/lectures/${lectureId}/classes/${classId}/live/end`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}

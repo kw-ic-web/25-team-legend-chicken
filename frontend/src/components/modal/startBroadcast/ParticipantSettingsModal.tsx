@@ -19,7 +19,6 @@ const ParticipantSettingsModal: React.FC<ParticipantSettingsModalProps> = ({
   const [showUploadModal, setShowUploadModal] = useState(false);
 
   const handleNext = () => {
-    onClose(); // 참여자 설정 모달 닫기
     setShowUploadModal(true);
   };
 
@@ -34,7 +33,12 @@ const ParticipantSettingsModal: React.FC<ParticipantSettingsModalProps> = ({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title="참여자 설정" size="lg">
+      <Modal
+        isOpen={isOpen && !showUploadModal}
+        onClose={onBack}
+        title="참여자 설정"
+        size="lg"
+      >
         <div className="space-y-6">
           <p className="text-gray-700 text-sm">
             실시간 강의 중 학생의 카메라 사용 방식을 선택하세요. 해당 설정은
@@ -117,7 +121,7 @@ const ParticipantSettingsModal: React.FC<ParticipantSettingsModalProps> = ({
 
       {/* 교안 업로드 모달 */}
       <LectureMaterialUploadModal
-        isOpen={showUploadModal}
+        isOpen={isOpen && showUploadModal}
         onClose={onClose}
         onBack={handleUploadBack}
         onNext={handleUploadNext}

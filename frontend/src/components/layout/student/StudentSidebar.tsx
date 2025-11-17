@@ -13,6 +13,7 @@ const StudentSidebar: React.FC = () => {
 
   // 학생 정보
   const [studentInfo, setStudentInfo] = useState({
+    id: "",
     name: "",
     title: "학생",
     affiliation: "광운대학교 정보융합학부", // API에 없으므로 기본값 유지
@@ -43,6 +44,7 @@ const StudentSidebar: React.FC = () => {
       // 학생 정보 업데이트
       if (myInfoResponse?.success && myInfoResponse.user) {
         setStudentInfo({
+          id: myInfoResponse.user.id,
           name: myInfoResponse.user.name,
           title: "학생",
           affiliation: "광운대학교 정보융합학부", // API에 없으므로 기본값 유지
