@@ -2,8 +2,10 @@ const express = require("express");
 const router = express.Router();
 const Question = require("../models/Question");
 const Lecture = require("../models/lectures");
+const WhiteboardPage = require("../models/whiteboardPage");
 const { authenticateToken } = require("../middleware/auth");
 const mongoose = require("mongoose");
+const OpenAI = require("openai");
 
 // 권한 체크: 강좌/클래스 접근 가능?
 async function canAccess(user, lecture_id) {
@@ -109,6 +111,11 @@ router.post("/", authenticateToken, async (req, res) => {
       const room = `lec:${lecture_id}:cls:${class_id}`;
       io.to(room).emit("question:new", q.toObject());
     }
+
+    // GPT 자동 답변 생성 (비동기, 응답은 먼저 반환)
+    generateGPTAnswer(q._id, lecture_id, class_id, text, io).catch((err) => {
+      console.error("GPT 답변 생성 오류:", err);
+    });
 
     return res
       .status(201)
