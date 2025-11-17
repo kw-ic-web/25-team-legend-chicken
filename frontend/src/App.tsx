@@ -18,6 +18,8 @@ import StudentDashboard from "./pages/student/StudentDashboard";
 import LiveWatching from "./pages/student/LiveWatching";
 import MyQuestions from "./pages/student/MyQuestions";
 import LectureSummaryReport from "./pages/student/LectureSummaryReport";
+import StudentProfile from "./pages/student/StudentProfile";
+import StudentClass from "./pages/student/StudentClass";
 
 // Professor pages
 import ProfessorDashboard from "./pages/professor/ProfessorDashboard";
@@ -52,6 +54,9 @@ function App() {
                 path="student/reports"
                 element={<LectureSummaryReport />}
               />
+              <Route path="student/profile" element={<LiveWatching />} />
+              <Route path="student/profile/:id" element={<StudentProfile />} />
+              <Route path="student/courses/:id" element={<StudentClass />} />
 
               {/* Professor routes */}
               <Route

@@ -10,7 +10,7 @@ type ToastState = {
   type: "success" | "error";
 } | null;
 
-const ProfessorProfile: React.FC = () => {
+const StudentProfile: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -214,7 +214,7 @@ const ProfessorProfile: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={userType === "professor" ? "교수" : userType}
+                    value={userType === "professor" ? "교수" : "학생"}
                     readOnly
                     className="w-full border border-gray-200 bg-gray-100 text-gray-500 rounded-lg px-3 py-2 cursor-not-allowed"
                   />
@@ -324,4 +324,4 @@ const ProfessorProfile: React.FC = () => {
   );
 };
 
-export default ProfessorProfile;
+export default StudentProfile;
