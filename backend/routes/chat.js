@@ -38,7 +38,7 @@ function rateLimitOnePerSecond(req, res, next) {
 // ───────── 메시지 전송 ─────────
 // POST /api/chat/messages
 // body: { lecture_id, class_id, live_id?, text, meta? }
-router.post("/messages", authenticateToken, rateLimitOnePerSecond, async (req, res) => {
+router.post("/", authenticateToken, rateLimitOnePerSecond, async (req, res) => {
   try {
     const user = req.user;
     const { lecture_id, class_id, live_id = null, text, meta = {} } = req.body || {};
@@ -93,7 +93,7 @@ router.post("/messages", authenticateToken, rateLimitOnePerSecond, async (req, r
 
 // ───────── 메시지 조회(폴링) ─────────
 // GET /api/chat/messages?lecture_id=...&class_id=...&live_id=...?&limit=50&before=ISO&since=ISO
-router.get("/messages", authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, async (req, res) => {
   try {
     const { lecture_id, class_id, live_id, limit = 50, before, since } = req.query || {};
     if (!lecture_id || !class_id) {
@@ -128,8 +128,8 @@ router.get("/messages", authenticateToken, async (req, res) => {
 });
 
 // ───────── 메시지 삭제(작성자 or 담당교수) ─────────
-// DELETE /api/chat/messages/:id
-router.delete("/messages/:id", authenticateToken, async (req, res) => {
+// DELETE /api/chat/:id
+router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     const msg = await ChatMessage.findById(req.params.id);
     if (!msg) return res.status(404).json({ message: "메시지를 찾을 수 없습니다." });
@@ -153,7 +153,7 @@ router.delete("/messages/:id", authenticateToken, async (req, res) => {
 
 // ───────── 메시지 좋아요(업보트) 토글 ─────────
 // POST /api/chat/messages/:id/upvote
-router.post("/messages/:id/upvote", authenticateToken, async (req, res) => {
+router.post("/:id/upvote", authenticateToken, async (req, res) => {
   try {
     const msg = await ChatMessage.findById(req.params.id);
     if (!msg) {
