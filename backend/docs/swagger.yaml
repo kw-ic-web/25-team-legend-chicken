@@ -21,6 +21,10 @@ tags:
     description: 강의 공통 API
   - name: Whiteboard
     description: 실시간 화이트보드 캡처 API
+  - name: Questions
+    description: 질문 관련 API
+  - name: Working
+    description: 지금 연결해야하는 API
 
 components:
   securitySchemes:
@@ -445,7 +449,7 @@ paths:
   /api/professor/lectures/create:
     post:
       tags: [Professor]
-      summary: 강의 개설
+      summary: 강좌 개설
       security:
         - bearerAuth: []
       requestBody:
@@ -515,7 +519,7 @@ paths:
   /api/professor/lectures/search:
     get:
       tags: [Professor]
-      summary: 강의 조회
+      summary: 강좌 조회
       security:
         - bearerAuth: []
       responses:
@@ -1201,3 +1205,130 @@ paths:
           description: 권한 없음 (학생만 가능)
         '404':
           description: 강좌를 찾을 수 없음
+
+  # ==================== 질문 API ====================
+  /api/questions/lectures/{lectureId}/classes/{classId}:
+    get:
+      tags: [Questions]
+      summary: 클래스 단위 질문 조회
+      description: 특정 강좌의 특정 클래스에 등록된 모든 질문을 조회합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-4CDC64C1
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: number
+          description: 특정 페이지의 질문만 조회 (선택)
+          example: 3
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 50
+            maximum: 200
+          description: 조회할 질문 개수 (최대 200개)
+          example: 50
+      responses:
+        '200':
+          description: 질문 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lecture_id:
+                    type: string
+                    example: LEC-4CDC64C1
+                  class_id:
+                    type: number
+                    example: 1
+                  count:
+                    type: number
+                    example: 5
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          example: 6914001daba488eae7586b8f
+                        lecture_id:
+                          type: string
+                          example: LEC-4CDC64C1
+                        class_id:
+                          type: number
+                          example: 1
+                        live_id:
+                          type: number
+                          nullable: true
+                          example: null
+                        page:
+                          type: number
+                          example: 3
+                        section:
+                          type: string
+                          nullable: true
+                          example: A
+                        position:
+                          type: object
+                          properties:
+                            x:
+                              type: number
+                              example: 0.12
+                            y:
+                              type: number
+                              example: 0.34
+                        timestamp:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.966Z
+                        type:
+                          type: string
+                          enum: [question, answer, note]
+                          example: question
+                        author:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                        text:
+                          type: string
+                          example: 질문 본문입니다
+                        metadata:
+                          type: object
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.974Z
+                        updated_at:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.974Z
+        '400':
+          description: 잘못된 요청
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 해당 강좌에 접근할 수 없습니다.
+        '404':
+          description: 강좌를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
