@@ -1,7 +1,15 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 const StudentHeader: React.FC = () => {
+  const location = useLocation();
+
+  const navItems = [
+    {
+      path: "/student/dashboard",
+      label: "대시보드",
+    },
+  ];
 
   return (
     <header className="fixed top-0 left-0 right-0 h-20 shadow-lg z-50">
@@ -15,7 +23,7 @@ const StudentHeader: React.FC = () => {
       ></div>
 
       {/* 컨텐츠 */}
-      <div className="relative z-10 h-full flex items-center px-6">
+      <div className="relative z-10 h-full flex items-center justify-between px-6">
         {/* 로고 (클릭 시 홈 이동) */}
         <Link
           to="/"
@@ -24,6 +32,26 @@ const StudentHeader: React.FC = () => {
         >
           <img src="/white-logo.svg" alt="lec-Q" className="h-12 w-auto pb-2" />
         </Link>
+
+        {/* 네비게이션 */}
+        <nav className="flex space-x-8">
+          {navItems.map((item) => {
+            const isActive =
+              location.pathname === item.path ||
+              location.pathname.startsWith(item.path + "/");
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`text-white font-semibold px-4 py-2 rounded-lg inline-flex items-center justify-center h-10 min-w-[120px] transition-colors duration-200 hover:bg-white/20 ${
+                  isActive ? "bg-white/30" : "hover:bg-white/10"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </header>
   );
