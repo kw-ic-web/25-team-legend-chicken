@@ -14,6 +14,9 @@ const Layout: React.FC = () => {
     "/professor/realtime-dashboard"
   );
   const isStudentClass = location.pathname.startsWith("/student/courses/");
+  const isStudentParticipate = location.pathname.startsWith(
+    "/student/participate"
+  );
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
@@ -24,7 +27,7 @@ const Layout: React.FC = () => {
       {/* 메인 레이아웃 */}
       <div className="flex flex-1 pt-20 overflow-hidden">
         {/* 사이드바 */}
-        {!isRealtimeDashboard && !isStudentClass && (
+        {!isRealtimeDashboard && !isStudentClass && !isStudentParticipate && (
           <>
             {isStudentRoute && <StudentSidebar />}
             {isProfessorRoute && <ProfessorSidebar />}
@@ -36,6 +39,7 @@ const Layout: React.FC = () => {
           className={`flex-1 flex flex-col overflow-hidden ${
             !isRealtimeDashboard &&
             !isStudentClass &&
+            !isStudentParticipate &&
             (isStudentRoute || isProfessorRoute)
               ? "ml-80"
               : ""

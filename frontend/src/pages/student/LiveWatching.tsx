@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import StudentParticipantStrip from "../../components/live/student/StudentParticipantStrip";
 import StudentScreenArea from "../../components/live/student/StudentScreenArea";
+import StudentLiveControls from "../../components/live/student/StudentLiveControls";
 
 interface Question {
   id: number;
@@ -12,7 +13,11 @@ interface Question {
 
 const LiveWatching: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const studentVideoRef = useRef<HTMLVideoElement>(null);
+  const studentStreamRef = useRef<MediaStream | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [isStudentMicOn, setIsStudentMicOn] = useState(false);
+  const [isStudentCameraOn, setIsStudentCameraOn] = useState(false);
 
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
   const [questionText, setQuestionText] = useState("");
@@ -83,6 +88,100 @@ const LiveWatching: React.FC = () => {
     setQuestionText("");
   };
 
+  const attachStudentStream = useCallback((stream: MediaStream) => {
+    if (studentVideoRef.current) {
+      studentVideoRef.current.srcObject = stream;
+      studentVideoRef.current.onloadedmetadata = () => {
+        studentVideoRef.current?.play().catch(console.error);
+      };
+    }
+  }, []);
+
+  const stopStudentCamera = useCallback(() => {
+    if (studentStreamRef.current) {
+      studentStreamRef.current.getTracks().forEach((track) => track.stop());
+      studentStreamRef.current = null;
+    }
+    if (studentVideoRef.current) {
+      studentVideoRef.current.srcObject = null;
+    }
+    setIsStudentCameraOn(false);
+    setIsStudentMicOn(false);
+  }, []);
+
+  const toggleStudentCamera = useCallback(async () => {
+    if (isStudentCameraOn) {
+      stopStudentCamera();
+      return;
+    }
+
+    try {
+      if (studentStreamRef.current) {
+        studentStreamRef.current.getTracks().forEach((track) => track.stop());
+        studentStreamRef.current = null;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      studentStreamRef.current = stream;
+      attachStudentStream(stream);
+      setIsStudentCameraOn(true);
+      setIsStudentMicOn(stream.getAudioTracks().some((track) => track.enabled));
+    } catch (error) {
+      console.error("학생 카메라 시작 실패:", error);
+      alert("카메라를 시작할 수 없습니다. 권한을 확인해주세요.");
+    }
+  }, [attachStudentStream, isStudentCameraOn, stopStudentCamera]);
+
+  const toggleStudentMic = useCallback(async () => {
+    const stream = studentStreamRef.current;
+
+    if (!stream) {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        studentStreamRef.current = audioStream;
+        setIsStudentMicOn(true);
+      } catch (error) {
+        console.error("마이크 시작 실패:", error);
+        alert("마이크를 시작할 수 없습니다. 권한을 확인해주세요.");
+      }
+      return;
+    }
+
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        audioStream.getAudioTracks().forEach((track) => {
+          stream.addTrack(track);
+        });
+        setIsStudentMicOn(true);
+      } catch (error) {
+        console.error("마이크 추가 실패:", error);
+        alert("마이크를 시작할 수 없습니다. 권한을 확인해주세요.");
+      }
+      return;
+    }
+
+    const newState = !isStudentMicOn;
+    audioTracks.forEach((track) => {
+      track.enabled = newState;
+    });
+    setIsStudentMicOn(newState);
+  }, [isStudentMicOn]);
+
+  useEffect(() => {
+    return () => {
+      stopStudentCamera();
+    };
+  }, [stopStudentCamera]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="flex h-[calc(100vh-80px)]">
@@ -97,10 +196,21 @@ const LiveWatching: React.FC = () => {
             </div>
 
             {/* 상단 참여자(웹캠) 스트립 */}
-            <StudentParticipantStrip />
+            <StudentParticipantStrip
+              studentVideoRef={studentVideoRef}
+              isStudentCameraOn={isStudentCameraOn}
+            />
 
             {/* 강의 콘텐츠(화면 공유 영역) - 컨트롤 제거 */}
-            <StudentScreenArea isLive={isLive} videoRef={videoRef} />
+            <div className="relative flex-1">
+              <StudentScreenArea isLive={isLive} videoRef={videoRef} />
+              <StudentLiveControls
+                isMicOn={isStudentMicOn}
+                isCameraOn={isStudentCameraOn}
+                onToggleMic={toggleStudentMic}
+                onToggleCamera={toggleStudentCamera}
+              />
+            </div>
           </div>
         </div>
 
