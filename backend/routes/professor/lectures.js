@@ -4,6 +4,7 @@ const Lecture = require("../../models/lectures");
 const { authenticateToken } = require("../../middleware/auth");
 const crypto = require("crypto");
 const { uploadThumbnail } = require("../../config/uploadImage");
+const { convertClassesMaterialsToAbsolute } = require("../../utils/urlUtils");
 
 router.post(
   "/create",
@@ -150,7 +151,7 @@ router.get(
 
         return {
           ...lecture.toObject(),
-          classes: formattedClasses,
+          classes: convertClassesMaterialsToAbsolute(req, formattedClasses),
         };
       });
 

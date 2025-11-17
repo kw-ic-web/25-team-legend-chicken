@@ -15,6 +15,7 @@ const {
   convertPdfPageToImage,
 } = require("../utils/pdf");
 const Lecture = require("../models/lectures");
+const { toAbsoluteUrl } = require("../utils/urlUtils");
 
 const tokenize = (text = "") =>
   text
@@ -265,8 +266,8 @@ async function handleUploadPdfSplit(req, res) {
 
       createdPages.push({
         page_number: created.page_number,
-        image_path: created.image_path,
-        pdf_path: created.pdf_path,
+        image_path: toAbsoluteUrl(req, created.image_path),
+        pdf_path: toAbsoluteUrl(req, created.pdf_path),
         text: created.text,
         status: created.status,
       });
@@ -280,7 +281,7 @@ async function handleUploadPdfSplit(req, res) {
       total_pages: splitted.length,
       pages: createdPages,
       materials_count: lecture.classes[idx].materials.length,
-      original_pdf_url: originalPdfUrl,
+      original_pdf_url: toAbsoluteUrl(req, originalPdfUrl),
     });
   } catch (error) {
     console.error("PDF 분할 업로드 오류:", error);
