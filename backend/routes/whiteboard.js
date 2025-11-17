@@ -4,9 +4,17 @@ const router = express.Router();
 
 const { authenticateToken } = require("../middleware/auth");
 const { uploadWhiteboardSnapshot } = require("../config/uploadImage");
+const uploadPdf = require("../config/upload");
 const WhiteboardPage = require("../models/whiteboardPage");
 const { extractTextFromImage } = require("../services/vision");
-const { createPdfFromImage, toAbsolutePath } = require("../utils/pdf");
+const {
+  createPdfFromImage,
+  toAbsolutePath,
+  splitPdfIntoPages,
+  extractTextFromPdf,
+  convertPdfPageToImage,
+} = require("../utils/pdf");
+const Lecture = require("../models/lectures");
 
 const tokenize = (text = "") =>
   text
@@ -167,6 +175,220 @@ router.post(
         success: false,
         message: "화이트보드 스냅샷을 처리하는 중 오류가 발생했습니다.",
       });
+    }
+  }
+);
+
+// 강좌 접근 권한 체크 (교수 본인 또는 수강 학생)
+async function canAccess(user, lecture_id) {
+  const lec = await Lecture.findOne({ lecture_id });
+  if (!lec) return { ok: false, code: 404, msg: "강좌를 찾을 수 없습니다." };
+  const isProfessor =
+    user.user_type === "professor" && String(lec.professor_id) === String(user._id);
+  const isStudent =
+    user.user_type === "student" &&
+    (lec.student_id_list || []).some((id) => String(id) === String(user._id));
+  if (!isProfessor && !isStudent) {
+    return { ok: false, code: 403, msg: "해당 강좌에 접근할 수 없습니다." };
+  }
+  return { ok: true, lec, isProfessor, isStudent };
+}
+
+// 내부 공용 핸들러: PDF 업로드 → 페이지 단위로 분할 저장 + 클래스 materials에 등록
+async function handleUploadPdfSplit(req, res) {
+  try {
+    const { lectureId, classId } = req.params;
+    const user = req.user;
+
+    if (user.user_type !== "professor") {
+      return res.status(403).json({
+        success: false,
+        message: "교수만 PDF를 업로드할 수 있습니다.",
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "pdf 필드에 PDF 파일을 업로드해주세요.",
+      });
+    }
+
+    // 강좌 소유 확인
+    const lecture = await Lecture.findOne({ lecture_id: lectureId, professor_id: user._id });
+    if (!lecture) {
+      return res.status(404).json({ success: false, message: "강좌를 찾을 수 없습니다." });
+    }
+
+    const idx = lecture.classes.findIndex((c) => Number(c.id) === Number(classId));
+    if (idx < 0) {
+      return res.status(404).json({ success: false, message: "해당 클래스를 찾을 수 없습니다." });
+    }
+
+    // 원본 PDF 경로 (프론트에는 원본만 노출)
+    const originalPdfUrl = `/uploads/pdfs/${req.file.filename}`;
+
+    // 분할은 내부 처리만 하고, materials에는 원본만 추가
+    const splitted = await splitPdfIntoPages(req.file.path, { lectureId, classId });
+    if (!Array.isArray(lecture.classes[idx].materials)) {
+      lecture.classes[idx].materials = [];
+    }
+    // 이미 동일 파일이 없을 때만 원본 추가
+    if (!lecture.classes[idx].materials.includes(originalPdfUrl)) {
+      lecture.classes[idx].materials.push(originalPdfUrl);
+    }
+    await lecture.save();
+
+    // OCR + WhiteboardPage 저장 (page_number는 기존 마지막 다음부터 연속 증가)
+    const lastPage = await WhiteboardPage.findOne({
+      lecture_id: lectureId,
+      class_id: String(classId),
+    }).sort({ page_number: -1 });
+    const basePageNumber = lastPage ? lastPage.page_number : 0;
+
+    const createdPages = [];
+
+    for (let i = 0; i < splitted.length; i++) {
+      const page = splitted[i];
+      const absolutePdfPath = toAbsolutePath(page.pdfPath);
+      let text = "";
+      try {
+        // 1) PDF → 이미지 변환
+        const imageAbsolutePath = await convertPdfPageToImage(absolutePdfPath);
+        // 2) Vision OCR 재사용 (snapshot과 동일한 경로)
+        const { text: ocrText } = await extractTextFromImage(imageAbsolutePath);
+        text = ocrText || "";
+      } catch (e) {
+        console.error("PDF 페이지 OCR 실패, 빈 텍스트로 진행:", e?.message || e);
+        // 최악의 경우 텍스트 없이 저장
+        text = "";
+      }
+
+      const created = await WhiteboardPage.create({
+        lecture_id: lectureId,
+        class_id: String(classId),
+        page_number: basePageNumber + i + 1,
+        // 이미지가 없는 PDF 기반 저장이므로 우선 PDF 경로를 image_path에도 저장
+        // (필드 필수 제약을 충족하기 위한 임시 전략)
+        image_path: page.pdfPath,
+        text: text,
+        pdf_path: page.pdfPath,
+        status: "finalized",
+      });
+
+      createdPages.push({
+        page_number: created.page_number,
+        image_path: created.image_path,
+        pdf_path: created.pdf_path,
+        text: created.text,
+        status: created.status,
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "PDF가 업로드되었고, 내부적으로 페이지별 분할 저장되었습니다.",
+      lecture_id: lecture.lecture_id,
+      class_id: Number(classId),
+      total_pages: splitted.length,
+      // snapshot 업로드 후 최종본이 저장된 것과 유사한 형태로 반환
+      pages: createdPages,
+      materials_count: lecture.classes[idx].materials.length,
+      original_pdf_url: originalPdfUrl,
+    });
+  } catch (error) {
+    console.error("PDF 분할 업로드 오류:", error);
+    return res.status(500).json({
+      success: false,
+      message: "PDF를 분할 저장하는 중 오류가 발생했습니다.",
+    });
+  }
+}
+
+// 기본 경로
+router.post(
+  "/lectures/:lectureId/classes/:classId/whiteboard/upload-pdf",
+  authenticateToken,
+  uploadPdf.single("pdf"),
+  handleUploadPdfSplit
+);
+
+// 교수 네임스페이스 별칭 경로
+router.post(
+  "/professor/lectures/:lectureId/classes/:classId/whiteboard/upload-pdf",
+  authenticateToken,
+  uploadPdf.single("pdf"),
+  handleUploadPdfSplit
+);
+
+// 화이트보드 페이지 목록 조회 (기본 finalized만)
+router.get(
+  "/lectures/:lectureId/classes/:classId/whiteboard/pages",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { lectureId, classId } = req.params;
+      const { status = "finalized" } = req.query;
+      const access = await canAccess(req.user, lectureId);
+      if (!access.ok) return res.status(access.code).json({ message: access.msg });
+
+      const filter = {
+        lecture_id: lectureId,
+        class_id: String(classId),
+      };
+      if (status === "finalized" || status === "draft") {
+        filter.status = status;
+      }
+
+      const pages = await WhiteboardPage.find(filter)
+        .sort({ page_number: 1 })
+        .select("page_number image_path pdf_path text status createdAt updatedAt")
+        .lean();
+
+      return res.json({
+        lecture_id: lectureId,
+        class_id: Number(classId),
+        count: pages.length,
+        pages,
+      });
+    } catch (err) {
+      console.error("화이트보드 페이지 목록 조회 오류:", err);
+      return res.status(500).json({ message: "서버 오류가 발생했습니다." });
+    }
+  }
+);
+
+// 최신 finalized 페이지 조회
+router.get(
+  "/lectures/:lectureId/classes/:classId/whiteboard/pages/latest",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { lectureId, classId } = req.params;
+      const access = await canAccess(req.user, lectureId);
+      if (!access.ok) return res.status(access.code).json({ message: access.msg });
+
+      const page = await WhiteboardPage.findOne({
+        lecture_id: lectureId,
+        class_id: String(classId),
+        status: "finalized",
+      })
+        .sort({ page_number: -1 })
+        .select("page_number image_path pdf_path text status createdAt updatedAt")
+        .lean();
+
+      if (!page) {
+        return res.status(404).json({ message: "최신 finalized 페이지가 없습니다." });
+      }
+
+      return res.json({
+        lecture_id: lectureId,
+        class_id: Number(classId),
+        page,
+      });
+    } catch (err) {
+      console.error("최신 화이트보드 페이지 조회 오류:", err);
+      return res.status(500).json({ message: "서버 오류가 발생했습니다." });
     }
   }
 );

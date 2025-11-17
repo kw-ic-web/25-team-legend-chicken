@@ -1,5 +1,14 @@
 {
+  "name": "lecq-monorepo",
+  "private": true,
   "dependencies": {
-    "lucide-react": "^0.545.0"
+    "lucide-react": "^0.545.0",
+    "pdf-parse": "^2.4.5"
+  },
+  "scripts": {
+    "install:backend": "npm --prefix backend install",
+    "install:frontend": "npm --prefix frontend install",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "postinstall": "npm run install:all"
   }
 }

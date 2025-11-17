@@ -172,31 +172,26 @@ router.post("/:id/upvote", authenticateToken, async (req, res) => {
       return res.status(404).json({ message: "질문을 찾을 수 없습니다." });
     }
 
-    // 접근 권한 확인 (이 강의의 수강생/교수인지)
     const access = await canAccess(req.user, q.lecture_id);
     if (!access.ok) {
       return res.status(access.code).json({ message: access.msg });
     }
 
-    // 필드 초기화
     if (!Array.isArray(q.upvoted_by)) q.upvoted_by = [];
     if (typeof q.upvote_count !== "number") q.upvote_count = 0;
 
     const already = q.upvoted_by.includes(userId);
 
     if (already) {
-      // 업보트 취소
       q.upvoted_by = q.upvoted_by.filter((id) => id !== userId);
       q.upvote_count = Math.max(0, q.upvote_count - 1);
     } else {
-      // 업보트 추가
       q.upvoted_by.push(userId);
       q.upvote_count += 1;
     }
 
     await q.save();
 
-    // 🔔 실시간 브로드캐스트 (선택)
     const io = req.app.get("io");
     if (io) {
       const room = `lec:${q.lecture_id}:cls:${q.class_id}`;
@@ -215,5 +210,48 @@ router.post("/:id/upvote", authenticateToken, async (req, res) => {
       .json({ message: "서버 오류가 발생했습니다.", error: err.message });
   }
 });
+
+
+// 강좌/클래스 기준 질문 조회 (교수 + 학생)
+// GET /api/questions/lectures/:lectureId/classes/:classId
+router.get(
+  "/lectures/:lectureId/classes/:classId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const { lectureId, classId } = req.params;
+      const { page, limit = 50 } = req.query;
+
+      const access = await canAccess(user, lectureId);
+      if (!access.ok) {
+        return res.status(access.code).json({ message: access.msg });
+      }
+
+      const filter = {
+        lecture_id: lectureId,
+        class_id: Number(classId),
+      };
+      if (page) filter.page = Number(page);
+
+      const questions = await Question.find(filter)
+        .sort({ createdAt: -1, created_at: -1 })
+        .limit(Math.min(Number(limit) || 50, 200));
+
+      return res.json({
+        lecture_id: lectureId,
+        class_id: Number(classId),
+        count: questions.length,
+        questions,
+      });
+    } catch (err) {
+      console.error("강좌/클래스 질문 조회 오류:", err);
+      return res
+        .status(500)
+        .json({ message: "서버 오류가 발생했습니다.", error: err.message });
+    }
+  }
+);
+
 
 module.exports = router;
