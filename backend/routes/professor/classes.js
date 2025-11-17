@@ -3,6 +3,7 @@ const router = express.Router();
 const Lecture = require("../../models/lectures");
 const { authenticateToken } = require("../../middleware/auth");
 const upload = require("../../config/upload");
+const { toAbsoluteUrl, convertMaterialsToAbsolute, convertClassMaterialsToAbsolute, convertClassesMaterialsToAbsolute } = require("../../utils/urlUtils");
 
 router.get(
   "/:lectureId/classes",
@@ -28,10 +29,12 @@ router.get(
           .json({ message: "해당 강좌에 접근할 수 없습니다." });
       }
 
+      const classesWithAbsoluteUrls = convertClassesMaterialsToAbsolute(req, lecture.classes);
+
       res.status(200).json({
         lecture_id: lecture.lecture_id,
         lecture_name: lecture.name,
-        classes: lecture.classes,
+        classes: classesWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("클래스 조회 오류:", err);
@@ -83,10 +86,12 @@ router.put(
       lecture.classes = classes;
       await lecture.save();
 
+      const classesWithAbsoluteUrls = convertClassesMaterialsToAbsolute(req, lecture.classes);
+
       res.status(200).json({
         message: "클래스가 성공적으로 수정되었습니다.",
         lecture_id: lecture.lecture_id,
-        classes: lecture.classes,
+        classes: classesWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("클래스 수정 오류:", err);
@@ -127,10 +132,12 @@ router.get(
         return res.status(404).json({ message: "해당 클래스를 찾을 수 없습니다." });
       }
 
+      const classWithAbsoluteUrls = convertClassMaterialsToAbsolute(req, classData);
+
       res.status(200).json({
         lecture_id: lecture.lecture_id,
         lecture_name: lecture.name,
-        class: classData,
+        class: classWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("클래스 정보 조회 오류:", err);
@@ -171,13 +178,15 @@ router.get(
         return res.status(404).json({ message: "해당 클래스를 찾을 수 없습니다." });
       }
 
+      const pdfsWithAbsoluteUrls = convertMaterialsToAbsolute(req, classData.materials || []);
+
       res.status(200).json({
         lecture_id: lecture.lecture_id,
         lecture_name: lecture.name,
         class_id: parseInt(classId),
         class_title: classData.title,
-        pdf_count: classData.materials ? classData.materials.length : 0,
-        pdfs: classData.materials || [],
+        pdf_count: pdfsWithAbsoluteUrls.length,
+        pdfs: pdfsWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("PDF 목록 조회 오류:", err);
@@ -346,14 +355,17 @@ router.post(
 
       await lecture.save();
 
+      const absolutePdfUrl = toAbsoluteUrl(req, pdfUrl);
+      const materialsWithAbsoluteUrls = convertMaterialsToAbsolute(req, lecture.classes[classIndex].materials);
+
       res.status(200).json({
         message: "PDF가 성공적으로 업로드되었습니다.",
         lecture_id: lecture.lecture_id,
         class_id: parseInt(classId),
         class_title: lecture.classes[classIndex].title,
-        pdf_url: pdfUrl,
+        pdf_url: absolutePdfUrl,
         filename: req.file.filename,
-        materials: lecture.classes[classIndex].materials,
+        materials: materialsWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("PDF 업로드 오류:", err);
