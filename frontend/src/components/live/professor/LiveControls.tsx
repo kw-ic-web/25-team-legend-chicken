@@ -23,11 +23,11 @@ const LiveControls: React.FC<LiveControlsProps> = ({
   onEnd,
 }) => {
   return (
-    <div className="absolute -bottom-8 left-0 right-0 flex justify-center">
-      <div className="flex items-center space-x-3 bg-white/80 backdrop-blur-xl rounded-3xl px-4 py-3 shadow-lg border border-white/20">
+    <div className="absolute bottom-6 left-0 right-0 flex justify-center">
+      <div className="flex items-center space-x-2 bg-white/90 backdrop-blur-xl rounded-3xl px-3 py-2.5 shadow-lg border border-white/30">
         <button
           onClick={onToggleMic}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+          className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 ${
             isMicOn
               ? "bg-blue-500/10 text-blue-600"
               : "bg-gray-100/50 text-gray-600 hover:bg-gray-200/50"
@@ -43,7 +43,7 @@ const LiveControls: React.FC<LiveControlsProps> = ({
 
         <button
           onClick={onToggleCamera}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+          className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 ${
             isCameraOn
               ? "bg-blue-500/10 text-blue-600"
               : "bg-gray-100/50 text-gray-600 hover:bg-gray-200/50"
@@ -59,7 +59,7 @@ const LiveControls: React.FC<LiveControlsProps> = ({
 
         <button
           onClick={onToggleShare}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+          className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 ${
             isSharing
               ? "bg-blue-500/10 text-blue-600"
               : "bg-gray-100/50 text-gray-600 hover:bg-gray-200/50"
@@ -71,7 +71,7 @@ const LiveControls: React.FC<LiveControlsProps> = ({
 
         <button
           onClick={onOpenPersonnel}
-          className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gray-100/50 text-gray-600 hover:bg-gray-200/50 transition-all duration-200"
+          className="w-11 h-11 rounded-2xl flex items-center justify-center bg-gray-100/50 text-gray-600 hover:bg-gray-200/50 transition-all duration-200"
           title="강의 인원 관리"
         >
           <UserPlus className="w-5 h-5" />
@@ -79,7 +79,7 @@ const LiveControls: React.FC<LiveControlsProps> = ({
 
         <button
           onClick={onEnd}
-          className="h-12 px-5 rounded-2xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-all duration-200 shadow-sm"
+          className="h-11 px-4 rounded-2xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-all duration-200 shadow-sm"
         >
           방송 종료
         </button>
