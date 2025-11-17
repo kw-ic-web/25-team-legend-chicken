@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { Edit, Video, VideoOff } from "lucide-react";
 import Modal from "../../common/Modal";
 
@@ -20,7 +19,6 @@ const BroadcastSettingsModal: React.FC<BroadcastSettingsModalProps> = ({
   cameraRequired,
   files,
 }) => {
-  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [isMicOn, setIsMicOn] = useState(false);
@@ -391,7 +389,6 @@ const BroadcastSettingsModal: React.FC<BroadcastSettingsModalProps> = ({
           <button
             onClick={() => {
               onStart();
-              navigate("/professor/realtime-dashboard");
             }}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200 flex items-center space-x-2"
           >

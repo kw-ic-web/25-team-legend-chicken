@@ -25,6 +25,7 @@ const ProfessorSidebar: React.FC = () => {
 
   // 교수 정보
   const [professorInfo, setProfessorInfo] = useState({
+    id: "",
     name: "",
     title: "강의자",
     affiliation: "광운대학교 정보융합학부", // API에 없으므로 기본값 유지
@@ -66,6 +67,7 @@ const ProfessorSidebar: React.FC = () => {
       // 교수 정보 업데이트 (GET /api/myinfo 응답 사용)
       if (myInfoResponse?.success && myInfoResponse.user) {
         setProfessorInfo({
+          id: myInfoResponse.user.id,
           name: myInfoResponse.user.name,
           title: "강의자",
           affiliation: "광운대학교 정보융합학부", // API에 없으므로 기본값 유지
