@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useLocation, useParams } from "react-router-dom";
 import { Send } from "lucide-react";
 import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
 import ParticipantStrip from "../../components/live/professor/ParticipantStrip";
@@ -15,7 +16,23 @@ interface Question {
   status: "pending" | "answered" | "dismissed";
 }
 
+type LiveNavigationState = {
+  lectureId?: string;
+  classId?: number;
+  classTitle?: string;
+  liveId?: number;
+  cameraRequired?: boolean;
+  materials?: Array<{ name: string; size: number }>;
+};
+
 const RealtimeDashboard: React.FC = () => {
+  const location = useLocation();
+  const params = useParams<{
+    lectureId?: string;
+    classId?: string;
+    liveId?: string;
+  }>();
+  const liveState = (location.state as LiveNavigationState) || null;
   const [isMicOn, setIsMicOn] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
@@ -479,8 +496,21 @@ const RealtimeDashboard: React.FC = () => {
             {/* 강의 제목 */}
             <div className="p-6 border-b border-gray-200">
               <h1 className="text-2xl font-bold text-green-600">
-                Chapter 1-1. 파이썬 & 프로그래밍 소개
+                {liveState?.classTitle || "실시간 강의"}
               </h1>
+              <div className="text-sm text-gray-500 mt-1 space-x-3">
+                {(liveState?.lectureId || params.lectureId) && (
+                  <span>
+                    강좌 ID: {liveState?.lectureId || params.lectureId}
+                  </span>
+                )}
+                {(liveState?.classId || params.classId) && (
+                  <span>클래스 ID: {liveState?.classId || params.classId}</span>
+                )}
+                {(liveState?.liveId || params.liveId) && (
+                  <span>라이브 ID: {liveState?.liveId || params.liveId}</span>
+                )}
+              </div>
             </div>
 
             {/* 상단 참여자(웹캠) 스트립 */}
@@ -609,7 +639,9 @@ const RealtimeDashboard: React.FC = () => {
         <LecturePersonnelModal
           isOpen={isPersonnelOpen}
           onClose={closePersonnel}
-          students={students} lectureId={""}        />
+          students={students}
+          lectureId={""}
+        />
         {toast && (
           <Toast
             message={toast.message}
