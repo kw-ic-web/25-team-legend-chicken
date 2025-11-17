@@ -19,6 +19,7 @@ interface LectureCardProps {
   newQuestions?: number;
   subject?: string;
   image?: string;
+  userType?: "student" | "professor";
 }
 
 const LectureCard: React.FC<LectureCardProps> = ({
@@ -30,6 +31,7 @@ const LectureCard: React.FC<LectureCardProps> = ({
   newQuestions = 0,
   subject = "Python",
   image,
+  userType = "professor",
 }) => {
   const [imageError, setImageError] = React.useState(false);
   const [imageLoaded, setImageLoaded] = React.useState(false);
@@ -105,9 +107,13 @@ const LectureCard: React.FC<LectureCardProps> = ({
     return iconMap[subject] || <BookOpen className="w-8 h-8 text-blue-600" />;
   };
 
+  const linkPath = userType === "student" 
+    ? `/student/courses/${id}` 
+    : `/professor/courses/${id}`;
+
   return (
     <Link
-      to={`/professor/courses/${id}`}
+      to={linkPath}
       className="block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
     >
       {/* 상단 섹션 - 강의 이미지 영역 */}
