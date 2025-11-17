@@ -42,16 +42,17 @@ const StudentParticipantStrip: React.FC<Props> = ({
         </div>
 
         <div className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden border border-blue-200">
-          {studentVideoRef && isStudentCameraOn ? (
-            <video
-              ref={studentVideoRef as React.RefObject<HTMLVideoElement>}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs text-gray-300 bg-gray-800">
+          <video
+            ref={studentVideoRef as React.RefObject<HTMLVideoElement>}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-cover transition-opacity duration-200 ${
+              isStudentCameraOn ? "opacity-100" : "opacity-0"
+            }`}
+          />
+          {!isStudentCameraOn && (
+            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-300 bg-gray-800">
               내 화면
             </div>
           )}
