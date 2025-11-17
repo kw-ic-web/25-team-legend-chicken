@@ -117,7 +117,60 @@ router.get(
         return res.status(403).json({ message: "잘못된 회원 유형입니다." });
       }
 
-      res.status(200).json({ lectures });
+      // 각 강좌의 클래스별 라이브 상태 정리
+      const formattedLectures = lectures.map(lecture => {
+        const formattedClasses = lecture.classes.map(cls => {
+          // lives 배열이 없으면 빈 배열로 초기화
+          const lives = Array.isArray(cls.lives) ? cls.lives : [];
+          
+          // 기본 클래스 정보
+          const classResponse = {
+            id: cls.id,
+            title: cls.title,
+            description: cls.description || "",
+            date: cls.date,
+            materials: cls.materials || [],
+            _id: cls._id,
+          };
+
+          // 라이브 상태에 따라 다른 값 반환
+          if (cls.isLiveActive && cls.currentLiveId) {
+            // 라이브 중
+            classResponse.isLiveActive = true;
+            classResponse.currentLiveId = cls.currentLiveId;
+            classResponse.lives = lives.map(live => ({
+              liveId: live.liveId,
+              status: live.status,
+              startedAt: live.startedAt,
+              endedAt: live.endedAt || null,
+            }));
+          } else if (lives.length > 0) {
+            // 라이브 끝남 (이전에 진행된 바 있음) - 클래스 3의 경우
+            classResponse.isLiveActive = false;
+            classResponse.currentLiveId = null;
+            classResponse.lives = lives.map(live => ({
+              liveId: live.liveId,
+              status: live.status,
+              startedAt: live.startedAt,
+              endedAt: live.endedAt || null,
+            }));
+          } else {
+            // 라이브 전 (한 번도 진행된 적 없음) - 클래스 4의 경우
+            classResponse.isLiveActive = false;
+            classResponse.currentLiveId = null;
+            classResponse.lives = [];
+          }
+
+          return classResponse;
+        });
+
+        return {
+          ...lecture.toObject(),
+          classes: formattedClasses,
+        };
+      });
+
+      res.status(200).json({ lectures: formattedLectures });
     } catch (err) {
       console.error("강의 조회 오류:", err);
       res.status(500).json({ message: "서버 오류가 발생했습니다." });
