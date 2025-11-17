@@ -21,6 +21,12 @@ tags:
     description: 강의 공통 API
   - name: Whiteboard
     description: 실시간 화이트보드 캡처 API
+  - name: Questions
+    description: 질문 관련 API
+  - name: Reports
+    description: 분석 리포트 API
+  - name: Working
+    description: 지금 연결해야하는 API
 
 components:
   securitySchemes:
@@ -1201,3 +1207,949 @@ paths:
           description: 권한 없음 (학생만 가능)
         '404':
           description: 강좌를 찾을 수 없음
+
+  # ==================== 질문 API ====================
+  /api/questions/lectures/{lectureId}/classes/{classId}:
+    get:
+      tags: [Questions]
+      summary: 클래스 단위 질문 조회
+      description: 특정 강좌의 특정 클래스에 등록된 모든 질문을 조회합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-4CDC64C1
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: number
+          description: 특정 페이지의 질문만 조회 (선택)
+          example: 3
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 50
+            maximum: 200
+          description: 조회할 질문 개수 (최대 200개)
+          example: 50
+      responses:
+        '200':
+          description: 질문 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lecture_id:
+                    type: string
+                    example: LEC-4CDC64C1
+                  class_id:
+                    type: number
+                    example: 1
+                  count:
+                    type: number
+                    example: 5
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          example: 6914001daba488eae7586b8f
+                        lecture_id:
+                          type: string
+                          example: LEC-4CDC64C1
+                        class_id:
+                          type: number
+                          example: 1
+                        live_id:
+                          type: number
+                          nullable: true
+                          example: null
+                        page:
+                          type: number
+                          example: 3
+                        section:
+                          type: string
+                          nullable: true
+                          example: A
+                        position:
+                          type: object
+                          properties:
+                            x:
+                              type: number
+                              example: 0.12
+                            y:
+                              type: number
+                              example: 0.34
+                        timestamp:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.966Z
+                        type:
+                          type: string
+                          enum: [question, answer, note]
+                          example: question
+                        author:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                        text:
+                          type: string
+                          example: 질문 본문입니다
+                        metadata:
+                          type: object
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.974Z
+                        updated_at:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.974Z
+        '400':
+          description: 잘못된 요청
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 해당 강좌에 접근할 수 없습니다.
+        '404':
+          description: 강좌를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+
+  # ==================== swagger update - 1107 ====================
+  /api/professor/lectures/{lectureId}/live-status:
+    get:
+      tags: [Professor, Working]
+      summary: 강좌 라이브 상태 조회
+      description: 특정 강좌의 모든 클래스별 라이브 상태를 조회합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-32AEBA14
+      responses:
+        '200':
+          description: 라이브 상태 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  lecture_name:
+                    type: string
+                    example: 웹서비스설계및실습
+                  classes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        class_id:
+                          type: number
+                          example: 1
+                        class_title:
+                          type: string
+                          example: Orientation, 웹기초
+                        isLiveActive:
+                          type: boolean
+                          example: true
+                        currentLiveId:
+                          type: number
+                          nullable: true
+                          example: 1
+                        lives:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              liveId:
+                                type: number
+                                example: 1
+                              status:
+                                type: string
+                                enum: [open, closed]
+                                example: open
+                              startedAt:
+                                type: string
+                                format: date-time
+                                example: 2025-11-17T06:04:27.947Z
+                              endedAt:
+                                type: string
+                                format: date-time
+                                nullable: true
+                                example: null
+        '403':
+          description: 권한 없음
+        '404':
+          description: 강좌를 찾을 수 없음
+        '500':
+          description: 서버 오류
+
+  /api/professor/lectures/{lectureId}/classes/{classId}/live/start:
+    post:
+      tags: [Professor, Working]
+      summary: 라이브 시작
+      description: 특정 클래스의 라이브를 시작합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-32AEBA14
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 라이브 시작 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 라이브가 시작되었습니다.
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  class_id:
+                    type: number
+                    example: 1
+                  live_id:
+                    type: number
+                    example: 1
+                  started_at:
+                    type: string
+                    format: date-time
+                    example: 2025-11-17T06:04:27.947Z
+                  live_path:
+                    type: string
+                    example: /professor/lectureLEC-32AEBA14/class1/live1
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+        '409':
+          description: 이미 진행 중인 라이브가 있음
+        '500':
+          description: 서버 오류
+
+  /api/professor/lectures/{lectureId}/classes/{classId}/live/end:
+    post:
+      tags: [Professor, Working]
+      summary: 라이브 종료
+      description: 특정 클래스의 현재 진행 중인 라이브를 종료합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-32AEBA14
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 라이브 종료 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 라이브가 종료되었습니다.
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  class_id:
+                    type: number
+                    example: 1
+                  live_id:
+                    type: number
+                    example: 1
+                  started_at:
+                    type: string
+                    format: date-time
+                    example: 2025-11-17T06:04:27.947Z
+                  ended_at:
+                    type: string
+                    format: date-time
+                    example: 2025-11-17T08:00:00.000Z
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+        '409':
+          description: 진행 중인 라이브가 없음
+        '500':
+          description: 서버 오류
+
+  /api/questions:
+    post:
+      tags: [Questions, Working]
+      summary: 질문 등록
+      description: 새로운 질문을 등록합니다. 질문 등록 후 GPT가 교안 내용을 기반으로 자동 답변을 생성합니다.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lecture_id, class_id, page, position, text]
+              properties:
+                lecture_id:
+                  type: string
+                  example: LEC-32AEBA14
+                class_id:
+                  type: number
+                  example: 2
+                page:
+                  type: number
+                  example: 3
+                section:
+                  type: string
+                  nullable: true
+                  example: A
+                position:
+                  type: object
+                  required: [x, y]
+                  properties:
+                    x:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                      example: 0.12
+                    y:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+                      example: 0.34
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: 2025-11-12T03:33:49.966Z
+                type:
+                  type: string
+                  enum: [question, answer, note]
+                  default: question
+                  example: question
+                author:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    role:
+                      type: string
+                text:
+                  type: string
+                  example: 이 부분이 이해가 안 됩니다.
+                metadata:
+                  type: object
+                  properties:
+                    source:
+                      type: string
+                      example: pdf_viewer
+                    device:
+                      type: string
+                      example: web
+                    language:
+                      type: string
+                      example: ko
+      responses:
+        '201':
+          description: 질문 등록 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 질문이 저장되었습니다.
+                  question:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        example: 6914001daba488eae7586b8f
+                      lecture_id:
+                        type: string
+                        example: LEC-32AEBA14
+                      class_id:
+                        type: number
+                        example: 2
+                      page:
+                        type: number
+                        example: 3
+                      position:
+                        type: object
+                        properties:
+                          x:
+                            type: number
+                            example: 0.12
+                          y:
+                            type: number
+                            example: 0.34
+                      text:
+                        type: string
+                        example: 이 부분이 이해가 안 됩니다.
+                      answer:
+                        type: string
+                        nullable: true
+                        description: GPT 자동 답변 (비동기 생성)
+                        example: null
+                      author:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          role:
+                            type: string
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: 2025-11-12T03:33:49.974Z
+        '400':
+          description: 잘못된 요청 (필수 필드 누락)
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 해당 강좌에 접근할 수 없습니다.
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+
+  /api/questions/lectures/{lectureId}:
+    get:
+      tags: [Questions, Working]
+      summary: 강좌 단위 질문 조회
+      description: 특정 강좌의 모든 질문을 조회합니다. upvote 기준 top5 질문도 포함됩니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-32AEBA14
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: number
+          description: 특정 페이지의 질문만 조회 (선택)
+          example: 3
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 50
+            maximum: 200
+          description: 조회할 질문 개수 (최대 200개)
+          example: 50
+      responses:
+        '200':
+          description: 질문 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  count:
+                    type: number
+                    example: 22
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        lecture_id:
+                          type: string
+                        class_id:
+                          type: number
+                        page:
+                          type: number
+                        text:
+                          type: string
+                        answer:
+                          type: string
+                          nullable: true
+                        author:
+                          type: object
+                        created_at:
+                          type: string
+                          format: date-time
+                  top_questions_by_upvote:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          example: 6914001daba488eae7586b8f
+                        text:
+                          type: string
+                          example: 이 부분이 이해가 안 됩니다.
+                        author:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                        upvotes:
+                          type: number
+                          example: 5
+                        class_id:
+                          type: number
+                          example: 2
+                        page:
+                          type: number
+                          example: 3
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.974Z
+        '400':
+          description: 잘못된 요청
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 해당 강좌에 접근할 수 없습니다.
+        '404':
+          description: 강좌를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+
+  /api/professor/lectures/{lectureId}/statistics:
+    get:
+      tags: [Professor, Working]
+      summary: 강좌 통계 조회
+      description: 강좌 전체 및 클래스별 통계 정보를 조회합니다. 총 질문 수, 총 업보트 수, 참여 학생 비율, 가장 어려운 개념 등을 제공합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-32AEBA14
+      responses:
+        '200':
+          description: 통계 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  lecture_name:
+                    type: string
+                    example: 웹서비스설계및실습-Web Service Design and Practice
+                  statistics:
+                    type: object
+                    properties:
+                      total_questions:
+                        type: number
+                        example: 22
+                      total_upvotes:
+                        type: number
+                        example: 15
+                      participation_rate:
+                        type: number
+                        example: 20.0
+                      participation_rate_percentage:
+                        type: string
+                        example: "20%"
+                      students_who_asked:
+                        type: number
+                        example: 2
+                      total_students:
+                        type: number
+                        example: 10
+                      hardest_concept:
+                        type: string
+                        example: 웹서비스
+                  class_statistics:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        class_id:
+                          type: number
+                          example: 1
+                        total_questions:
+                          type: number
+                          example: 12
+                        total_upvotes:
+                          type: number
+                          example: 8
+                        participation_rate:
+                          type: number
+                          example: 20.0
+                        participation_rate_percentage:
+                          type: string
+                          example: "20%"
+                        students_who_asked:
+                          type: number
+                          example: 2
+                        total_students:
+                          type: number
+                          example: 10
+                        hardest_concept:
+                          type: string
+                          example: API
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '404':
+          description: 강좌를 찾을 수 없음
+        '500':
+          description: 서버 오류
+
+  /api/lectures/{lectureId}/classes/{classId}/whiteboard/upload-pdf:
+    post:
+      tags: [Whiteboard, Working]
+      summary: PDF 업로드 및 분할
+      description: PDF 파일을 업로드하고 페이지별로 분할하여 저장합니다. 각 페이지는 OCR을 통해 텍스트를 추출합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-32AEBA14
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 2
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [pdf]
+              properties:
+                pdf:
+                  type: string
+                  format: binary
+                  description: PDF 파일
+      responses:
+        '201':
+          description: PDF 업로드 및 분할 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: PDF가 업로드되었고, 내부적으로 페이지별 분할 저장되었습니다.
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  class_id:
+                    type: number
+                    example: 2
+                  total_pages:
+                    type: number
+                    example: 10
+                  pages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        page_number:
+                          type: number
+                          example: 1
+                        image_path:
+                          type: string
+                          example: /uploads/pdfs/pdf-1763312325706-187817688.pdf
+                        pdf_path:
+                          type: string
+                          example: /uploads/pdfs/pdf-1763312325706-187817688.pdf
+                        text:
+                          type: string
+                          example: "웹서비스 기초\nRESTful API 설계..."
+                        status:
+                          type: string
+                          enum: [finalized]
+                          example: finalized
+                  materials_count:
+                    type: number
+                    example: 1
+                  original_pdf_url:
+                    type: string
+                    example: /uploads/pdfs/pdf-1763312325706-187817688.pdf
+        '400':
+          description: 잘못된 요청 (PDF 파일 미업로드)
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+        '500':
+          description: 서버 오류
+
+  /api/reports/{lectureId}/classes/{classId}/analysis/latest:
+    get:
+      tags: [Reports, Working]
+      summary: 클래스 단위 분석 리포트 조회 및 생성
+      description: >
+        특정 클래스의 분석 리포트를 조회합니다. 리포트가 없거나 기존 리포트가 있어도 
+        매 요청마다 최신 데이터로 새로 생성합니다.
+        <br/>- 총 질문 수, 총 업보트 수, 참여 학생 비율, 가장 어려운 개념 등 KPI 제공
+        <br/>- 타임라인, 질문 매트릭스, 개념 그래프, 리더보드, GPT 요약 포함
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-32AEBA14
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 분석 리포트 조회/생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                    example: 691b21568ee043546f263fab
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  class_id:
+                    type: number
+                    example: 1
+                  kpis:
+                    type: object
+                    properties:
+                      totalQuestions:
+                        type: number
+                        example: 136
+                      totalCurious:
+                        type: number
+                        example: 516
+                      participationRate:
+                        type: number
+                        example: 1.0
+                      hardestConcept:
+                        type: string
+                        example: REST API
+                  timeline:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        start:
+                          type: string
+                          format: date-time
+                          example: 2025-11-17T10:10:40.530Z
+                        end:
+                          type: string
+                          format: date-time
+                          example: 2025-11-17T10:15:40.530Z
+                        questions:
+                          type: number
+                          example: 136
+                        curious:
+                          type: number
+                          example: 516
+                  questionMatrix:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        text:
+                          type: string
+                          example: 개발 도구는 어떤 것을 선택해도 되나요?
+                        frequency:
+                          type: number
+                          example: 1
+                        popularity:
+                          type: number
+                          example: 3
+                        uniqueAuthors:
+                          type: number
+                          example: 1
+                  conceptGraph:
+                    type: object
+                    properties:
+                      nodes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: 무엇인가요
+                            label:
+                              type: string
+                              example: 무엇인가요
+                            weight:
+                              type: number
+                              example: 48
+                      edges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            source:
+                              type: string
+                              example: 무엇인가요
+                            target:
+                              type: string
+                              example: 이유는
+                            weight:
+                              type: number
+                              example: 10
+                  leaderboard:
+                    type: object
+                    properties:
+                      topAskers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId:
+                              type: string
+                              example: 6910d351fb90e6f31ca52cad
+                            name:
+                              type: string
+                              example: 웹설실_학생3
+                            count:
+                              type: number
+                              example: 20
+                      topVoters:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId:
+                              type: string
+                              example: 6910d332fb90e6f31ca52c98
+                            name:
+                              type: string
+                              example: 웹설실_학생10
+                            likes:
+                              type: number
+                              example: 63
+                  gpt:
+                    type: object
+                    properties:
+                      summary:
+                        type: string
+                        description: GPT가 생성한 상세한 분석 리포트 내용
+                        example: |
+                          ### 1) 강좌 전체 핵심 요약
+                          강좌 "웹서비스설계및실습"은 웹 서비스의 설계 및 구현에 대한 실습 중심의 교육을 제공하였습니다...
+                      sections:
+                        type: object
+                        properties: {}
+                      usage:
+                        type: object
+                        nullable: true
+                        properties:
+                          prompt_tokens:
+                            type: number
+                            example: 211
+                          completion_tokens:
+                            type: number
+                            example: 607
+                          total_tokens:
+                            type: number
+                            example: 818
+                          estimated_cost:
+                            type: number
+                            example: 0.00039585
+                  generated_at:
+                    type: string
+                    format: date-time
+                    example: 2025-11-17T13:21:26.061Z
+                  createdAt:
+                    type: string
+                    format: date-time
+                    example: 2025-11-17T13:21:26.072Z
+                  updatedAt:
+                    type: string
+                    format: date-time
+                    example: 2025-11-17T13:21:26.072Z
+        '403':
+          description: 권한 없음 (교수만 리포트 생성 가능, 학생은 조회만 가능)
+        '404':
+          description: 강좌를 찾을 수 없음
+        '500':
+          description: 서버 오류
