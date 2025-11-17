@@ -23,6 +23,8 @@ tags:
     description: 실시간 화이트보드 캡처 API
   - name: Questions
     description: 질문 관련 API
+  - name: Reports
+    description: 분석 리포트 API
   - name: Working
     description: 지금 연결해야하는 API
 
@@ -2050,5 +2052,206 @@ paths:
           description: 권한 없음 (교수만 가능)
         '404':
           description: 강좌 또는 클래스를 찾을 수 없음
+        '500':
+          description: 서버 오류
+
+  /api/reports/{lectureId}/classes/{classId}/analysis/latest:
+    get:
+      tags: [Reports, Working]
+      summary: 클래스 단위 분석 리포트 조회 및 생성
+      description: >
+        특정 클래스의 분석 리포트를 조회합니다. 리포트가 없거나 기존 리포트가 있어도 
+        매 요청마다 최신 데이터로 새로 생성합니다.
+        <br/>- 총 질문 수, 총 업보트 수, 참여 학생 비율, 가장 어려운 개념 등 KPI 제공
+        <br/>- 타임라인, 질문 매트릭스, 개념 그래프, 리더보드, GPT 요약 포함
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-32AEBA14
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 분석 리포트 조회/생성 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  _id:
+                    type: string
+                    example: 691b21568ee043546f263fab
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  class_id:
+                    type: number
+                    example: 1
+                  kpis:
+                    type: object
+                    properties:
+                      totalQuestions:
+                        type: number
+                        example: 136
+                      totalCurious:
+                        type: number
+                        example: 516
+                      participationRate:
+                        type: number
+                        example: 1.0
+                      hardestConcept:
+                        type: string
+                        example: REST API
+                  timeline:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        start:
+                          type: string
+                          format: date-time
+                          example: 2025-11-17T10:10:40.530Z
+                        end:
+                          type: string
+                          format: date-time
+                          example: 2025-11-17T10:15:40.530Z
+                        questions:
+                          type: number
+                          example: 136
+                        curious:
+                          type: number
+                          example: 516
+                  questionMatrix:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        text:
+                          type: string
+                          example: 개발 도구는 어떤 것을 선택해도 되나요?
+                        frequency:
+                          type: number
+                          example: 1
+                        popularity:
+                          type: number
+                          example: 3
+                        uniqueAuthors:
+                          type: number
+                          example: 1
+                  conceptGraph:
+                    type: object
+                    properties:
+                      nodes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: 무엇인가요
+                            label:
+                              type: string
+                              example: 무엇인가요
+                            weight:
+                              type: number
+                              example: 48
+                      edges:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            source:
+                              type: string
+                              example: 무엇인가요
+                            target:
+                              type: string
+                              example: 이유는
+                            weight:
+                              type: number
+                              example: 10
+                  leaderboard:
+                    type: object
+                    properties:
+                      topAskers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId:
+                              type: string
+                              example: 6910d351fb90e6f31ca52cad
+                            name:
+                              type: string
+                              example: 웹설실_학생3
+                            count:
+                              type: number
+                              example: 20
+                      topVoters:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            userId:
+                              type: string
+                              example: 6910d332fb90e6f31ca52c98
+                            name:
+                              type: string
+                              example: 웹설실_학생10
+                            likes:
+                              type: number
+                              example: 63
+                  gpt:
+                    type: object
+                    properties:
+                      summary:
+                        type: string
+                        description: GPT가 생성한 상세한 분석 리포트 내용
+                        example: |
+                          ### 1) 강좌 전체 핵심 요약
+                          강좌 "웹서비스설계및실습"은 웹 서비스의 설계 및 구현에 대한 실습 중심의 교육을 제공하였습니다...
+                      sections:
+                        type: object
+                        properties: {}
+                      usage:
+                        type: object
+                        nullable: true
+                        properties:
+                          prompt_tokens:
+                            type: number
+                            example: 211
+                          completion_tokens:
+                            type: number
+                            example: 607
+                          total_tokens:
+                            type: number
+                            example: 818
+                          estimated_cost:
+                            type: number
+                            example: 0.00039585
+                  generated_at:
+                    type: string
+                    format: date-time
+                    example: 2025-11-17T13:21:26.061Z
+                  createdAt:
+                    type: string
+                    format: date-time
+                    example: 2025-11-17T13:21:26.072Z
+                  updatedAt:
+                    type: string
+                    format: date-time
+                    example: 2025-11-17T13:21:26.072Z
+        '403':
+          description: 권한 없음 (교수만 리포트 생성 가능, 학생은 조회만 가능)
+        '404':
+          description: 강좌를 찾을 수 없음
         '500':
           description: 서버 오류
