@@ -132,7 +132,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
                         <div className="flex items-center space-x-1">
                           <Users className="w-4 h-4 text-gray-400" />
                           <span className="text-xs text-gray-500">
-                            {item.participants}+
+                            {item.participants}
                           </span>
                         </div>
                       )}

@@ -22,7 +22,12 @@ const StudentClass: React.FC = () => {
     Array<{
       week: number;
       title: string;
-      items: Array<{ name: string; size: string; url?: string; originalName?: string }>;
+      items: Array<{
+        name: string;
+        size: string;
+        url?: string;
+        originalName?: string;
+      }>;
     }>
   >([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +37,8 @@ const StudentClass: React.FC = () => {
     message: string;
     type: "success" | "error";
   } | null>(null);
-  const [isLessonQuestionModalOpen, setIsLessonQuestionModalOpen] = useState(false);
+  const [isLessonQuestionModalOpen, setIsLessonQuestionModalOpen] =
+    useState(false);
   const [selectedLesson, setSelectedLesson] = useState<{
     title: string;
     fileName: string;
@@ -54,7 +60,7 @@ const StudentClass: React.FC = () => {
       participants: number;
     }>
   >([]);
-  
+
   // 최신 질문 (임시 데이터, 나중에 API로 교체)
   const latestQuestions = [
     { q: "과목에 대한 질문을 해도 되나요?", a: "네, 얼마든지요..." },
@@ -85,10 +91,12 @@ const StudentClass: React.FC = () => {
         }
 
         if (lecturesResponse?.lectures) {
-          const lecturesList = lecturesResponse.lectures.map((lecture: { name: string }) => ({
-            title: lecture.name,
-            participants: 0,
-          }));
+          const lecturesList = lecturesResponse.lectures.map(
+            (lecture: { name: string }) => ({
+              title: lecture.name,
+              participants: 0,
+            })
+          );
           setMyLectures(lecturesList.slice(0, 4));
         }
       } catch (error) {
@@ -119,7 +127,6 @@ const StudentClass: React.FC = () => {
           description: lectureDetailResponse?.lecture_description || "",
           participants: lectureDetailResponse?.student_count || 0,
         });
-
 
         // 클래스를 weeks 형식으로 변환
         const transformedWeeks =
@@ -173,8 +180,11 @@ const StudentClass: React.FC = () => {
           const liveWeek = liveChecks.find((check) => check.active === true);
           console.log("Live checks result:", liveChecks);
           console.log("Active live week:", liveWeek);
-          console.log("Current live class state before update:", currentLiveClass);
-          
+          console.log(
+            "Current live class state before update:",
+            currentLiveClass
+          );
+
           if (liveWeek) {
             const liveWeekData = transformedWeeks.find(
               (w) => w.week === liveWeek.week
@@ -240,7 +250,12 @@ const StudentClass: React.FC = () => {
   };
 
   const handleDownloadAll = async (
-    items: Array<{ name: string; size: string; url?: string; originalName?: string }>
+    items: Array<{
+      name: string;
+      size: string;
+      url?: string;
+      originalName?: string;
+    }>
   ) => {
     for (const item of items) {
       if (item.url) {
@@ -433,12 +448,12 @@ const StudentClass: React.FC = () => {
                 </span>
                 <span className="inline-flex items-center space-x-1 text-base">
                   <Users className="w-4 h-4 text-gray-500" />
-                  <span>{course.participants}+</span>
+                  <span>{course.participants}</span>
                 </span>
               </div>
               <div className="mt-6 space-y-5 text-gray-700 text-[12px]">
                 <p>
-                  {course.description || 
+                  {course.description ||
                     "이미 12명 이상이 학습하고 만족한 최고의 프로그래밍 입문 강의. 프로그래밍을 전혀 접해보지 못한 사람부터 실제 활용 가능한 프로그래밍 능력까지 갈 수 있도록 도와주는 강의입니다."}
                 </p>
               </div>
@@ -468,7 +483,9 @@ const StudentClass: React.FC = () => {
         <div className="bg-gray-100 px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <h1 className="text-2xl font-bold text-gray-900">{course.title || "강좌 정보를 불러오는 중..."}</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {course.title || "강좌 정보를 불러오는 중..."}
+              </h1>
             </div>
           </div>
         </div>
@@ -480,13 +497,12 @@ const StudentClass: React.FC = () => {
               <div className="flex-1">
                 <p className="text-lg font-bold text-gray-900 mb-2">
                   현재{" "}
-                  <span className="text-blue-600 font-bold">
-                    1주차 강의
-                  </span>
+                  <span className="text-blue-600 font-bold">1주차 강의</span>
                   <span className="text-gray-900">가 진행 중입니다.</span>
                 </p>
                 <p className="text-sm text-gray-700">
-                  지금 입장하면 실시간 채팅과 질문 참여가 가능합니다. 늦지 않게 합류하세요!
+                  지금 입장하면 실시간 채팅과 질문 참여가 가능합니다. 늦지 않게
+                  합류하세요!
                 </p>
               </div>
               <button
@@ -502,113 +518,126 @@ const StudentClass: React.FC = () => {
 
         {/* 콘텐츠 */}
         <div className="flex-1 p-6 overflow-y-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-gray-500">클래스 목록을 불러오는 중...</div>
-          </div>
-        ) : weeks.length === 0 && course.title ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-gray-500">등록된 클래스가 없습니다.</div>
-          </div>
-        ) : weeks.length === 0 ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-gray-500">
-              클래스 목록을 불러올 수 없습니다. 페이지를 새로고침해주세요.
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-gray-500">클래스 목록을 불러오는 중...</div>
             </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {weeks.map((w) => {
-              const classId = Number(w.week);
-              return (
-                <details
-                  key={w.week}
-                  className="bg-white border border-gray-200 rounded-lg group"
-                  open={w.week === 1}
-                  onToggle={(event) =>
-                    handleToggleWeek(classId, w.title, event.currentTarget.open)
-                  }
-                >
-                  <summary className="list-none cursor-pointer select-none px-6 py-4 flex items-center justify-between border-b border-gray-200 group-open:border-b">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-5 h-5 flex items-center justify-center">
-                        <ChevronDown className="w-5 h-5 text-gray-500 group-open:hidden transition-transform" />
-                        <ChevronUp className="w-5 h-5 text-gray-500 hidden group-open:block transition-transform" />
+          ) : weeks.length === 0 && course.title ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-gray-500">등록된 클래스가 없습니다.</div>
+            </div>
+          ) : weeks.length === 0 ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-gray-500">
+                클래스 목록을 불러올 수 없습니다. 페이지를 새로고침해주세요.
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {weeks.map((w) => {
+                const classId = Number(w.week);
+                return (
+                  <details
+                    key={w.week}
+                    className="bg-white border border-gray-200 rounded-lg group"
+                    open={w.week === 1}
+                    onToggle={(event) =>
+                      handleToggleWeek(
+                        classId,
+                        w.title,
+                        event.currentTarget.open
+                      )
+                    }
+                  >
+                    <summary className="list-none cursor-pointer select-none px-6 py-4 flex items-center justify-between border-b border-gray-200 group-open:border-b">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-5 h-5 flex items-center justify-center">
+                          <ChevronDown className="w-5 h-5 text-gray-500 group-open:hidden transition-transform" />
+                          <ChevronUp className="w-5 h-5 text-gray-500 hidden group-open:block transition-transform" />
+                        </div>
+                        <div className="font-semibold text-gray-900">
+                          {w.title}
+                        </div>
                       </div>
-                      <div className="font-semibold text-gray-900">{w.title}</div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className="text-sm text-gray-600">{w.items.length}개</span>
-                      {w.items.length > 0 && (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleDownloadAll(w.items);
-                          }}
-                          className="text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
-                        >
-                          <Download className="w-4 h-4" />
-                          <span>전체 다운로드</span>
-                        </button>
-                      )}
-                    </div>
-                  </summary>
-                  <div className="p-6 space-y-3">
-                    {isPdfLoadingFor === classId ? (
-                      <div className="text-center py-4 text-gray-500">
-                        자료를 불러오는 중...
-                      </div>
-                    ) : w.items.length === 0 ? (
-                      <div className="text-center py-4 text-gray-500">
-                        등록된 자료가 없습니다.
-                      </div>
-                    ) : (
-                      <>
-                        {w.items.map((item, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between p-3 border border-gray-200 rounded hover:bg-gray-50"
+                      <div className="flex items-center space-x-3">
+                        <span className="text-sm text-gray-600">
+                          {w.items.length}개
+                        </span>
+                        {w.items.length > 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleDownloadAll(w.items);
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
                           >
-                            <div className="flex items-center space-x-3 flex-1 min-w-0">
-                              <Download className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-gray-900 truncate">
-                                  {item.name}
+                            <Download className="w-4 h-4" />
+                            <span>전체 다운로드</span>
+                          </button>
+                        )}
+                      </div>
+                    </summary>
+                    <div className="p-6 space-y-3">
+                      {isPdfLoadingFor === classId ? (
+                        <div className="text-center py-4 text-gray-500">
+                          자료를 불러오는 중...
+                        </div>
+                      ) : w.items.length === 0 ? (
+                        <div className="text-center py-4 text-gray-500">
+                          등록된 자료가 없습니다.
+                        </div>
+                      ) : (
+                        <>
+                          {w.items.map((item, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between p-3 border border-gray-200 rounded hover:bg-gray-50"
+                            >
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                <Download className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-gray-900 truncate">
+                                    {item.name}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {item.size}
+                                  </div>
                                 </div>
-                                <div className="text-xs text-gray-500">{item.size}</div>
                               </div>
-                            </div>
-                            <div className="flex items-center space-x-2 ml-4">
-                              <button
-                                onClick={() =>
-                                  handleViewHandout(classId, w.title)
-                                }
-                                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                              >
-                                교안 및 질문 보기
-                              </button>
-                              {item.url && (
+                              <div className="flex items-center space-x-2 ml-4">
                                 <button
                                   onClick={() =>
-                                    handleDownload(item.url!, item.originalName || item.name)
+                                    handleViewHandout(classId, w.title)
                                   }
-                                  className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors flex items-center space-x-1"
+                                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
                                 >
-                                  <Download className="w-4 h-4" />
-                                  <span>다운로드</span>
+                                  교안 및 질문 보기
                                 </button>
-                              )}
+                                {item.url && (
+                                  <button
+                                    onClick={() =>
+                                      handleDownload(
+                                        item.url!,
+                                        item.originalName || item.name
+                                      )
+                                    }
+                                    className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors flex items-center space-x-1"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                    <span>다운로드</span>
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </details>
-              );
-            }            )}
-          </div>
-        )}
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
@@ -635,4 +664,3 @@ const StudentClass: React.FC = () => {
 };
 
 export default StudentClass;
-
