@@ -7,6 +7,7 @@ const crypto = require("crypto");
 const upload = require("../config/upload");
 const { uploadThumbnail } = require("../config/uploadImage");
 const OpenAI = require("openai");
+const Question = require("../models/Question"); // Question 모델 추가
 
 // 강의 개설
 router.post(
@@ -173,6 +174,83 @@ router.get(
       res.status(200).json({ lectures: formattedLectures });
     } catch (err) {
       console.error("강의 조회 오류:", err);
+      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+    }
+  }
+);
+
+// 특정 강좌의 라이브 상태 조회
+router.get(
+  "/lectures/:lectureId/live-status",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const { lectureId } = req.params;
+
+      // 강좌 조회
+      const lecture = await Lecture.findOne({ lecture_id: lectureId });
+      if (!lecture) {
+        return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+      }
+
+      // 권한 확인
+      const isProfessor = user.user_type === "professor" && 
+        lecture.professor_id.toString() === user._id.toString();
+      const isStudent = user.user_type === "student" && 
+        lecture.student_id_list.includes(user._id);
+
+      if (!isProfessor && !isStudent) {
+        return res.status(403).json({ message: "해당 강좌에 접근할 수 없습니다." });
+      }
+
+      // 각 클래스의 라이브 상태만 간단하게 반환
+      const classesLiveStatus = lecture.classes.map(cls => {
+        const lives = Array.isArray(cls.lives) ? cls.lives : [];
+        
+        const classStatus = {
+          class_id: cls.id,
+          class_title: cls.title,
+        };
+
+        // 라이브 상태에 따라 다른 값 반환
+        if (cls.isLiveActive && cls.currentLiveId) {
+          // 라이브 중
+          classStatus.isLiveActive = true;
+          classStatus.currentLiveId = cls.currentLiveId;
+          classStatus.lives = lives.map(live => ({
+            liveId: live.liveId,
+            status: live.status,
+            startedAt: live.startedAt,
+            endedAt: live.endedAt || null,
+          }));
+        } else if (lives.length > 0) {
+          // 라이브 끝남 (이전에 진행된 바 있음)
+          classStatus.isLiveActive = false;
+          classStatus.currentLiveId = null;
+          classStatus.lives = lives.map(live => ({
+            liveId: live.liveId,
+            status: live.status,
+            startedAt: live.startedAt,
+            endedAt: live.endedAt || null,
+          }));
+        } else {
+          // 라이브 전 (한 번도 진행된 적 없음)
+          classStatus.isLiveActive = false;
+          classStatus.currentLiveId = null;
+          classStatus.lives = [];
+        }
+
+        return classStatus;
+      });
+
+      res.status(200).json({
+        lecture_id: lecture.lecture_id,
+        lecture_name: lecture.name,
+        classes: classesLiveStatus,
+      });
+    } catch (err) {
+      console.error("라이브 상태 조회 오류:", err);
       res.status(500).json({ message: "서버 오류가 발생했습니다." });
     }
   }
@@ -1110,5 +1188,97 @@ router.post(
 
 // 강의 예약
 router.post("/lecture/:lectureId/class/:classId/reservation", authenticateToken, async (req, res) => {});
+
+// 강좌 통계 조회 (총 질문 수, 총 업보트 수, 참여 학생 비율, 가장 어려운 개념)
+router.get(
+  "/lectures/:lectureId/statistics",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const { lectureId } = req.params;
+
+      // 교수 권한 확인
+      if (user.user_type !== "professor") {
+        return res
+          .status(403)
+          .json({ message: "교수만 통계를 조회할 수 있습니다." });
+      }
+
+      // 강좌 조회
+      const lecture = await Lecture.findOne({ 
+        lecture_id: lectureId, 
+        professor_id: user._id 
+      });
+      if (!lecture) {
+        return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+      }
+
+      // 해당 강좌의 모든 질문 조회
+      const questions = await Question.find({ lecture_id: lectureId }).lean();
+
+      // 1. 총 질문 수
+      const totalQuestions = questions.length;
+
+      // 2. 총 업보트 수 (metadata.likes 합산)
+      const totalUpvotes = questions.reduce(
+        (sum, q) => sum + Number(q.metadata?.likes || 0),
+        0
+      );
+
+      // 3. 참여 학생 비율 (질문을 남긴 학생 수 / 전체 수강 학생 수)
+      const uniqueQuestionAuthors = new Set(
+        questions.map((q) => String(q.author?.id || "")).filter(Boolean)
+      );
+      const totalStudents = lecture.student_id_list?.length || 0;
+      const participationRate = totalStudents > 0 
+        ? (uniqueQuestionAuthors.size / totalStudents) * 100 
+        : 0;
+
+      // 4. 가장 어려운 개념 (가장 빈출 단어)
+      // reports.js의 topKeywords 함수 로직 사용
+      const tokenizeKo = (text = "") => {
+        return String(text)
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}\s]/gu, " ")
+          .split(/\s+/)
+          .filter(Boolean)
+          .filter((w) => w.length >= 2);
+      };
+
+      const wordFreq = new Map();
+      questions.forEach((q) => {
+        const words = tokenizeKo(q.text || "");
+        words.forEach((word) => {
+          wordFreq.set(word, (wordFreq.get(word) || 0) + 1);
+        });
+      });
+
+      // 가장 빈도가 높은 단어 찾기
+      const sortedWords = [...wordFreq.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 1);
+      
+      const hardestConcept = sortedWords.length > 0 ? sortedWords[0][0] : "";
+
+      res.status(200).json({
+        lecture_id: lectureId,
+        lecture_name: lecture.name,
+        statistics: {
+          total_questions: totalQuestions,
+          total_upvotes: totalUpvotes,
+          participation_rate: Math.round(participationRate * 100) / 100, // 소수점 2자리
+          participation_rate_percentage: `${Math.round(participationRate * 100) / 100}%`,
+          students_who_asked: uniqueQuestionAuthors.size,
+          total_students: totalStudents,
+          hardest_concept: hardestConcept,
+        },
+      });
+    } catch (err) {
+      console.error("강좌 통계 조회 오류:", err);
+      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+    }
+  }
+);
 
 module.exports = router;

@@ -66,6 +66,72 @@ function attachSocket(server, corsOrigin = "*") {
       }
     });
 
+    // WebRTC Signaling 이벤트
+    socket.on("webrtc:offer", async (data, cb) => {
+      try {
+        const { lecture_id, class_id, offer, from } = data || {};
+        if (!lecture_id || !class_id || !offer) {
+          return cb && cb({ ok: false, error: "invalid offer payload" });
+        }
+
+        const room = `lec:${lecture_id}:cls:${class_id}`;
+        // offer를 같은 방의 다른 사용자들에게 전달
+        socket.to(room).emit("webrtc:offer", {
+          offer,
+          from: from || socket.id,
+        });
+        cb && cb({ ok: true });
+      } catch (e) {
+        cb && cb({ ok: false, error: e.message });
+      }
+    });
+
+    socket.on("webrtc:answer", async (data, cb) => {
+      try {
+        const { lecture_id, class_id, answer, to } = data || {};
+        if (!lecture_id || !class_id || !answer) {
+          return cb && cb({ ok: false, error: "invalid answer payload" });
+        }
+
+        const room = `lec:${lecture_id}:cls:${class_id}`;
+        // answer를 특정 사용자에게 전달
+        if (to) {
+          io.to(to).emit("webrtc:answer", { answer, from: socket.id });
+        } else {
+          socket.to(room).emit("webrtc:answer", { answer, from: socket.id });
+        }
+        cb && cb({ ok: true });
+      } catch (e) {
+        cb && cb({ ok: false, error: e.message });
+      }
+    });
+
+    socket.on("webrtc:ice-candidate", async (data, cb) => {
+      try {
+        const { lecture_id, class_id, candidate, to } = data || {};
+        if (!lecture_id || !class_id || !candidate) {
+          return cb && cb({ ok: false, error: "invalid ice-candidate payload" });
+        }
+
+        const room = `lec:${lecture_id}:cls:${class_id}`;
+        // ICE candidate를 상대방에게 전달
+        if (to) {
+          io.to(to).emit("webrtc:ice-candidate", {
+            candidate,
+            from: socket.id,
+          });
+        } else {
+          socket.to(room).emit("webrtc:ice-candidate", {
+            candidate,
+            from: socket.id,
+          });
+        }
+        cb && cb({ ok: true });
+      } catch (e) {
+        cb && cb({ ok: false, error: e.message });
+      }
+    });
+
     socket.on("disconnect", () => {});
   });
 

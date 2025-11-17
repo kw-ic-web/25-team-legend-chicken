@@ -27,6 +27,7 @@ const QuestionSchema = new mongoose.Schema({
   type: { type: String, enum: ["question", "answer", "note"], default: "question" },
   author: { type: AuthorSchema, required: true },
   text: { type: String, required: true },
+  answer: { type: String, default: null }, // GPT 자동 답변
   metadata: { type: MetadataSchema, default: () => ({}) },
 }, {
   timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
@@ -34,4 +35,4 @@ const QuestionSchema = new mongoose.Schema({
 
 QuestionSchema.index({ lecture_id: 1, class_id: 1, page: 1, created_at: -1 });
 
-module.exports = mongoose.model("Question", QuestionSchema);
+module.exports = mongoose.models.Question || mongoose.model("Question", QuestionSchema);
