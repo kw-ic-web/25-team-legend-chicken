@@ -81,6 +81,10 @@ function App() {
               />
               <Route path="professor/analysis" element={<LectureAnalysis />} />
               <Route
+                path="professor/analysis/:lectureId"
+                element={<LectureAnalysis />}
+              />
+              <Route
                 path="professor/class-analysis/:id"
                 element={<ClassAnalysis />}
               />

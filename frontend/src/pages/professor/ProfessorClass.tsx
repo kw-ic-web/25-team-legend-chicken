@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Play, Users, Download, ChevronDown, ChevronUp } from "lucide-react";
 import CommonSidebar from "../../components/layout/CommonSidebar";
 import BroadcastAgreementModal from "../../components/modal/startBroadcast/BroadcastAgreementModal";
@@ -68,6 +68,7 @@ const ProfessorClass: React.FC = () => {
     title: string;
   } | null>(null);
   const navigate = useNavigate();
+  const lectureIdForAnalysis = course.id || id || "";
 
   const resolveUrl = useCallback((url: string) => {
     if (!url) return url;
@@ -483,6 +484,20 @@ const ProfessorClass: React.FC = () => {
             {course.title || "강좌 정보를 불러오는 중..."}
           </h1>
           <div className="flex items-center space-x-2">
+            <Link
+              to={
+                lectureIdForAnalysis
+                  ? `/professor/analysis/${lectureIdForAnalysis}`
+                  : "#"
+              }
+              className={`px-4 py-2 bg-gray-100 rounded-lg text-sm transition-colors duration-200 ${
+                lectureIdForAnalysis
+                  ? "hover:bg-gray-200"
+                  : "opacity-50 pointer-events-none"
+              }`}
+            >
+              분석 리포트
+            </Link>
             <button
               onClick={handleReservationModalOpen}
               className="px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors duration-200"
