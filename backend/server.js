@@ -15,6 +15,7 @@ const whiteboardRouter = require("./routes/whiteboard");
 const questionsRouter = require("./routes/questions");
 const chatRouter = require("./routes/chat");
 const reportsRouter = require("./routes/reports");
+const handwritingRouter = require("./routes/handwriting");
 
 const http = require("http");
 const { attachSocket } = require("./socket");
@@ -38,6 +39,7 @@ app.use("/api", whiteboardRouter);
 app.use("/api/questions", questionsRouter); 
 app.use("/api/chat", chatRouter); 
 app.use("/api/reports", reportsRouter);
+app.use("/api/handwriting", handwritingRouter);
 
 app.get("/", (req, res) => {
   res.send("Lec-Q 서버가 실행 중입니다.");

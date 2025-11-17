@@ -5,6 +5,7 @@ const Lecture = require("../models/lectures");
 const Question = require("../models/Question");
 const AnalysisReport = require("../models/AnalysisReport");
 const OpenAI = require("openai");
+const { extractHardestConceptWithGPT } = require("./professor/utils");
 
 async function verifyProfessorOwnership(user, lectureId) {
   if (user.user_type !== "professor") return { ok: false, code: 403, msg: "교수만 접근할 수 있습니다." };
@@ -71,7 +72,7 @@ function bucketizeTimeline(questions, bucketMinutes = 5) {
     const idx = Math.floor((ts - minT) / bucketMs);
     if (buckets[idx]) {
       buckets[idx].questions += 1;
-      buckets[idx].curious += Number(q.metadata?.likes || 0);
+      buckets[idx].curious += Number(q.upvote_count || 0);
     }
   }
   return buckets.map((b) => ({ ...b, start: new Date(b.start), end: new Date(b.end) }));
@@ -82,14 +83,14 @@ function buildQuestionMatrix(questions) {
   for (const q of questions) {
     const key = String(q.text || "").trim();
     if (!key) continue;
-    const likes = Number(q.metadata?.likes || 0);
+    const upvotes = Number(q.upvote_count || q.metadata?.likes || 0);
     const authorId = String(q.author?.id || "");
     if (!map.has(key)) {
       map.set(key, { frequency: 0, popularity: 0, authors: new Set() });
     }
     const entry = map.get(key);
     entry.frequency += 1;
-    entry.popularity += likes;
+    entry.popularity += upvotes;
     if (authorId) entry.authors.add(authorId);
   }
   return [...map.entries()].map(([text, v]) => ({
@@ -110,12 +111,17 @@ function buildLeaderboard(questions) {
       if (!askMap.has(uid)) askMap.set(uid, { name, count: 0 });
       askMap.get(uid).count += 1;
     }
-    const voters = Array.isArray(q.metadata?.voters) ? q.metadata.voters : [];
-    for (const v of voters) {
-      const vid = String(v.id || v.userId || "");
-      const vname = v.name || "익명";
+    const upvotedBy = Array.isArray(q.upvoted_by) ? q.upvoted_by : [];
+    for (const voterId of upvotedBy) {
+      const vid = String(voterId || "");
       if (!vid) continue;
-      if (!voteMap.has(vid)) voteMap.set(vid, { name: vname, likes: 0 });
+      if (!voteMap.has(vid)) {
+        voteMap.set(vid, { name: "익명", likes: 0 });
+        const voterQuestion = questions.find((q2) => String(q2.author?.id) === vid);
+        if (voterQuestion) {
+          voteMap.get(vid).name = voterQuestion.author?.name || "익명";
+        }
+      }
       voteMap.get(vid).likes += 1;
     }
   }
@@ -130,20 +136,33 @@ function buildLeaderboard(questions) {
   return { topAskers, topVoters };
 }
 
-router.post(
-  "/:lectureId/classes/:classId/analysis/run",
+
+router.get(
+  "/:lectureId/classes/:classId/analysis/latest",
   authenticateToken,
   async (req, res) => {
     try {
       const { lectureId, classId } = req.params;
-      const { ok, code, msg, lecture } = await verifyProfessorOwnership(req.user, lectureId);
-      if (!ok) return res.status(code).json({ message: msg });
+      const lecture = await Lecture.findOne({ lecture_id: lectureId });
+      if (!lecture) return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+      const isProfessor =
+        req.user.user_type === "professor" && String(lecture.professor_id) === String(req.user._id);
+      const isStudent =
+        req.user.user_type === "student" &&
+        (lecture.student_id_list || []).some((id) => String(id) === String(req.user._id));
+      if (!isProfessor && !isStudent) return res.status(403).json({ message: "권한이 없습니다." });
 
       const cid = Number(classId);
-      const questions = await Question.find({ lecture_id: lectureId, class_id: cid }).lean();
+      
+      const { ok, code, msg } = await verifyProfessorOwnership(req.user, lectureId);
+      if (!ok) return res.status(code).json({ message: msg });
+
+      const questions = await Question.find({ lecture_id: lectureId, class_id: cid })
+        .select('lecture_id class_id page position timestamp type author text answer metadata upvote_count upvoted_by created_at updated_at')
+        .lean();
 
       const totalQuestions = questions.length;
-      const totalCurious = questions.reduce((a, q) => a + Number(q.metadata?.likes || 0), 0);
+      const totalCurious = questions.reduce((a, q) => a + Number(q.upvote_count || 0), 0);
       const uniqueAuthors = new Set(questions.map((q) => String(q.author?.id || ""))).size;
       const denom = Math.max(lecture.student_id_list?.length || 0, 1);
       const participationRate = uniqueAuthors / denom;
@@ -151,100 +170,14 @@ router.post(
       const texts = questions.map((q) => q.text || "");
       const nodes = topKeywords(texts, 15);
       const edges = cooccurrence(texts, nodes);
-      const hardestConcept = nodes.length ? nodes[0].label : "";
+      const hardestConcept = await extractHardestConceptWithGPT(questions);
 
       const timeline = bucketizeTimeline(questions, 5);
       const questionMatrix = buildQuestionMatrix(questions);
       const leaderboard = buildLeaderboard(questions);
 
-      // GPT 요약(선택)
-      let gpt = { summary: "", sections: {}, usage: null };
-      try {
-        const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_API;
-        if (apiKey) {
-          const openai = new OpenAI({ apiKey });
-          const prompt = `다음 강의 데이터를 요약해 교수에게 actionable insights를 제공하세요.
-강의: ${lecture.name}
-질문 수: ${totalQuestions}, 궁금해요 합: ${totalCurious}, 참여율: ${(participationRate * 100).toFixed(1)}%, 가장 어려운 개념: ${hardestConcept}
-상위 키워드: ${nodes.slice(0,10).map(n=>n.label).join(", ")}
-타임라인(5분 단위) 질문 카운트: ${timeline.map(b=>b.questions).join(", ")}
-요구 포맷: 1) 핵심 요약 2) 다음 강의 개선 제안 3) 학생 과제/복습 가이드 4) 평가 포인트`;
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-              { role: "system", content: "교육 데이터 분석 전문가" },
-              { role: "user", content: prompt },
-            ],
-            temperature: 0.7,
-            max_tokens: 700,
-          });
-          gpt.summary = completion.choices?.[0]?.message?.content || "";
-          if (completion.usage) {
-            gpt.usage = {
-              prompt_tokens: completion.usage.prompt_tokens,
-              completion_tokens: completion.usage.completion_tokens,
-              total_tokens: completion.usage.total_tokens,
-              estimated_cost:
-                ((completion.usage.prompt_tokens * 0.00015) +
-                  (completion.usage.completion_tokens * 0.0006)) / 1000,
-            };
-          }
-        }
-      } catch (e) {
-        gpt.summary = gpt.summary || "GPT 요약 생성에 실패했습니다. 데이터 기반 시각화만 저장합니다.";
-      }
-
-      const report = await AnalysisReport.create({
-        lecture_id: lectureId,
-        class_id: cid,
-        kpis: { totalQuestions, totalCurious, participationRate, hardestConcept },
-        timeline,
-        questionMatrix,
-        conceptGraph: { nodes, edges },
-        leaderboard,
-        gpt,
-      });
-
-      return res.status(201).json({ message: "분석이 생성되었습니다.", report_id: report._id });
-    } catch (err) {
-      console.error("분석 생성 오류:", err);
-      return res.status(500).json({ message: "서버 오류가 발생했습니다." });
-    }
-  }
-);
-
-router.post(
-  "/:lectureId/analysis/run",
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const { lectureId } = req.params;
-      const { ok, code, msg, lecture } = await verifyProfessorOwnership(
-        req.user,
-        lectureId
-      );
-      if (!ok) return res.status(code).json({ message: msg });
-
-      const questions = await Question.find({ lecture_id: lectureId }).lean();
-      const totalQuestions = questions.length;
-      const totalCurious = questions.reduce(
-        (a, q) => a + Number(q.metadata?.likes || 0),
-        0
-      );
-      const uniqueAuthors = new Set(
-        questions.map((q) => String(q.author?.id || ""))
-      ).size;
-      const denom = Math.max(lecture.student_id_list?.length || 0, 1);
-      const participationRate = uniqueAuthors / denom;
-
-      const texts = questions.map((q) => q.text || "");
-      const nodes = topKeywords(texts, 20);
-      const edges = cooccurrence(texts, nodes);
-      const hardestConcept = nodes.length ? nodes[0].label : "";
-
-      const timeline = bucketizeTimeline(questions, 5);
-      const questionMatrix = buildQuestionMatrix(questions);
-      const leaderboard = buildLeaderboard(questions);
+      const classData = lecture.classes.find((cls) => cls.id === cid);
+      const className = classData ? classData.title : `클래스 ${cid}`;
 
       let gpt = { summary: "", sections: {}, usage: null };
       try {
@@ -253,18 +186,18 @@ router.post(
           const openai = new OpenAI({ apiKey });
           const prompt = `다음 강좌 데이터를 요약해 교수에게 actionable insights를 제공하세요.
 강좌: ${lecture.name}
-총 질문 수: ${totalQuestions}, 총 궁금해요 수: ${totalCurious}, 참여율: ${(participationRate * 100).toFixed(
+클래스: ${className}
+총 질문 수: ${totalQuestions}, 총 업보트 수: ${totalCurious}, 참여율: ${(participationRate * 100).toFixed(
             1
-          )}%, 가장 어려웠던 개념: ${hardestConcept}
+          )}%, 가장 어려웠던 개념: ${hardestConcept || "분석 중"}
 상위 키워드: ${nodes
             .slice(0, 15)
             .map((n) => n.label)
             .join(", ")}
-주차(클래스)를 모두 포함한 타임라인(5분 단위) 질문 카운트: ${timeline
+타임라인(5분 단위) 질문 카운트: ${timeline
             .map((b) => b.questions)
             .join(", ")}
 요구 포맷: 1) 강좌 전체 핵심 요약 2) 난이도 높은 주차/주제 요약 3) 다음 학기 강의 개선 제안 4) 학생들에게 줄 복습/예습 가이드`;
-
           const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
@@ -286,16 +219,22 @@ router.post(
                 1000,
             };
           }
+        } else {
+          console.warn("OpenAI API 키가 설정되지 않아 GPT 요약을 생성할 수 없습니다.");
         }
       } catch (e) {
-        gpt.summary =
-          gpt.summary ||
-          "GPT 요약 생성에 실패했습니다. 강좌 전체 통계와 시각화 데이터만 저장합니다.";
+        console.error("GPT 요약 생성 오류:", e.message || e);
+        gpt.summary = gpt.summary || "GPT 요약 생성에 실패했습니다. 데이터 기반 시각화만 저장합니다.";
       }
 
-      const report = await AnalysisReport.create({
+      await AnalysisReport.deleteMany({
         lecture_id: lectureId,
-        class_id: 0,
+        class_id: cid,
+      });
+
+      const newReport = await AnalysisReport.create({
+        lecture_id: lectureId,
+        class_id: cid,
         kpis: { totalQuestions, totalCurious, participationRate, hardestConcept },
         timeline,
         questionMatrix,
@@ -304,40 +243,7 @@ router.post(
         gpt,
       });
 
-      return res
-        .status(201)
-        .json({ message: "강좌 단위 분석이 생성되었습니다.", report_id: report._id });
-    } catch (err) {
-      console.error("강좌 단위 분석 생성 오류:", err);
-      return res.status(500).json({ message: "서버 오류가 발생했습니다." });
-    }
-  }
-);
-
-router.get(
-  "/:lectureId/classes/:classId/analysis/latest",
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const { lectureId, classId } = req.params;
-      const lecture = await Lecture.findOne({ lecture_id: lectureId });
-      if (!lecture) return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
-      const isProfessor =
-        req.user.user_type === "professor" && String(lecture.professor_id) === String(req.user._id);
-      const isStudent =
-        req.user.user_type === "student" &&
-        (lecture.student_id_list || []).some((id) => String(id) === String(req.user._id));
-      if (!isProfessor && !isStudent) return res.status(403).json({ message: "권한이 없습니다." });
-
-      const cid = Number(classId);
-      const report = await AnalysisReport.findOne({
-        lecture_id: lectureId,
-        class_id: cid,
-      })
-        .sort({ createdAt: -1 })
-        .lean();
-      if (!report) return res.status(404).json({ message: "분석 결과가 없습니다." });
-      return res.json(report);
+      return res.json(newReport.toObject());
     } catch (err) {
       console.error("최신 분석 조회 오류:", err);
       return res.status(500).json({ message: "서버 오류가 발생했습니다." });
@@ -345,41 +251,6 @@ router.get(
   }
 );
 
-router.get(
-  "/:lectureId/analysis/latest",
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const { lectureId } = req.params;
-      const lecture = await Lecture.findOne({ lecture_id: lectureId });
-      if (!lecture)
-        return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
-      const isProfessor =
-        req.user.user_type === "professor" &&
-        String(lecture.professor_id) === String(req.user._id);
-      const isStudent =
-        req.user.user_type === "student" &&
-        (lecture.student_id_list || []).some(
-          (id) => String(id) === String(req.user._id)
-        );
-      if (!isProfessor && !isStudent)
-        return res.status(403).json({ message: "권한이 없습니다." });
-
-      const report = await AnalysisReport.findOne({
-        lecture_id: lectureId,
-        class_id: 0,
-      })
-        .sort({ createdAt: -1 })
-        .lean();
-      if (!report)
-        return res.status(404).json({ message: "강좌 단위 분석 결과가 없습니다." });
-      return res.json(report);
-    } catch (err) {
-      console.error("강좌 단위 최신 분석 조회 오류:", err);
-      return res.status(500).json({ message: "서버 오류가 발생했습니다." });
-    }
-  }
-);
 
 module.exports = router;
 
