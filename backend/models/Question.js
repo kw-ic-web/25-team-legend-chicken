@@ -28,10 +28,18 @@ const QuestionSchema = new mongoose.Schema({
   author: { type: AuthorSchema, required: true },
   text: { type: String, required: true },
   metadata: { type: MetadataSchema, default: () => ({}) },
+  upvote_count: { type: Number, default: 0 },
+  upvoted_by: [{ type: String }],
 }, {
   timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
 });
 
-QuestionSchema.index({ lecture_id: 1, class_id: 1, page: 1, created_at: -1 });
+QuestionSchema.index({
+  lecture_id: 1,
+  class_id: 1,
+  page: 1,
+  created_at: -1,
+});
 
-module.exports = mongoose.model("Question", QuestionSchema);
+module.exports =
+  mongoose.models.Question || mongoose.model("Question", QuestionSchema);

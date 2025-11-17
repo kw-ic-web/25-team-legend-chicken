@@ -151,4 +151,66 @@ router.delete("/messages/:id", authenticateToken, async (req, res) => {
   }
 });
 
+// ───────── 메시지 좋아요(업보트) 토글 ─────────
+// POST /api/chat/messages/:id/upvote
+router.post("/messages/:id/upvote", authenticateToken, async (req, res) => {
+  try {
+    const msg = await ChatMessage.findById(req.params.id);
+    if (!msg) {
+      return res
+        .status(404)
+        .json({ message: "메시지를 찾을 수 없습니다." });
+    }
+
+    // 강좌 접근 권한 확인
+    const access = await canAccess(req.user, msg.lecture_id);
+    if (!access.ok)
+      return res.status(access.code).json({ message: access.msg });
+
+    const userId = String(req.user._id);
+
+    if (!Array.isArray(msg.liked_by)) msg.liked_by = [];
+    if (typeof msg.like_count !== "number") msg.like_count = 0;
+
+    const already = msg.liked_by.includes(userId);
+
+    if (already) {
+      // 좋아요 취소
+      msg.liked_by = msg.liked_by.filter((id) => id !== userId);
+      msg.like_count = Math.max(0, msg.like_count - 1);
+    } else {
+      // 좋아요 추가
+      msg.liked_by.push(userId);
+      msg.like_count += 1;
+    }
+
+    await msg.save();
+
+    // 원하면 여기서도 socket 브로드캐스트 가능
+    const io = req.app.get("io");
+    if (io) {
+      const room = `lec:${msg.lecture_id}:cls:${msg.class_id}:live:${
+        msg.live_id ?? "none"
+      }`;
+      io.to(room).emit("chat:upvote", {
+        _id: msg._id,
+        like_count: msg.like_count,
+        upvoted: !already,
+        user_id: userId,
+      });
+    }
+
+    return res.json({
+      message: "ok",
+      like_count: msg.like_count,
+      liked: !already,
+    });
+  } catch (err) {
+    console.error("채팅 업보트 오류:", err);
+    return res
+      .status(500)
+      .json({ message: "서버 오류가 발생했습니다." });
+  }
+});
+
 module.exports = router;
