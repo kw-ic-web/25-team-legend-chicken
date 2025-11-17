@@ -483,20 +483,33 @@ const ProfessorClass: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-gray-900">
             {course.title || "강좌 정보를 불러오는 중..."}
           </h1>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             <Link
               to={
                 lectureIdForAnalysis
                   ? `/professor/analysis/${lectureIdForAnalysis}`
                   : "#"
               }
-              className={`px-4 py-2 bg-gray-100 rounded-lg text-sm transition-colors duration-200 ${
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-all duration-200 ${
                 lectureIdForAnalysis
-                  ? "hover:bg-gray-200"
-                  : "opacity-50 pointer-events-none"
+                  ? "bg-gradient-to-r from-[#07CDAC] via-[#1089E3] to-[#3A6EFF] text-white hover:shadow-lg hover:-translate-y-0.5"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
               }`}
             >
-              분석 리포트
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 9v6l5-3-5-3z" />
+                <path d="M21 15V9a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 9v6a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 15Z" />
+              </svg>
+              <span>분석 리포트</span>
             </Link>
             <button
               onClick={handleReservationModalOpen}
@@ -571,13 +584,6 @@ const ProfessorClass: React.FC = () => {
                         </button>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <span
-                          className={`text-xs font-semibold ${
-                            isLiveActive ? "text-red-600" : "text-gray-500"
-                          }`}
-                        >
-                          {isLiveActive ? "라이브 진행중" : "라이브 대기"}
-                        </span>
                         <button
                           className={`px-3 py-1 rounded text-sm transition-colors duration-200 ${
                             isLiveActive
