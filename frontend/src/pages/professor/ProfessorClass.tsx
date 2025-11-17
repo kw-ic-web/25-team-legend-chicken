@@ -566,9 +566,6 @@ const ProfessorClass: React.FC = () => {
                       <div className="font-semibold">{w.title}</div>
                     </div>
                     <div className="flex items-center space-x-3">
-                      <div className="text-sm text-gray-600">
-                        {w.items.length}개
-                      </div>
                       <div className="flex items-center space-x-2">
                         <button
                           className="flex items-center space-x-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm transition-colors duration-200"
