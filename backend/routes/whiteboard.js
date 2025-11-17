@@ -179,7 +179,6 @@ router.post(
   }
 );
 
-// 강좌 접근 권한 체크 (교수 본인 또는 수강 학생)
 async function canAccess(user, lecture_id) {
   const lec = await Lecture.findOne({ lecture_id });
   if (!lec) return { ok: false, code: 404, msg: "강좌를 찾을 수 없습니다." };
@@ -194,7 +193,6 @@ async function canAccess(user, lecture_id) {
   return { ok: true, lec, isProfessor, isStudent };
 }
 
-// 내부 공용 핸들러: PDF 업로드 → 페이지 단위로 분할 저장 + 클래스 materials에 등록
 async function handleUploadPdfSplit(req, res) {
   try {
     const { lectureId, classId } = req.params;
@@ -214,7 +212,6 @@ async function handleUploadPdfSplit(req, res) {
       });
     }
 
-    // 강좌 소유 확인
     const lecture = await Lecture.findOne({ lecture_id: lectureId, professor_id: user._id });
     if (!lecture) {
       return res.status(404).json({ success: false, message: "강좌를 찾을 수 없습니다." });
@@ -225,21 +222,16 @@ async function handleUploadPdfSplit(req, res) {
       return res.status(404).json({ success: false, message: "해당 클래스를 찾을 수 없습니다." });
     }
 
-    // 원본 PDF 경로 (프론트에는 원본만 노출)
     const originalPdfUrl = `/uploads/pdfs/${req.file.filename}`;
-
-    // 분할은 내부 처리만 하고, materials에는 원본만 추가
     const splitted = await splitPdfIntoPages(req.file.path, { lectureId, classId });
     if (!Array.isArray(lecture.classes[idx].materials)) {
       lecture.classes[idx].materials = [];
     }
-    // 이미 동일 파일이 없을 때만 원본 추가
     if (!lecture.classes[idx].materials.includes(originalPdfUrl)) {
       lecture.classes[idx].materials.push(originalPdfUrl);
     }
     await lecture.save();
 
-    // OCR + WhiteboardPage 저장 (page_number는 기존 마지막 다음부터 연속 증가)
     const lastPage = await WhiteboardPage.findOne({
       lecture_id: lectureId,
       class_id: String(classId),
@@ -253,14 +245,11 @@ async function handleUploadPdfSplit(req, res) {
       const absolutePdfPath = toAbsolutePath(page.pdfPath);
       let text = "";
       try {
-        // 1) PDF → 이미지 변환
         const imageAbsolutePath = await convertPdfPageToImage(absolutePdfPath);
-        // 2) Vision OCR 재사용 (snapshot과 동일한 경로)
         const { text: ocrText } = await extractTextFromImage(imageAbsolutePath);
         text = ocrText || "";
       } catch (e) {
         console.error("PDF 페이지 OCR 실패, 빈 텍스트로 진행:", e?.message || e);
-        // 최악의 경우 텍스트 없이 저장
         text = "";
       }
 
@@ -268,8 +257,6 @@ async function handleUploadPdfSplit(req, res) {
         lecture_id: lectureId,
         class_id: String(classId),
         page_number: basePageNumber + i + 1,
-        // 이미지가 없는 PDF 기반 저장이므로 우선 PDF 경로를 image_path에도 저장
-        // (필드 필수 제약을 충족하기 위한 임시 전략)
         image_path: page.pdfPath,
         text: text,
         pdf_path: page.pdfPath,
@@ -291,7 +278,6 @@ async function handleUploadPdfSplit(req, res) {
       lecture_id: lecture.lecture_id,
       class_id: Number(classId),
       total_pages: splitted.length,
-      // snapshot 업로드 후 최종본이 저장된 것과 유사한 형태로 반환
       pages: createdPages,
       materials_count: lecture.classes[idx].materials.length,
       original_pdf_url: originalPdfUrl,
@@ -305,7 +291,6 @@ async function handleUploadPdfSplit(req, res) {
   }
 }
 
-// 기본 경로
 router.post(
   "/lectures/:lectureId/classes/:classId/whiteboard/upload-pdf",
   authenticateToken,
@@ -313,7 +298,6 @@ router.post(
   handleUploadPdfSplit
 );
 
-// 교수 네임스페이스 별칭 경로
 router.post(
   "/professor/lectures/:lectureId/classes/:classId/whiteboard/upload-pdf",
   authenticateToken,
@@ -321,7 +305,6 @@ router.post(
   handleUploadPdfSplit
 );
 
-// 화이트보드 페이지 목록 조회 (기본 finalized만)
 router.get(
   "/lectures/:lectureId/classes/:classId/whiteboard/pages",
   authenticateToken,
@@ -358,7 +341,6 @@ router.get(
   }
 );
 
-// 최신 finalized 페이지 조회
 router.get(
   "/lectures/:lectureId/classes/:classId/whiteboard/pages/latest",
   authenticateToken,

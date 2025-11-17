@@ -6,7 +6,6 @@ const Question = require("../models/Question");
 const AnalysisReport = require("../models/AnalysisReport");
 const OpenAI = require("openai");
 
-// 권한 체크
 async function verifyProfessorOwnership(user, lectureId) {
   if (user.user_type !== "professor") return { ok: false, code: 403, msg: "교수만 접근할 수 있습니다." };
   const lecture = await Lecture.findOne({ lecture_id: lectureId, professor_id: user._id });
@@ -38,7 +37,7 @@ function topKeywords(texts = [], limit = 10) {
 
 function cooccurrence(texts = [], keywords = []) {
   const keySet = new Set(keywords.map((k) => k.id));
-  const edgeMap = new Map(); // "a|b" -> count
+  const edgeMap = new Map();
   for (const t of texts) {
     const ws = tokenizeKo(t).filter((w) => keySet.has(w));
     const uniq = [...new Set(ws)];
@@ -79,7 +78,7 @@ function bucketizeTimeline(questions, bucketMinutes = 5) {
 }
 
 function buildQuestionMatrix(questions) {
-  const map = new Map(); // text -> { freq, popularity, authors:set }
+  const map = new Map();
   for (const q of questions) {
     const key = String(q.text || "").trim();
     if (!key) continue;
@@ -102,8 +101,8 @@ function buildQuestionMatrix(questions) {
 }
 
 function buildLeaderboard(questions) {
-  const askMap = new Map(); // userId -> { name, count }
-  const voteMap = new Map(); // userId -> { name, likes }
+  const askMap = new Map();
+  const voteMap = new Map();
   for (const q of questions) {
     const uid = String(q.author?.id || "");
     const name = q.author?.name || "익명";
@@ -111,7 +110,6 @@ function buildLeaderboard(questions) {
       if (!askMap.has(uid)) askMap.set(uid, { name, count: 0 });
       askMap.get(uid).count += 1;
     }
-    // voters 데이터가 별도로 없는 관계로 metadata.voters 배열을 가정(없으면 skip)
     const voters = Array.isArray(q.metadata?.voters) ? q.metadata.voters : [];
     for (const v of voters) {
       const vid = String(v.id || v.userId || "");
@@ -132,7 +130,6 @@ function buildLeaderboard(questions) {
   return { topAskers, topVoters };
 }
 
-// ▶ 강의(클래스) 단위 분석 실행
 router.post(
   "/:lectureId/classes/:classId/analysis/run",
   authenticateToken,
@@ -216,7 +213,6 @@ router.post(
   }
 );
 
-// ▶ 강좌(코스) 단위 분석 실행
 router.post(
   "/:lectureId/analysis/run",
   authenticateToken,
@@ -229,7 +225,6 @@ router.post(
       );
       if (!ok) return res.status(code).json({ message: msg });
 
-      // 해당 강좌의 모든 질문 사용 (모든 class_id 포함)
       const questions = await Question.find({ lecture_id: lectureId }).lean();
       const totalQuestions = questions.length;
       const totalCurious = questions.reduce(
@@ -251,7 +246,6 @@ router.post(
       const questionMatrix = buildQuestionMatrix(questions);
       const leaderboard = buildLeaderboard(questions);
 
-      // GPT 요약(선택)
       let gpt = { summary: "", sections: {}, usage: null };
       try {
         const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_API;
@@ -301,7 +295,7 @@ router.post(
 
       const report = await AnalysisReport.create({
         lecture_id: lectureId,
-        class_id: 0, // 0번은 강좌 전체 집계용으로 사용
+        class_id: 0,
         kpis: { totalQuestions, totalCurious, participationRate, hardestConcept },
         timeline,
         questionMatrix,
@@ -320,7 +314,6 @@ router.post(
   }
 );
 
-// ▶ 강의(클래스) 단위 최신 분석 조회
 router.get(
   "/:lectureId/classes/:classId/analysis/latest",
   authenticateToken,
@@ -352,7 +345,6 @@ router.get(
   }
 );
 
-// ▶ 강좌(코스) 단위 최신 분석 조회
 router.get(
   "/:lectureId/analysis/latest",
   authenticateToken,
