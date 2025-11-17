@@ -684,7 +684,7 @@ paths:
           description: 강좌를 찾을 수 없음
 
     put:
-      tags: [Professor]
+      tags: [Professor, Working]
       summary: 클래스 수정
       security:
         - bearerAuth: []
@@ -843,7 +843,7 @@ paths:
           description: 강좌 또는 클래스를 찾을 수 없음
 
     delete:
-      tags: [Professor]
+      tags: [Professor, Working]
       summary: 클래스 삭제
       description: 특정 클래스를 삭제합니다.
       security:

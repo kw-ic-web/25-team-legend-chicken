@@ -56,6 +56,24 @@ async function endLiveCore(req, res, liveIdSource) {
 
   await lec.save();
 
+  const io = req.app.get("io");
+  if (io) {
+    const baseRoom = `lec:${lectureId}:cls:${cid}`;
+    const liveRoom = `${baseRoom}:live:${lid}`;
+    
+    io.to(baseRoom).emit("live:ended", {
+      lecture_id: lectureId,
+      class_id: cid,
+      live_id: lid,
+      started_at: live.startedAt,
+      ended_at: endedAt,
+      professor: {
+        id: String(user._id),
+        name: user.name || "교수",
+      },
+    });
+  }
+
   return res.status(200).json({
     message: "라이브가 종료되었습니다.",
     lecture_id: lec.lecture_id,
@@ -114,6 +132,24 @@ router.post(
       cls.currentLiveId = newLiveId;
 
       await lec.save();
+
+      const io = req.app.get("io");
+      if (io) {
+        const baseRoom = `lec:${lectureId}:cls:${cid}`;
+        const liveRoom = `${baseRoom}:live:${newLiveId}`;
+        
+        io.to(baseRoom).emit("live:started", {
+          lecture_id: lectureId,
+          class_id: cid,
+          live_id: newLiveId,
+          started_at: startedAt,
+          live_path: `/professor/lecture${lectureId}/class${cid}/live${newLiveId}`,
+          professor: {
+            id: String(user._id),
+            name: user.name || "교수",
+          },
+        });
+      }
 
       return res.status(200).json({
         message: "라이브가 시작되었습니다.",
