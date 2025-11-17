@@ -7,14 +7,18 @@ type AnyVideoRef =
 
 interface Props {
   teacherName?: string;
-  videoRef?: AnyVideoRef;   // <- 여기 수정
+  videoRef?: AnyVideoRef;
+  studentVideoRef?: AnyVideoRef;
+  isStudentCameraOn?: boolean;
 }
 
 const StudentParticipantStrip: React.FC<Props> = ({
   teacherName = "교수자",
   videoRef,
+  studentVideoRef,
+  isStudentCameraOn,
 }) => {
-  const placeholders = Array.from({ length: 5 }).map((_, i) => i);
+  const placeholders = Array.from({ length: 4 }).map((_, i) => i);
 
   return (
     <div className="px-6 py-4 border-b border-gray-200">
@@ -34,6 +38,26 @@ const StudentParticipantStrip: React.FC<Props> = ({
           )}
           <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded">
             {teacherName}
+          </div>
+        </div>
+
+        <div className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden border border-blue-200">
+          <video
+            ref={studentVideoRef as React.RefObject<HTMLVideoElement>}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-cover transition-opacity duration-200 ${
+              isStudentCameraOn ? "opacity-100" : "opacity-0"
+            }`}
+          />
+          {!isStudentCameraOn && (
+            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-300 bg-gray-800">
+              내 화면
+            </div>
+          )}
+          <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded">
+            나
           </div>
         </div>
 
