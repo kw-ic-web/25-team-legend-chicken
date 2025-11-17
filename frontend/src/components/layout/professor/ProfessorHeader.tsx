@@ -10,13 +10,7 @@ const ProfessorHeader: React.FC = () => {
       label: "대시보드",
       relatedPaths: [],
     },
-    {
-      path: "/professor/analysis",
-      label: "분석리포트",
-      relatedPaths: ["/professor/class-analysis"],
-    },
   ];
-
   return (
     <header className="fixed top-0 left-0 right-0 h-20 shadow-lg z-50">
       {/* 배경 색상: 60도 대각선 구분 (70% / 5% / 25%) */}

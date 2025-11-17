@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Play, Users, Download, ChevronDown, ChevronUp } from "lucide-react";
 import CommonSidebar from "../../components/layout/CommonSidebar";
 import BroadcastAgreementModal from "../../components/modal/startBroadcast/BroadcastAgreementModal";
@@ -11,6 +11,10 @@ import {
   getClassPdfs,
   getClasses,
   getMembers,
+  getLiveStatus,
+  startLive,
+  endLive,
+  type LiveStatusClass,
   type GetClassDetailResponse,
 } from "../../api/professor";
 import Toast from "../../components/common/Toast";
@@ -53,6 +57,25 @@ const ProfessorClass: React.FC = () => {
     message: string;
     type: "success" | "error";
   } | null>(null);
+  const [liveStatuses, setLiveStatuses] = useState<
+    Record<number, LiveStatusClass>
+  >({});
+  const [liveActionLoading, setLiveActionLoading] = useState<number | null>(
+    null
+  );
+  const [targetClass, setTargetClass] = useState<{
+    id: number;
+    title: string;
+  } | null>(null);
+  const navigate = useNavigate();
+  const lectureIdForAnalysis = course.id || id || "";
+  const firstClassIdForAnalysis =
+    weeks.length > 0 ? Number(weeks[0].week) : null;
+  const analysisLink = lectureIdForAnalysis
+    ? firstClassIdForAnalysis
+      ? `/professor/analysis/${lectureIdForAnalysis}?classId=${firstClassIdForAnalysis}`
+      : `/professor/analysis/${lectureIdForAnalysis}`
+    : "#";
 
   const resolveUrl = useCallback((url: string) => {
     if (!url) return url;
@@ -150,22 +173,21 @@ const ProfessorClass: React.FC = () => {
   ];
 
   const handleStartBroadcast = () => {
+    if (weeks.length === 0) {
+      setToast({
+        message: "시작할 클래스를 찾을 수 없습니다.",
+        type: "error",
+      });
+      return;
+    }
+    const firstWeek = weeks[0];
+    setTargetClass({ id: Number(firstWeek.week), title: firstWeek.title });
     setIsModalOpen(true);
-  };
-
-  const handleAgree = (cameraRequired: boolean, files: File[]) => {
-    // 실제 방송 시작 로직 (여기에 방송 시작 API 호출 등)
-    console.log(
-      "방송 시작 동의됨, 카메라 필수:",
-      cameraRequired,
-      "업로드된 파일:",
-      files
-    );
-    setIsModalOpen(false);
   };
 
   const handleClose = () => {
     setIsModalOpen(false);
+    setTargetClass(null);
   };
 
   const handleReservationModalOpen = () => {
@@ -280,6 +302,61 @@ const ProfessorClass: React.FC = () => {
     setSelectedLesson(null);
   };
 
+  const loadLiveStatuses = useCallback(async () => {
+    if (!id) return;
+    try {
+      const response = await getLiveStatus(id);
+      const map: Record<number, LiveStatusClass> = {};
+      response.classes?.forEach((cls) => {
+        map[cls.class_id] = cls;
+      });
+      setLiveStatuses(map);
+    } catch (error) {
+      console.error("라이브 상태 조회 실패:", error);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadLiveStatuses();
+  }, [loadLiveStatuses]);
+
+  const handleStartLiveFlow = (
+    classId: number,
+    classTitle: string,
+    e?: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    setTargetClass({ id: classId, title: classTitle });
+    setIsModalOpen(true);
+  };
+
+  const handleEndLive = async (
+    classId: number,
+    e?: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (!id) return;
+    setLiveActionLoading(classId);
+    try {
+      const response = await endLive(id, classId);
+      setToast({
+        message: response.message || "라이브가 종료되었습니다.",
+        type: "success",
+      });
+      await loadLiveStatuses();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "라이브 종료 중 오류가 발생했습니다.";
+      setToast({ message, type: "error" });
+    } finally {
+      setLiveActionLoading(null);
+    }
+  };
+
   const handleAddAnswer = (questionId: number, answer: string) => {
     // 실제 답변 추가 로직 (여기에 API 호출 등)
     console.log("답변 추가됨:", { questionId, answer });
@@ -301,6 +378,47 @@ const ProfessorClass: React.FC = () => {
   const handleInviteById = (studentEmail: string) => {
     // API 호출은 IdInviteModal에서 처리됨
     console.log("이메일 초대됨:", studentEmail);
+  };
+
+  const handleLiveFlowComplete = async (
+    cameraRequired: boolean,
+    files: File[]
+  ) => {
+    if (!id || !targetClass) return;
+    setIsModalOpen(false);
+    setLiveActionLoading(targetClass.id);
+    try {
+      const response = await startLive(id, targetClass.id);
+      setToast({
+        message:
+          response.message || `${targetClass.title} 라이브가 시작되었습니다.`,
+        type: "success",
+      });
+      await loadLiveStatuses();
+      const realtimePath = `/professor/realtime-dashboard/${id}/${targetClass.id}/${response.live_id}`;
+      navigate(realtimePath, {
+        state: {
+          lectureId: id,
+          classId: targetClass.id,
+          classTitle: targetClass.title,
+          liveId: response.live_id,
+          cameraRequired,
+          materials: files.map((file) => ({
+            name: file.name,
+            size: file.size,
+          })),
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "라이브 시작 중 오류가 발생했습니다.";
+      setToast({ message, type: "error" });
+    } finally {
+      setLiveActionLoading(null);
+      setTargetClass(null);
+    }
   };
 
   return (
@@ -372,7 +490,30 @@ const ProfessorClass: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-gray-900">
             {course.title || "강좌 정보를 불러오는 중..."}
           </h1>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
+            <Link
+              to={analysisLink}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-all duration-200 ${
+                lectureIdForAnalysis
+                  ? "bg-gradient-to-r from-[#07CDAC] via-[#1089E3] to-[#3A6EFF] text-white hover:shadow-lg hover:-translate-y-0.5"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 9v6l5-3-5-3z" />
+                <path d="M21 15V9a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 9v6a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 15Z" />
+              </svg>
+              <span>분석 리포트</span>
+            </Link>
             <button
               onClick={handleReservationModalOpen}
               className="px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors duration-200"
@@ -406,6 +547,8 @@ const ProfessorClass: React.FC = () => {
           <div className="space-y-3">
             {weeks.map((w) => {
               const classId = Number(w.week);
+              const liveInfo = liveStatuses[classId];
+              const isLiveActive = liveInfo?.isLiveActive ?? false;
               return (
                 <details
                   key={w.week}
@@ -441,6 +584,27 @@ const ProfessorClass: React.FC = () => {
                         >
                           <Download className="w-4 h-4" />
                           <span>전체 다운로드</span>
+                        </button>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          className={`px-3 py-1 rounded text-sm transition-colors duration-200 ${
+                            isLiveActive
+                              ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                              : "bg-green-50 text-green-700 border border-green-200 hover:bg-green-100"
+                          } ${liveActionLoading === classId ? "opacity-60 cursor-not-allowed" : ""}`}
+                          onClick={(e) =>
+                            isLiveActive
+                              ? handleEndLive(classId, e)
+                              : handleStartLiveFlow(classId, w.title, e)
+                          }
+                          disabled={liveActionLoading === classId}
+                        >
+                          {liveActionLoading === classId
+                            ? "처리 중..."
+                            : isLiveActive
+                              ? "라이브 종료"
+                              : "라이브 시작"}
                         </button>
                       </div>
                     </div>
@@ -505,7 +669,7 @@ const ProfessorClass: React.FC = () => {
       <BroadcastAgreementModal
         isOpen={isModalOpen}
         onClose={handleClose}
-        onAgree={handleAgree}
+        onAgree={handleLiveFlowComplete}
       />
 
       {/* 강의 예약 모달 */}

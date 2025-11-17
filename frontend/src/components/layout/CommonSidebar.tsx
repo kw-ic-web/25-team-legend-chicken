@@ -2,14 +2,17 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Users, Clock, BookOpen, Play } from "lucide-react";
 
+interface UserInfo {
+  id?: string;
+  name: string;
+  title: string;
+  affiliation: string;
+  currentLectures?: number;
+}
+
 interface CommonSidebarProps {
   userType: "student" | "professor";
-  userInfo: {
-    name: string;
-    title: string;
-    affiliation: string;
-    currentLectures?: number;
-  };
+  userInfo: UserInfo;
   showBroadcastControls?: boolean;
   upcomingLectures?: Array<{
     title: string;
@@ -40,6 +43,11 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
     for (const mine of myLectures) seen.add(mine.title);
     return seen.size;
   }, [upcomingLectures, myLectures]);
+  const profilePath =
+    userType === "professor"
+      ? `/professor/profile${userInfo.id ? `/${userInfo.id}` : ""}`
+      : `/student/profile${userInfo.id ? `/${userInfo.id}` : ""}`;
+
   return (
     <div className="fixed top-20 left-0 w-80 bg-white shadow-lg h-[calc(100vh-5rem)] overflow-y-auto flex flex-col z-10">
       {/* 사용자 프로필 섹션 */}
@@ -59,15 +67,13 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
             )}
           </div>
         </div>
-        {/* 내 정보 버튼 (교수 전용) */}
-        {userType === "professor" && (
-          <Link
-            to="/professor/profile"
-            className="w-full bg-[#1F3A93] hover:bg-[#1b327f] text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200 block text-center"
-          >
-            내 정보
-          </Link>
-        )}
+        {/* 내 정보 버튼 */}
+        <Link
+          to={profilePath}
+          className="w-full bg-[#1F3A93] hover:bg-[#1b327f] text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200 block text-center"
+        >
+          내 정보
+        </Link>
       </div>
 
       {/* 내 강의 + 곧 다가올 강의 병합 섹션 (교수만) */}
@@ -132,7 +138,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
                         <div className="flex items-center space-x-1">
                           <Users className="w-4 h-4 text-gray-400" />
                           <span className="text-xs text-gray-500">
-                            {item.participants}+
+                            {item.participants}
                           </span>
                         </div>
                       )}

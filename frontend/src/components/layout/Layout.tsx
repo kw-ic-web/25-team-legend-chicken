@@ -10,8 +10,9 @@ const Layout: React.FC = () => {
 
   const isStudentRoute = location.pathname.startsWith("/student");
   const isProfessorRoute = location.pathname.startsWith("/professor");
-  const isRealtimeDashboard =
-    location.pathname === "/professor/realtime-dashboard";
+  const isRealtimeDashboard = location.pathname.startsWith(
+    "/professor/realtime-dashboard"
+  );
   const isStudentClass = location.pathname.startsWith("/student/courses/");
 
   return (
@@ -33,7 +34,7 @@ const Layout: React.FC = () => {
         {/* 메인 콘텐츠 */}
         <main
           className={`flex-1 flex flex-col ${
-            !isRealtimeDashboard && 
+            !isRealtimeDashboard &&
             !isStudentClass &&
             (isStudentRoute || isProfessorRoute)
               ? "ml-80"

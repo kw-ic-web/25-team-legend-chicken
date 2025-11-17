@@ -107,9 +107,10 @@ const LectureCard: React.FC<LectureCardProps> = ({
     return iconMap[subject] || <BookOpen className="w-8 h-8 text-blue-600" />;
   };
 
-  const linkPath = userType === "student" 
-    ? `/student/courses/${id}` 
-    : `/professor/courses/${id}`;
+  const linkPath =
+    userType === "student"
+      ? `/student/courses/${id}`
+      : `/professor/courses/${id}`;
 
   return (
     <Link
@@ -172,7 +173,7 @@ const LectureCard: React.FC<LectureCardProps> = ({
           <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-1">
               <Users className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-500">{participants}+</span>
+              <span className="text-sm text-gray-500">{participants}</span>
             </div>
             {newQuestions > 0 && (
               <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded">
