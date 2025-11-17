@@ -75,7 +75,10 @@ function App() {
                 path="professor/realtime-dashboard/:lectureId/:classId/:liveId"
                 element={<RealtimeDashboard />}
               />
-              <Route path="professor/profile" element={<ProfessorProfile />} />
+              <Route
+                path="professor/profile/:id"
+                element={<ProfessorProfile />}
+              />
               <Route path="professor/analysis" element={<LectureAnalysis />} />
               <Route
                 path="professor/class-analysis/:id"
