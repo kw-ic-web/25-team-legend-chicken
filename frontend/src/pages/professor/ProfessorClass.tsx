@@ -69,6 +69,13 @@ const ProfessorClass: React.FC = () => {
   } | null>(null);
   const navigate = useNavigate();
   const lectureIdForAnalysis = course.id || id || "";
+  const firstClassIdForAnalysis =
+    weeks.length > 0 ? Number(weeks[0].week) : null;
+  const analysisLink = lectureIdForAnalysis
+    ? firstClassIdForAnalysis
+      ? `/professor/analysis/${lectureIdForAnalysis}?classId=${firstClassIdForAnalysis}`
+      : `/professor/analysis/${lectureIdForAnalysis}`
+    : "#";
 
   const resolveUrl = useCallback((url: string) => {
     if (!url) return url;
@@ -485,11 +492,7 @@ const ProfessorClass: React.FC = () => {
           </h1>
           <div className="flex items-center space-x-3">
             <Link
-              to={
-                lectureIdForAnalysis
-                  ? `/professor/analysis/${lectureIdForAnalysis}`
-                  : "#"
-              }
+              to={analysisLink}
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-all duration-200 ${
                 lectureIdForAnalysis
                   ? "bg-gradient-to-r from-[#07CDAC] via-[#1089E3] to-[#3A6EFF] text-white hover:shadow-lg hover:-translate-y-0.5"
