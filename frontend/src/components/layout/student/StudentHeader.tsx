@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 const StudentHeader: React.FC = () => {
 
   return (
-    <header className="relative h-20 shadow-lg">
+    <header className="fixed top-0 left-0 right-0 h-20 shadow-lg z-50">
       {/* 배경 색상: 60도 대각선 구분 (70% / 5% / 25%) */}
       <div
         className="absolute inset-0"

@@ -17,15 +17,23 @@ const getClient = () => {
  * @returns {Promise<{ text: string, raw: object }>}
  */
 async function extractTextFromImage(filePath) {
-  const annotator = getClient();
-  const [result] = await annotator.documentTextDetection(filePath);
-
-  const text = (result.fullTextAnnotation && result.fullTextAnnotation.text) || "";
-
-  return {
-    text: text.replace(/\r/g, "").trim(),
-    raw: result,
-  };
+  try {
+    // 자격증명 미설정 시 안전하게 우회
+    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      return { text: "", raw: null };
+    }
+    const annotator = getClient();
+    const [result] = await annotator.documentTextDetection(filePath);
+    const text = (result.fullTextAnnotation && result.fullTextAnnotation.text) || "";
+    return {
+      text: text.replace(/\r/g, "").trim(),
+      raw: result,
+    };
+  } catch (err) {
+    // OCR 실패 시에도 크래시 방지하고 빈 텍스트로 진행
+    console.error("Vision OCR 오류:", err?.message || err);
+    return { text: "", raw: null };
+  }
 }
 
 module.exports = {
