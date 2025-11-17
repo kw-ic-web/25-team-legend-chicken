@@ -12,18 +12,8 @@ function attachSocket(server, corsOrigin = "*") {
   io.on("connection", (socket) => {
     console.log("[socket] connected:", socket.id);
 
-    // ─────────────────────────────────────────────
-    // 공통: 라이브 페이지 입장 (질문/채팅/WebRTC 모두 같은 룸 사용)
-    // ─────────────────────────────────────────────
-    // front 예시:
-    // socket.emit("live:join", {
-    //   lecture_id: "LEC-XXXX",
-    //   class_id: 1,
-    //   live_id: 1,         // 라이브 없으면 null
-    //   role: "student",    // or "professor"
-    //   user_id: "..."      // 사용자 _id
-    // });
-    socket.on("live:join", ({ lecture_id, class_id, live_id, role, user_id }) => {
+      // 공통: 라이브 룸 입장 처리 함수 추가
+    function joinLiveRoom({ lecture_id, class_id, live_id, user_id }, forcedRole) {
       if (!lecture_id || !class_id) return;
 
       const baseRoom = `lec:${lecture_id}:cls:${class_id}`;
@@ -35,10 +25,12 @@ function attachSocket(server, corsOrigin = "*") {
       socket.join(baseRoom);
       socket.join(liveRoom);
 
+      const role = forcedRole; // role은 서버에서 강제
       socket.data = { lecture_id, class_id, live_id, role, user_id };
 
       console.log(
         "[live:join]",
+        role,
         socket.id,
         "->",
         baseRoom,
@@ -54,7 +46,31 @@ function attachSocket(server, corsOrigin = "*") {
         role,
         user_id,
       });
+    }
+
+    // ─────────────────────────────────────────────
+    // 공통: 라이브 페이지 입장 (질문/채팅/WebRTC 모두 같은 룸 사용)
+    // ─────────────────────────────────────────────
+    // front 예시:
+    // socket.emit("live:join", {
+    //   lecture_id: "LEC-XXXX",
+    //   class_id: 1,
+    //   live_id: 1,         // 라이브 없으면 null
+    //   role: "student",    // or "professor"
+    //   user_id: "..."      // 사용자 _id
+    // });
+    // ✅ 학생 입장
+    // socket.emit("live:join-student", { lecture_id, class_id, live_id, user_id });
+    socket.on("live:join-student", (payload) => {
+      joinLiveRoom(payload, "student");
     });
+
+    // ✅ 교수 입장
+    // socket.emit("live:join-professor", { lecture_id, class_id, live_id, user_id });
+    socket.on("live:join-professor", (payload) => {
+      joinLiveRoom(payload, "professor");
+    });
+
 
     // ─────────────────────────────────────────────
     // WebRTC 시그널링 이벤트들
