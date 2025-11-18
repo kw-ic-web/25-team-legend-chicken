@@ -15,9 +15,12 @@ import {
   startLive,
   endLive,
   getClassQuestions,
+  getMyInfo,
+  getLectures,
   type LiveStatusClass,
   type GetClassDetailResponse,
   type ClassQuestion,
+  type MyInfoUser,
 } from "../../api/professor";
 import Toast from "../../components/common/Toast";
 import { getBaseUrl } from "../../api/auth/client";
@@ -78,6 +81,8 @@ const ProfessorClass: React.FC = () => {
   const [latestQuestionsError, setLatestQuestionsError] = useState<
     string | null
   >(null);
+  const [myInfo, setMyInfo] = useState<MyInfoUser | null>(null);
+  const [lectureCount, setLectureCount] = useState(0);
   const navigate = useNavigate();
   const lectureIdForAnalysis = course.id || id || "";
   const firstClassIdForAnalysis =
@@ -176,6 +181,31 @@ const ProfessorClass: React.FC = () => {
 
     fetchData();
   }, [id, resolveUrl]);
+
+  useEffect(() => {
+    const fetchMyInfo = async () => {
+      try {
+        const response = await getMyInfo();
+        setMyInfo(response.user);
+      } catch (error) {
+        console.error("내 정보 조회 실패:", error);
+      }
+    };
+    fetchMyInfo();
+  }, []);
+
+  useEffect(() => {
+    const fetchLectureCount = async () => {
+      try {
+        const response = await getLectures();
+        setLectureCount(response.lectures?.length ?? 0);
+      } catch (error) {
+        console.error("강좌 목록 조회 실패:", error);
+        setLectureCount(0);
+      }
+    };
+    fetchLectureCount();
+  }, []);
 
   useEffect(() => {
     if (weeks.length > 0 && selectedQuestionClassId === null) {
@@ -487,10 +517,14 @@ const ProfessorClass: React.FC = () => {
       <CommonSidebar
         userType="professor"
         userInfo={{
-          name: "김철수",
-          title: "강의자",
-          affiliation: "광운대학교 정보융합학부",
-          currentLectures: 13,
+          name: myInfo?.name || "교수자",
+          title:
+            myInfo?.user_type === "professor"
+              ? "교수"
+              : myInfo?.user_type || "강의자",
+          affiliation: course.description || "강의자 정보",
+          currentLectures: lectureCount,
+          profileImage: myInfo?.profile_image,
         }}
         showBroadcastControls={false}
         additionalContent={

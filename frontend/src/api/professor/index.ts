@@ -316,6 +316,20 @@ export type GetClassQuestionsResponse = {
   questions: ClassQuestion[];
 };
 
+export type MyInfoUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  user_type: string;
+  profile_image?: string;
+};
+
+export type MyInfoResponse = {
+  success: boolean;
+  user: MyInfoUser;
+};
+
 export async function getLiveStatus(
   lectureId: string
 ): Promise<LiveStatusResponse> {
@@ -415,4 +429,18 @@ export async function getClassQuestions(
       },
     }
   );
+}
+
+export async function getMyInfo(): Promise<MyInfoResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<MyInfoResponse>("/api/myinfo", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
