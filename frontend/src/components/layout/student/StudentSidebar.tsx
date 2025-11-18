@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import CommonSidebar from "../CommonSidebar";
 import { joinLecture, getMyLectures } from "../../../api/student";
 import { getMyInfo } from "../../../api/auth";
 import { X, BookOpen, CheckCircle, AlertCircle } from "lucide-react";
 
 const StudentSidebar: React.FC = () => {
+  const location = useLocation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [lectureId, setLectureId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -126,12 +128,15 @@ const StudentSidebar: React.FC = () => {
     setSuccessMessage(null);
   };
 
+  const hideMyLecturesSection = location.pathname.startsWith("/student/courses/");
+
   return (
     <>
       <CommonSidebar
         userType="student"
         userInfo={studentInfo}
         myLectures={myLectures}
+        hideStudentMyLectures={hideMyLecturesSection}
         additionalContent={
           <div className="p-6 border-t border-gray-200">
             <button
