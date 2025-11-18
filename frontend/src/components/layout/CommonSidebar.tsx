@@ -15,6 +15,7 @@ interface CommonSidebarProps {
   userType: "student" | "professor";
   userInfo: UserInfo;
   showBroadcastControls?: boolean;
+  hideStudentMyLectures?: boolean;
   upcomingLectures?: Array<{
     title: string;
     time: string;
@@ -34,6 +35,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
   userType,
   userInfo,
   showBroadcastControls = true,
+  hideStudentMyLectures = false,
   upcomingLectures = [],
   myLectures = [],
   additionalContent,
@@ -229,7 +231,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       )}
 
       {/* 학생 내 강의 섹션 */}
-      {userType === "student" && myLectures.length > 0 && (
+      {userType === "student" && myLectures.length > 0 && !hideStudentMyLectures && (
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">내 강의</h3>
           <div className="space-y-3">
