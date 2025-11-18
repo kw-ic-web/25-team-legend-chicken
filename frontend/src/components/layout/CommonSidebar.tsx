@@ -221,13 +221,6 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       {userType === "student" && (
         <div className="p-6 space-y-3">
           <Link
-            to="/student/participate"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-          >
-            <BookOpen className="w-5 h-5" />
-            <span>강의 참여하기</span>
-          </Link>
-          <Link
             to="/student/questions"
             className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
           >
