@@ -1,8 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/user");
+const RefreshToken = require("../models/RefreshToken");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const { authenticateToken } = require("../middleware/auth");
 const { uploadProfileImage } = require("../config/uploadImage");
 
@@ -107,8 +109,8 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // JWT 발급
-    const token = jwt.sign(
+    // Access Token 발급 (짧은 만료 시간: 1시간)
+    const accessToken = jwt.sign(
       {
         id: user._id,
         email: user.email,
@@ -117,11 +119,29 @@ router.post("/login", async (req, res) => {
       },
       process.env.JWT_SECRET || "your-secret-key",
       {
-        expiresIn: "24h",
+        expiresIn: "1h", // Access token은 1시간
         issuer: "lec-q",
         subject: "userInfo",
       }
     );
+
+    // Refresh Token 생성 (랜덤 문자열)
+    const refreshTokenValue = crypto.randomBytes(64).toString("hex");
+    
+    // Refresh Token 만료 시간 (7일)
+    const refreshTokenExpiresAt = new Date();
+    refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + 7);
+
+    // Refresh Token DB에 저장
+    const refreshToken = new RefreshToken({
+      token: refreshTokenValue,
+      user_id: user._id,
+      expires_at: refreshTokenExpiresAt,
+      device_info: req.headers["user-agent"] || null,
+      ip_address: req.ip || req.connection.remoteAddress || null,
+    });
+
+    await refreshToken.save();
 
     console.log("로그인 성공, 토큰 발급:", { email: user.email });
 
@@ -134,7 +154,9 @@ router.post("/login", async (req, res) => {
         name: user.name,
         user_type: user.user_type,
       },
-      token,
+      access_token: accessToken,
+      refresh_token: refreshTokenValue,
+      expires_in: 3600, // 1시간 (초 단위)
     });
   } catch (error) {
     console.error("로그인 오류:", error);
@@ -215,15 +237,104 @@ router.get("/verify", async (req, res) => {
   }
 });
 
+// 토큰 갱신 (Refresh Token 사용)
+router.post("/refresh", async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+
+    if (!refresh_token) {
+      return res.status(400).json({
+        success: false,
+        message: "refresh_token이 필요합니다.",
+      });
+    }
+
+    // Refresh Token 조회
+    const refreshTokenDoc = await RefreshToken.findOne({
+      token: refresh_token,
+    });
+
+    if (!refreshTokenDoc) {
+      return res.status(401).json({
+        success: false,
+        message: "유효하지 않은 refresh token입니다.",
+      });
+    }
+
+    // 만료 확인
+    if (new Date() > refreshTokenDoc.expires_at) {
+      // 만료된 토큰 삭제
+      await RefreshToken.deleteOne({ _id: refreshTokenDoc._id });
+      return res.status(401).json({
+        success: false,
+        message: "refresh token이 만료되었습니다.",
+      });
+    }
+
+    // 사용자 정보 조회
+    const user = await User.findById(refreshTokenDoc.user_id);
+    if (!user) {
+      await RefreshToken.deleteOne({ _id: refreshTokenDoc._id });
+      return res.status(404).json({
+        success: false,
+        message: "사용자를 찾을 수 없습니다.",
+      });
+    }
+
+    // 새로운 Access Token 발급
+    const accessToken = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        user_type: user.user_type,
+      },
+      process.env.JWT_SECRET || "your-secret-key",
+      {
+        expiresIn: "1h",
+        issuer: "lec-q",
+        subject: "userInfo",
+      }
+    );
+
+    console.log("토큰 갱신 성공:", { email: user.email });
+
+    return res.json({
+      success: true,
+      message: "토큰이 갱신되었습니다.",
+      access_token: accessToken,
+      expires_in: 3600, // 1시간 (초 단위)
+    });
+  } catch (error) {
+    console.error("토큰 갱신 오류:", error);
+    return res.status(500).json({
+      success: false,
+      message: "서버 오류가 발생했습니다.",
+    });
+  }
+});
+
 // 로그아웃
 router.post("/logout", authenticateToken, async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-    
+    const { refresh_token } = req.body;
+
+    // Access Token 블랙리스트에 추가
     if (token) {
       const { addToBlacklist } = require("../middleware/auth");
       addToBlacklist(token);
-      console.log("토큰 블랙리스트에 추가됨:", { email: req.user.email });
+      console.log("Access token 블랙리스트에 추가됨:", { email: req.user.email });
+    }
+
+    // Refresh Token 삭제
+    if (refresh_token) {
+      await RefreshToken.deleteOne({ token: refresh_token });
+      console.log("Refresh token 삭제됨:", { email: req.user.email });
+    } else {
+      // refresh_token이 없으면 해당 사용자의 모든 refresh token 삭제
+      await RefreshToken.deleteMany({ user_id: req.user._id });
+      console.log("모든 refresh token 삭제됨:", { email: req.user.email });
     }
     
     console.log("로그아웃 요청:", { email: req.user.email });
