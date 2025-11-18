@@ -1378,6 +1378,11 @@ paths:
                           type: string
                         lecture_description:
                           type: string
+                        thumbnail:
+                          type: string
+                          nullable: true
+                          description: 강의 썸네일 이미지 경로
+                          example: /uploads/images/thumbnail-1234567890-123456789.jpg
         '403':
           description: 권한 없음 (학생만 가능)
 

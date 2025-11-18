@@ -80,7 +80,7 @@ router.get("/my-lectures", authenticateToken, async (req, res) => {
     const lectures = await Lecture.find({
       student_id_list: user._id,
     }).select(
-      "lecture_id name schedule professor_name professor_email professor_phone lecture_description"
+      "lecture_id name schedule professor_name professor_email professor_phone lecture_description thumbnail"
     );
 
     res.status(200).json({
