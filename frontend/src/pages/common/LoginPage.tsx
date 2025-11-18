@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import UserTypeSelector from "../../components/auth/UserTypeSelector";
 import LoginForm from "../../components/auth/LoginForm";
@@ -16,12 +16,39 @@ const LoginPage: React.FC = () => {
   const [rememberId, setRememberId] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { user, login } = useAuth();
 
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      const redirectPath =
+        user.role === "professor"
+          ? "/professor/dashboard"
+          : "/student/dashboard";
+      navigate(redirectPath, { replace: true });
+      return;
+    }
+
+    const rawAuth = localStorage.getItem("lecq.auth");
+    if (!rawAuth) return;
+    try {
+      const parsed = JSON.parse(rawAuth) as {
+        id?: string;
+        name?: string;
+        role?: "student" | "professor";
+      };
+      if (parsed.id && parsed.name && parsed.role) {
+        login({ id: parsed.id, name: parsed.name, role: parsed.role });
+      }
+    } catch (error) {
+      console.warn("잘못된 인증 정보가 발견되어 초기화합니다.", error);
+      localStorage.removeItem("lecq.auth");
+    }
+  }, [navigate, user, login]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
