@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { Send } from "lucide-react";
 import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
@@ -7,6 +13,8 @@ import ScreenShareArea from "../../components/live/professor/ScreenShareArea";
 import LiveControls from "../../components/live/professor/LiveControls";
 import EndBroadcastConfirmModal from "../../components/modal/live/EndBroadcastConfirmModal";
 import Toast from "../../components/common/Toast";
+import { useAuth } from "../../contexts/AuthContext";
+import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
 
 interface Question {
   id: number;
@@ -33,6 +41,7 @@ const RealtimeDashboard: React.FC = () => {
     liveId?: string;
   }>();
   const liveState = (location.state as LiveNavigationState) || null;
+  const { user } = useAuth();
   const [isMicOn, setIsMicOn] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
@@ -44,7 +53,9 @@ const RealtimeDashboard: React.FC = () => {
     message: string;
     type: "success" | "error";
   } | null>(null);
-  const showError = (message: string) => setToast({ message, type: "error" });
+  const showError = useCallback((message: string) => {
+    setToast({ message, type: "error" });
+  }, []);
   const [students] = useState(
     Array.from({ length: 8 }).map((_, i) => ({
       id: i + 1,
@@ -52,6 +63,16 @@ const RealtimeDashboard: React.FC = () => {
       email: `student${i + 1}@example.com`,
     }))
   );
+
+  const parseNumeric = (value?: number | string | null) => {
+    if (value === null || value === undefined || value === "") return undefined;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : undefined;
+  };
+
+  const resolvedLectureId = liveState?.lectureId || params.lectureId;
+  const resolvedClassId = parseNumeric(liveState?.classId ?? params.classId);
+  const resolvedLiveId = parseNumeric(liveState?.liveId ?? params.liveId);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const shareVideoRef = useRef<HTMLVideoElement>(null);
@@ -61,6 +82,26 @@ const RealtimeDashboard: React.FC = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const isStartingShareRef = useRef(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+
+  const localStreams = useMemo(
+    () => [cameraStream, screenStream],
+    [cameraStream, screenStream]
+  );
+
+  const {
+    remoteParticipants,
+    status: webrtcStatus,
+    error: webrtcError,
+  } = useLiveWebRTC({
+    lectureId: resolvedLectureId,
+    classId: resolvedClassId,
+    liveId: resolvedLiveId ?? null,
+    role: "professor",
+    userId: user?.id,
+    localStreams,
+  });
 
   const [questions, setQuestions] = useState<Question[]>([
     {
@@ -78,27 +119,6 @@ const RealtimeDashboard: React.FC = () => {
       timestamp: "08:15",
       status: "pending",
     },
-    {
-      id: 3,
-      studentName: "익명의 오소리",
-      question: "이 부분이 이해가 잘 안가서 그러는데 파이썬이 뭐죠?",
-      timestamp: "08:15",
-      status: "pending",
-    },
-    {
-      id: 4,
-      studentName: "익명의 오소리",
-      question: "이 부분이 이해가 잘 안가서 그러는데 파이썬이 뭐죠?",
-      timestamp: "08:15",
-      status: "pending",
-    },
-    {
-      id: 5,
-      studentName: "익명의 오소리",
-      question: "이 부분이 이해가 잘 안가서 그러는데 파이썬이 뭐죠?",
-      timestamp: "08:15",
-      status: "pending",
-    },
   ]);
 
   // 웹캠 시작
@@ -109,6 +129,7 @@ const RealtimeDashboard: React.FC = () => {
         audio: true,
       });
       streamRef.current = stream;
+      setCameraStream(stream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -139,7 +160,7 @@ const RealtimeDashboard: React.FC = () => {
         showError("웹캠을 시작할 수 없어요. 장치와 권한을 확인해 주세요.");
       }
     }
-  }, []);
+  }, [showError]);
 
   // 웹캠 중지
   const stopCamera = useCallback(() => {
@@ -152,6 +173,7 @@ const RealtimeDashboard: React.FC = () => {
     }
     setIsCameraOn(false);
     setIsMicOn(false);
+    setCameraStream(null);
     stopAudioLevelMonitoring();
   }, []);
 
@@ -208,6 +230,7 @@ const RealtimeDashboard: React.FC = () => {
       shareVideoRef.current.srcObject = null;
     }
     setIsSharing(false);
+    setScreenStream(null);
   }, []);
 
   const startScreenShare = useCallback(async () => {
@@ -237,6 +260,7 @@ const RealtimeDashboard: React.FC = () => {
         audio: true,
       });
       shareStreamRef.current = displayStream;
+      setScreenStream(displayStream);
       if (shareVideoRef.current) {
         shareVideoRef.current.srcObject =
           displayStream as unknown as MediaStream;
@@ -268,9 +292,9 @@ const RealtimeDashboard: React.FC = () => {
         showError("화면 공유를 시작할 수 없어요.");
       }
     }
-  }, [stopScreenShare]);
+  }, [showError, stopScreenShare]);
 
-  const toggleMic = () => {
+  const toggleMic = useCallback(() => {
     if (streamRef.current) {
       const audioTracks = streamRef.current.getAudioTracks();
       if (audioTracks.length > 0) {
@@ -325,9 +349,9 @@ const RealtimeDashboard: React.FC = () => {
           }
         });
     }
-  };
+  }, [showError]);
 
-  const toggleCamera = () => {
+  const toggleCamera = useCallback(() => {
     if (streamRef.current) {
       const videoTracks = streamRef.current.getVideoTracks();
       if (videoTracks.length > 0) {
@@ -421,7 +445,7 @@ const RealtimeDashboard: React.FC = () => {
           }
         });
     }
-  };
+  }, [showError]);
 
   const handleSendMessage = () => {
     if (chatMessage.trim()) {
@@ -458,6 +482,12 @@ const RealtimeDashboard: React.FC = () => {
     };
   }, [startCamera, stopCamera, stopScreenShare]);
 
+  useEffect(() => {
+    if (webrtcError) {
+      showError(`WebRTC 오류: ${webrtcError}`);
+    }
+  }, [webrtcError, showError]);
+
   // 탭 숨김/이탈 시 리소스 정리
   useEffect(() => {
     const onVisibility = () => {
@@ -488,36 +518,54 @@ const RealtimeDashboard: React.FC = () => {
   }, [stopCamera, stopScreenShare, isSharing]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex h-[calc(100vh-80px)]">
+    <div className="flex h-full bg-gray-50">
+      <div className="flex flex-1 overflow-hidden">
         {/* 메인 콘텐츠 영역 */}
-        <div className="flex-1 bg-white m-4 rounded-lg shadow-sm">
-          <div className="h-full flex flex-col">
+        <div className="flex-1 bg-white m-2 rounded-lg shadow-sm overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden">
             {/* 강의 제목 */}
-            <div className="p-6 border-b border-gray-200">
-              <h1 className="text-2xl font-bold text-green-600">
-                {liveState?.classTitle || "실시간 강의"}
-              </h1>
-              <div className="text-sm text-gray-500 mt-1 space-x-3">
-                {(liveState?.lectureId || params.lectureId) && (
-                  <span>
-                    강좌 ID: {liveState?.lectureId || params.lectureId}
-                  </span>
-                )}
-                {(liveState?.classId || params.classId) && (
-                  <span>클래스 ID: {liveState?.classId || params.classId}</span>
-                )}
-                {(liveState?.liveId || params.liveId) && (
-                  <span>라이브 ID: {liveState?.liveId || params.liveId}</span>
-                )}
+            <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-white via-white to-green-50">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h1 className="text-xl font-bold text-green-600 truncate">
+                  {liveState?.classTitle || "실시간 강의"}
+                </h1>
+                <div className="text-xs text-gray-500 flex items-center gap-3 flex-wrap">
+                  {(liveState?.lectureId || params.lectureId) && (
+                    <span className="flex items-center gap-1">
+                      <span className="font-semibold text-gray-700">강좌</span>
+                      {liveState?.lectureId || params.lectureId}
+                    </span>
+                  )}
+                  {(liveState?.classId || params.classId) && (
+                    <span className="flex items-center gap-1">
+                      <span className="font-semibold text-gray-700">
+                        클래스
+                      </span>
+                      {liveState?.classId || params.classId}
+                    </span>
+                  )}
+                  {(liveState?.liveId || params.liveId) && (
+                    <span className="flex items-center gap-1">
+                      <span className="font-semibold text-gray-700">
+                        라이브
+                      </span>
+                      {liveState?.liveId || params.liveId}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* 상단 참여자(웹캠) 스트립 */}
-            <ParticipantStrip isCameraOn={isCameraOn} videoRef={videoRef} />
-
             {/* 강의 콘텐츠(화면 공유 영역) */}
-            <ScreenShareArea isSharing={isSharing} videoRef={shareVideoRef}>
+            <ScreenShareArea
+              isSharing={isSharing}
+              videoRef={shareVideoRef}
+              connectionStatus={webrtcStatus}
+              remoteParticipants={remoteParticipants}
+            >
+              <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
+                <ParticipantStrip isCameraOn={isCameraOn} videoRef={videoRef} />
+              </div>
               <LiveControls
                 isMicOn={isMicOn}
                 isCameraOn={isCameraOn}
@@ -621,7 +669,7 @@ const RealtimeDashboard: React.FC = () => {
                   type="text"
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
-                  placeholder="김철수로 채팅하기"
+                  placeholder="채팅 입력 (Enter)"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                 />
@@ -635,31 +683,31 @@ const RealtimeDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-        {/* 강의 인원 모달 */}
-        <LecturePersonnelModal
-          isOpen={isPersonnelOpen}
-          onClose={closePersonnel}
-          students={students}
-          lectureId={""}
-        />
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        )}
-        <EndBroadcastConfirmModal
-          isOpen={isEndConfirmOpen}
-          onClose={() => setIsEndConfirmOpen(false)}
-          onConfirm={() => {
-            setIsEndConfirmOpen(false);
-            stopScreenShare();
-            stopCamera();
-            console.log("방송 종료됨");
-          }}
-        />
       </div>
+
+      <LecturePersonnelModal
+        isOpen={isPersonnelOpen}
+        onClose={closePersonnel}
+        students={students}
+        lectureId={liveState?.lectureId || params.lectureId || ""}
+      />
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <EndBroadcastConfirmModal
+        isOpen={isEndConfirmOpen}
+        onClose={() => setIsEndConfirmOpen(false)}
+        onConfirm={() => {
+          setIsEndConfirmOpen(false);
+          stopScreenShare();
+          stopCamera();
+          console.log("방송 종료됨");
+        }}
+      />
     </div>
   );
 };

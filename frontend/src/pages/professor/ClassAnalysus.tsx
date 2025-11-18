@@ -124,6 +124,8 @@ const ClassAnalysis: React.FC = () => {
     week?: number;
   }>({});
   const [reportError, setReportError] = useState<string | null>(null);
+  const [isLoadingClasses, setIsLoadingClasses] = useState(false);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
 
   useEffect(() => {
     setSelectedClassId(parsedClassId);
@@ -133,6 +135,7 @@ const ClassAnalysis: React.FC = () => {
     if (!lectureId) return;
 
     let active = true;
+    setIsLoadingClasses(true);
     (async () => {
       try {
         const response = await getClasses(lectureId);
@@ -182,6 +185,10 @@ const ClassAnalysis: React.FC = () => {
         }
       } catch (error) {
         console.error("강의 목록을 불러오지 못했습니다.", error);
+      } finally {
+        if (active) {
+          setIsLoadingClasses(false);
+        }
       }
     })();
 
@@ -204,6 +211,7 @@ const ClassAnalysis: React.FC = () => {
 
     let active = true;
     setReportError(null);
+    setIsLoadingReport(true);
 
     (async () => {
       try {
@@ -412,7 +420,9 @@ const ClassAnalysis: React.FC = () => {
         setReportError(message);
         showToast(message, "error");
       } finally {
-        // no-op
+        if (active) {
+          setIsLoadingReport(false);
+        }
       }
     })();
 
@@ -441,6 +451,8 @@ const ClassAnalysis: React.FC = () => {
     }
   };
 
+  const isLoading = isLoadingClasses || isLoadingReport;
+
   return (
     <div className="flex-1 flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="p-8 space-y-8">
@@ -461,6 +473,31 @@ const ClassAnalysis: React.FC = () => {
             />
           )}
         </div>
+
+        {isLoading && (
+          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm flex items-center gap-3">
+            <svg
+              className="w-4 h-4 animate-spin text-slate-400"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              />
+            </svg>
+            <span>분석 데이터를 불러오는 중입니다...</span>
+          </div>
+        )}
 
         {reportError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
