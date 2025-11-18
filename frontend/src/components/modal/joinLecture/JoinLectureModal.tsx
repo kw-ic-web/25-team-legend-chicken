@@ -143,3 +143,4 @@ const JoinLectureModal: React.FC<JoinLectureModalProps> = ({
 
 export default JoinLectureModal;
 
+
