@@ -632,6 +632,7 @@ const StudentClass: React.FC = () => {
         userType="student"
         userInfo={studentInfo}
         myLectures={myLectures}
+        hideStudentMyLectures
         additionalContent={
           <div className="p-6 border-t border-gray-200 space-y-6">
             <div>
