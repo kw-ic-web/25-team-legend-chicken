@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,6 +8,7 @@ import {
   BarChart3,
   Target,
 } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
 
 const LandingPage: React.FC = () => {
   const sectionRefs = useRef<HTMLDivElement[]>([]);
@@ -16,6 +17,36 @@ const LandingPage: React.FC = () => {
   const isAnimatingRef = useRef(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const navigate = useNavigate();
+  const { user, login } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      const redirectPath =
+        user.role === "professor"
+          ? "/professor/dashboard"
+          : "/student/dashboard";
+      navigate(redirectPath, { replace: true });
+      return;
+    }
+
+    const rawAuth = localStorage.getItem("lecq.auth");
+    if (!rawAuth) return;
+
+    try {
+      const parsed = JSON.parse(rawAuth) as {
+        id?: string;
+        name?: string;
+        role?: "student" | "professor";
+      };
+      if (parsed.id && parsed.name && parsed.role) {
+        login({ id: parsed.id, name: parsed.name, role: parsed.role });
+      }
+    } catch (error) {
+      console.warn("잘못된 인증 정보를 초기화합니다.", error);
+      localStorage.removeItem("lecq.auth");
+    }
+  }, [login, navigate, user]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
