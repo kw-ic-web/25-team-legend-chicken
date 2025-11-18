@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   Filter,
@@ -9,47 +9,28 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { getMyQuestions } from "../../api/student";
 
 // ---------------- Types ----------------
-interface Question {
-  id: number;
-  lectureName: string;
-  question: string;
-  timestamp: string; // e.g. "2024-01-15 14:30"
-  status: "pending" | "answered" | "rejected";
-  answer?: string;
-}
+type QuestionStatus = "pending" | "answered" | "rejected";
 
-// ---------------- Demo Data ----------------
-const initialData: Question[] = [
-  {
-    id: 1,
-    lectureName: "데이터베이스 개론",
-    question: "정규화가 무엇인지 설명해주세요.",
-    timestamp: "2024-01-15 14:30",
-    status: "answered",
-    answer:
-      "정규화는 데이터베이스의 중복을 줄이고 이상 현상을 방지해 데이터 일관성과 무결성을 높이는 설계 절차입니다.",
-  },
-  {
-    id: 2,
-    lectureName: "웹 프로그래밍",
-    question: "React와 Vue의 차이점은 무엇인가요?",
-    timestamp: "2024-01-14 16:45",
-    status: "pending",
-  },
-  {
-    id: 3,
-    lectureName: "운영체제",
-    question: "컨텍스트 스위칭이 성능에 미치는 영향은?",
-    timestamp: "2024-01-12 10:15",
-    status: "rejected",
-  },
-];
+interface Question {
+  id: string;
+  lectureId: string;
+  lectureName: string;
+  classId?: number;
+  question: string;
+  timestamp: string;
+  status: QuestionStatus;
+  answer?: string;
+  page?: number;
+  section?: string;
+  upvoteCount?: number;
+}
 
 // ---------------- Helpers ----------------
 const statusMeta: Record<
-  Question["status"],
+  QuestionStatus,
   { label: string; icon: React.ReactNode; className: string }
 > = {
   pending: {
@@ -72,15 +53,123 @@ const statusMeta: Record<
   },
 };
 
-const parseTs = (ts: string) => new Date(ts.replace(/-/g, "/").replace(" ", "T"));
+const parseTs = (ts: string) => {
+  const parsed = new Date(ts);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
+  return new Date(ts.replace(/-/g, "/").replace(" ", "T"));
+};
+
+const formatTimestamp = (ts: string) => {
+  const date = parseTs(ts);
+  if (Number.isNaN(date.getTime())) return ts;
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 // ---------------- Component ----------------
 const MyQuestions: React.FC = () => {
-  const [questions] = useState<Question[]>(initialData);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<"all" | Question["status"]>("all");
+  const [status, setStatus] = useState<"all" | QuestionStatus>("all");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [lectureInput, setLectureInput] = useState("");
+  const [classInput, setClassInput] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState<{
+    lectureId?: string;
+    classId?: number;
+  }>({});
+
+  const fetchQuestions = useCallback(
+    async (opts?: { showSkeleton?: boolean }) => {
+      const showSkeleton = opts?.showSkeleton ?? true;
+      if (showSkeleton) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+      setError(null);
+      try {
+        const response = await getMyQuestions({
+          lectureId: appliedFilters.lectureId,
+          classId: appliedFilters.classId,
+          limit: 200,
+        });
+        const mapped: Question[] = response.questions.map((item) => ({
+          id: item._id,
+          lectureId: item.lecture_id,
+          lectureName: item.lecture_name,
+          classId: item.class_id,
+          question: item.text,
+          timestamp:
+            item.updated_at ||
+            item.created_at ||
+            item.timestamp ||
+            new Date().toISOString(),
+          status: item.answer ? "answered" : "pending",
+          answer: item.answer,
+          page: item.page,
+          section: item.section,
+          upvoteCount: item.upvote_count,
+        }));
+        setQuestions(mapped);
+        setTotalCount(response.total_count ?? mapped.length);
+        setExpandedId(null);
+      } catch (err) {
+        console.error("내 질문 목록 조회 실패:", err);
+        const message =
+          err instanceof Error ? err.message : "질문 목록을 불러오지 못했습니다.";
+        setError(message);
+      } finally {
+        if (showSkeleton) {
+          setIsLoading(false);
+        } else {
+          setIsRefreshing(false);
+        }
+      }
+    },
+    [appliedFilters]
+  );
+
+  useEffect(() => {
+    fetchQuestions({ showSkeleton: true });
+  }, [fetchQuestions]);
+
+  const handleApplyFilters = () => {
+    const nextFilters: { lectureId?: string; classId?: number } = {};
+    if (lectureInput.trim()) {
+      nextFilters.lectureId = lectureInput.trim();
+    }
+    if (classInput.trim()) {
+      const parsed = Number(classInput.trim());
+      if (!Number.isNaN(parsed)) {
+        nextFilters.classId = parsed;
+      } else {
+        setError("클래스 ID는 숫자여야 합니다.");
+        return;
+      }
+    }
+    setAppliedFilters(nextFilters);
+  };
+
+  const handleResetFilters = () => {
+    setLectureInput("");
+    setClassInput("");
+    setAppliedFilters({});
+  };
+
+  const handleRefresh = () => {
+    fetchQuestions({ showSkeleton: false });
+  };
 
   const filtered = useMemo(() => {
     let list = [...questions];
@@ -112,7 +201,11 @@ const MyQuestions: React.FC = () => {
               내 질문 내역
             </h1>
             <p className="mt-1 text-slate-500 dark:text-slate-400">
-              총 <span className="font-medium">{filtered.length}</span>개 결과
+              총{" "}
+              <span className="font-medium">
+                {totalCount ?? filtered.length}
+              </span>
+              개 결과
             </p>
           </div>
 
@@ -157,11 +250,70 @@ const MyQuestions: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Filter inputs */}
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                강좌 ID
+              </label>
+              <input
+                value={lectureInput}
+                onChange={(e) => setLectureInput(e.target.value)}
+                placeholder="예: LEC-32AEBA14"
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm outline-none ring-0 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:shadow transition dark:bg-slate-800 dark:border-slate-700"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                클래스 ID
+              </label>
+              <input
+                value={classInput}
+                onChange={(e) => setClassInput(e.target.value)}
+                placeholder="예: 1"
+                inputMode="numeric"
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm outline-none ring-0 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:shadow transition dark:bg-slate-800 dark:border-slate-700"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleApplyFilters}
+                className="w-full sm:w-auto rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-blue-700 transition"
+              >
+                필터 적용
+              </button>
+              {(appliedFilters.lectureId || appliedFilters.classId !== undefined) && (
+                <button
+                  onClick={handleResetFilters}
+                  className="w-full sm:w-auto rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50 transition dark:border-slate-700 dark:text-slate-200"
+                >
+                  초기화
+                </button>
+              )}
+              <button
+                onClick={handleRefresh}
+                className="w-full sm:w-auto rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50 transition dark:border-slate-700 dark:text-slate-200"
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? "새로고침 중..." : "새로고침"}
+              </button>
+            </div>
+          </div>
         </div>
+
+        {error && (
+          <ErrorBanner
+            message={error}
+            onRetry={() => fetchQuestions({ showSkeleton: true })}
+          />
+        )}
 
         {/* Content */}
         <div className="mt-6 grid grid-cols-1 gap-4">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <LoadingState />
+          ) : filtered.length === 0 ? (
             <EmptyState />
           ) : (
             filtered.map((item) => (
@@ -203,7 +355,7 @@ const QuestionCard: React.FC<{
             </span>
             <span className="text-xs text-slate-400">•</span>
             <time className="text-xs text-slate-500 dark:text-slate-400">
-              {data.timestamp}
+              {formatTimestamp(data.timestamp)}
             </time>
           </div>
 
@@ -214,6 +366,31 @@ const QuestionCard: React.FC<{
             <MessageCircle className="mt-0.5 h-4 w-4 shrink-0" />
             {data.question}
           </p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium dark:bg-slate-800">
+              강좌 ID: {data.lectureId}
+            </span>
+            {typeof data.classId === "number" && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium dark:bg-slate-800">
+                클래스 #{data.classId}
+              </span>
+            )}
+            {typeof data.page === "number" && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium dark:bg-slate-800">
+                페이지 {data.page}
+              </span>
+            )}
+            {data.section && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium dark:bg-slate-800">
+                섹션 {data.section}
+              </span>
+            )}
+            {typeof data.upvoteCount === "number" && data.upvoteCount > 0 && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium dark:bg-slate-800">
+                공감 {data.upvoteCount}
+              </span>
+            )}
+          </div>
         </div>
 
         <button
@@ -232,7 +409,7 @@ const QuestionCard: React.FC<{
         </button>
       </div>
 
-      {/* Details with CSS-only transition (no framer-motion) */}
+      {/* Details with CSS-only transition */}
       <div
         className={`overflow-hidden transition-all duration-200 ${expanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}
       >
@@ -266,6 +443,34 @@ const EmptyState: React.FC = () => (
     <p className="mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
       아직 등록된 질문이 없어요. 페이지 상단의 입력 폼 또는 강의 상세 페이지에서 새로운 질문을 남겨보세요.
     </p>
+  </div>
+);
+
+const LoadingState: React.FC = () => (
+  <>
+    {Array.from({ length: 3 }).map((_, idx) => (
+      <div
+        key={idx}
+        className="h-32 animate-pulse rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40"
+      />
+    ))}
+  </>
+);
+
+const ErrorBanner: React.FC<{ message: string; onRetry: () => void }> = ({
+  message,
+  onRetry,
+}) => (
+  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">
+    <div className="flex items-center justify-between gap-2">
+      <span>{message}</span>
+      <button
+        onClick={onRetry}
+        className="rounded-lg bg-white px-3 py-1 text-xs font-semibold text-red-700 shadow-sm hover:bg-red-100 dark:bg-red-900/60 active:scale-[0.98]"
+      >
+        다시 시도
+      </button>
+    </div>
   </div>
 );
 
