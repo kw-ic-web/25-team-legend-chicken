@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Download, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { getClasses, getLectureDetail, getMyLectures } from "../../api/student";
@@ -7,10 +7,14 @@ import { getBaseUrl, apiFetch } from "../../api/auth/client";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
 import CommonSidebar from "../../components/layout/CommonSidebar";
 import { getMyInfo } from "../../api/auth";
+import { io, Socket } from "socket.io-client";
+import { useAuth } from "../../contexts/AuthContext";
 
 const StudentClass: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const socketRef = useRef<Socket | null>(null);
   const [course, setCourse] = useState({
     id: id || "",
     title: "",
@@ -49,6 +53,17 @@ const StudentClass: React.FC = () => {
     classId: number;
     weekTitle: string;
   } | null>(null);
+
+  // currentLiveClass 변경 시 디버깅
+  useEffect(() => {
+    console.log("[StudentClass] currentLiveClass changed:", currentLiveClass);
+    console.log("[StudentClass] currentLiveClass?.active:", currentLiveClass?.active);
+    if (currentLiveClass && currentLiveClass.active) {
+      console.log("[StudentClass] ✅ Live banner should be visible!");
+      console.log("[StudentClass] classId:", currentLiveClass.classId);
+      console.log("[StudentClass] weekTitle:", currentLiveClass.weekTitle);
+    }
+  }, [currentLiveClass]);
   const [studentInfo, setStudentInfo] = useState({
     name: "",
     title: "학생",
@@ -68,8 +83,8 @@ const StudentClass: React.FC = () => {
     { q: "과제 제출 형식이 궁금해요", a: "PDF 혹은 노트북 파일" },
   ];
 
-  const resolveUrl = useCallback((url: string) => {
-    if (!url) return url;
+  const resolveUrl = useCallback((url: string | undefined | null) => {
+    if (!url || typeof url !== "string") return url || "";
     return url.startsWith("http") ? url : `${getBaseUrl()}${url}`;
   }, []);
 
@@ -156,9 +171,13 @@ const StudentClass: React.FC = () => {
                 const token = localStorage.getItem("lecq.token");
                 if (!token) {
                   console.log(`Week ${week.week}: No token`);
-                  return { week: week.week, active: false };
+                  return { week: week.week, active: false, liveId: null };
                 }
-                const response = await apiFetch<{ active: boolean }>(
+                const response = await apiFetch<{ 
+                  active: boolean; 
+                  live_id?: number | null;
+                  class_id?: number;
+                }>(
                   `/api/professor/lectures/${id}/classes/${week.week}/live/current`,
                   {
                     method: "GET",
@@ -168,10 +187,15 @@ const StudentClass: React.FC = () => {
                   }
                 );
                 console.log(`Week ${week.week} live status:`, response);
-                return { week: week.week, active: response.active === true };
+                return { 
+                  week: week.week, 
+                  active: response.active === true,
+                  liveId: response.live_id || null,
+                  classId: response.class_id || week.week,
+                };
               } catch (error) {
                 console.error(`Week ${week.week} live check error:`, error);
-                return { week: week.week, active: false };
+                return { week: week.week, active: false, liveId: null, classId: week.week };
               }
             })
           );
@@ -191,11 +215,20 @@ const StudentClass: React.FC = () => {
             );
             const newLiveClass = {
               active: true,
-              classId: liveWeek.week,
+              classId: liveWeek.classId || liveWeek.week,
               weekTitle: liveWeekData?.title || `${liveWeek.week}주차`,
             };
+            console.log("Setting currentLiveClass to:", JSON.stringify(newLiveClass));
             setCurrentLiveClass(newLiveClass);
             console.log("Current live class set:", newLiveClass);
+            
+            // 이미 시작된 라이브에 대한 알림 표시
+            setTimeout(() => {
+              setToast({
+                message: `${newLiveClass.weekTitle} 라이브가 진행 중입니다! 지금 입장하세요.`,
+                type: "success",
+              });
+            }, 100);
           } else {
             setCurrentLiveClass(null);
             console.log("No active live class found");
@@ -219,6 +252,123 @@ const StudentClass: React.FC = () => {
     fetchData();
   }, [id]);
 
+  // 소켓 연결 및 라이브 시작 알림 리스닝
+  useEffect(() => {
+    if (!id || !user?.id) return;
+
+    const baseUrl = getBaseUrl();
+    const token = localStorage.getItem("lecq.token");
+
+    const socket = io(baseUrl, {
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+      auth: token ? { token } : undefined,
+    });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("[StudentClass] Socket connected:", socket.id);
+      // 강좌의 baseRoom에 join (모든 클래스의 라이브 이벤트를 받기 위해)
+      // 각 클래스별로 join하는 대신, 강좌 전체의 baseRoom에 join
+      const joinPayload = {
+        lecture_id: id,
+        class_id: 0, // 0은 전체 강좌를 의미 (실제 클래스 ID는 live:started 이벤트에서 받음)
+        live_id: null,
+        role: "student",
+        user_id: user.id,
+      };
+      console.log("[StudentClass] Emitting live:join with payload:", joinPayload);
+      socket.emit("live:join", joinPayload);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("[StudentClass] Socket connect error:", err);
+    });
+
+    // 라이브 시작 이벤트 리스닝
+    socket.on("live:started", (data: {
+      lecture_id: string;
+      class_id: number;
+      live_id: number;
+      started_at: string;
+      live_path?: string;
+      professor?: {
+        id: string;
+        name: string;
+      };
+    }) => {
+      console.log("[StudentClass] Live started event received:", data);
+      console.log("[StudentClass] Current lecture id:", id);
+      console.log("[StudentClass] Event lecture id:", data.lecture_id);
+      
+      // 현재 강좌의 라이브인지 확인
+      if (data.lecture_id !== id) {
+        console.log("[StudentClass] Lecture ID mismatch, ignoring event");
+        return;
+      }
+
+      console.log("[StudentClass] Lecture ID matches, processing event");
+      console.log("[StudentClass] Current weeks:", weeks);
+
+      // 해당 클래스 정보 찾기
+      const weekData = weeks.find((w) => w.week === data.class_id);
+      const weekTitle = weekData?.title || `${data.class_id}주차`;
+      
+      console.log("[StudentClass] Found week data:", weekData);
+      console.log("[StudentClass] Week title:", weekTitle);
+
+      // currentLiveClass 업데이트
+      setCurrentLiveClass({
+        active: true,
+        classId: data.class_id,
+        weekTitle: weekTitle,
+      });
+
+      console.log("[StudentClass] Updated currentLiveClass");
+
+      // 알림 표시
+      setToast({
+        message: `${weekTitle} 라이브가 시작되었습니다! 지금 입장하세요.`,
+        type: "success",
+      });
+      
+      console.log("[StudentClass] Toast notification set");
+    });
+
+    // 라이브 종료 이벤트 리스닝
+    socket.on("live:ended", (data: {
+      lecture_id: string;
+      class_id: number;
+      live_id: number;
+    }) => {
+      console.log("[StudentClass] Live ended event:", data);
+      
+      // 현재 강좌의 라이브인지 확인
+      if (data.lecture_id !== id) return;
+
+      // 해당 클래스의 라이브가 종료된 경우
+      setCurrentLiveClass((prev) => {
+        if (prev?.classId === data.class_id) {
+          setToast({
+            message: "라이브 방송이 종료되었습니다.",
+            type: "success",
+          });
+          return null;
+        }
+        return prev;
+      });
+    });
+
+    return () => {
+      socket.off("connect");
+      socket.off("connect_error");
+      socket.off("live:started");
+      socket.off("live:ended");
+      socketRef.current = null;
+      socket.disconnect();
+    };
+  }, [id, user?.id, weeks]);
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 B";
     const k = 1024;
@@ -229,8 +379,36 @@ const StudentClass: React.FC = () => {
 
   const handleDownload = async (url: string, fileName: string) => {
     try {
+      if (!url || typeof url !== "string") {
+        setToast({
+          message: "파일 URL이 올바르지 않습니다.",
+          type: "error",
+        });
+        return;
+      }
       const resolvedUrl = resolveUrl(url);
+      if (!resolvedUrl) {
+        setToast({
+          message: "파일 URL을 확인할 수 없습니다.",
+          type: "error",
+        });
+        return;
+      }
       const response = await fetch(resolvedUrl);
+      if (!response.ok) {
+        if (response.status === 404) {
+          setToast({
+            message: "파일을 찾을 수 없습니다. 파일이 삭제되었을 수 있습니다.",
+            type: "error",
+          });
+        } else {
+          setToast({
+            message: `파일 다운로드에 실패했습니다. (${response.status})`,
+            type: "error",
+          });
+        }
+        return;
+      }
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -242,8 +420,12 @@ const StudentClass: React.FC = () => {
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
       console.error("다운로드 실패:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "파일 다운로드에 실패했습니다.";
       setToast({
-        message: "파일 다운로드에 실패했습니다.",
+        message,
         type: "error",
       });
     }
@@ -351,18 +533,31 @@ const StudentClass: React.FC = () => {
           },
         });
 
-        const newItems = (resp.pdfs || []).map((pdfUrl) => {
-          const url = resolveUrl(pdfUrl);
-          const name = url.split("/").pop() || "자료";
-          return { name, size: "파일", url, originalName: name };
-        });
+        const newItems = (resp.pdfs || [])
+          .filter((pdfUrl) => pdfUrl && typeof pdfUrl === "string")
+          .map((pdfUrl) => {
+            const url = resolveUrl(pdfUrl);
+            const name = url ? url.split("/").pop() || "자료" : "자료";
+            return { name, size: "파일", url, originalName: name };
+          })
+          .filter((item) => item.url); // 유효한 URL만 유지
 
         // 파일 크기 가져오기
         const itemsWithSize = await Promise.all(
           newItems.map(async (item) => {
-            if (!item.url) return item;
+            if (!item.url || typeof item.url !== "string") return item;
             try {
               const headResponse = await fetch(item.url, { method: "HEAD" });
+              if (!headResponse.ok) {
+                // 404 등 에러 시 기본값 유지
+                if (headResponse.status === 404) {
+                  return {
+                    ...item,
+                    size: "[ 파일 없음 ]",
+                  };
+                }
+                return item;
+              }
               const contentLength = headResponse.headers.get("content-length");
               if (contentLength) {
                 return {
@@ -370,8 +565,9 @@ const StudentClass: React.FC = () => {
                   size: `[ ${formatFileSize(Number(contentLength))} ]`,
                 };
               }
-            } catch {
-              // 파일 크기 가져오기 실패 시 무시
+            } catch (error) {
+              // 파일 크기 가져오기 실패 시 무시 (404 등)
+              console.warn(`파일 크기 조회 실패 (${item.url}):`, error);
             }
             return item;
           })
@@ -478,9 +674,9 @@ const StudentClass: React.FC = () => {
       />
 
       {/* 메인 콘텐츠 */}
-      <section className="flex-1 flex flex-col ml-80">
+      <section className="flex-1 flex flex-col ml-80 overflow-y-auto">
         {/* 헤더 */}
-        <div className="bg-gray-100 px-6 py-4 border-b border-gray-200">
+        <div className="bg-gray-100 px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <h1 className="text-2xl font-bold text-gray-900">
@@ -490,34 +686,46 @@ const StudentClass: React.FC = () => {
           </div>
         </div>
 
-        {/* 라이브 알림 및 입장하기 버튼 (임시 - 항상 표시) */}
-        <div className="px-6 py-6 bg-gray-50 border-b border-gray-200">
-          <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <p className="text-lg font-bold text-gray-900 mb-2">
-                  현재{" "}
-                  <span className="text-blue-600 font-bold">1주차 강의</span>
-                  <span className="text-gray-900">가 진행 중입니다.</span>
-                </p>
-                <p className="text-sm text-gray-700">
-                  지금 입장하면 실시간 채팅과 질문 참여가 가능합니다. 늦지 않게
-                  합류하세요!
-                </p>
+        {/* 라이브 알림 및 입장하기 버튼 */}
+        {currentLiveClass && currentLiveClass.active && (
+          <div className="px-6 py-6 bg-gray-50 border-b border-gray-200 flex-shrink-0" style={{ display: 'block', visibility: 'visible', opacity: 1, position: 'relative', zIndex: 10 }}>
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border-2 border-blue-200 shadow-lg">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white animate-pulse">
+                      🔴 LIVE
+                    </span>
+                    <p className="text-lg font-bold text-gray-900">
+                      현재{" "}
+                      <span className="text-blue-600 font-bold">
+                        {currentLiveClass.weekTitle}
+                      </span>
+                      <span className="text-gray-900">가 진행 중입니다.</span>
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-700 mb-2">
+                    지금 입장하면 실시간 채팅과 질문 참여가 가능합니다. 늦지 않게
+                    합류하세요!
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    입장 링크: /student/participate?lectureId={course.id}&classId={currentLiveClass.classId}
+                  </p>
+                </div>
+                <button
+                  onClick={handleEnterLecture}
+                  className="ml-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center space-x-2 flex-shrink-0 shadow-md hover:shadow-lg transform hover:scale-105"
+                >
+                  <span className="text-lg">▷</span>
+                  <span>강의 입장하기</span>
+                </button>
               </div>
-              <button
-                onClick={handleEnterLecture}
-                className="ml-6 px-6 py-3 bg-black hover:bg-gray-900 text-white font-medium rounded-lg transition-colors flex items-center space-x-2 flex-shrink-0"
-              >
-                <span className="text-lg">▷</span>
-                <span>강의 입장하기</span>
-              </button>
             </div>
           </div>
-        </div>
+        )}
 
         {/* 콘텐츠 */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 p-6 overflow-y-auto flex-shrink">
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-gray-500">클래스 목록을 불러오는 중...</div>

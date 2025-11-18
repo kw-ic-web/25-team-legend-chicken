@@ -60,8 +60,22 @@ async function endLiveCore(req, res, liveIdSource) {
   if (io) {
     const baseRoom = `lec:${lectureId}:cls:${cid}`;
     const liveRoom = `${baseRoom}:live:${lid}`;
+    const lectureRoom = `lec:${lectureId}`; // 강좌 전체 룸
     
+    // 클래스별 룸과 강좌 전체 룸 모두에 이벤트 발송
     io.to(baseRoom).emit("live:ended", {
+      lecture_id: lectureId,
+      class_id: cid,
+      live_id: lid,
+      started_at: live.startedAt,
+      ended_at: endedAt,
+      professor: {
+        id: String(user._id),
+        name: user.name || "교수",
+      },
+    });
+    
+    io.to(lectureRoom).emit("live:ended", {
       lecture_id: lectureId,
       class_id: cid,
       live_id: lid,
@@ -137,8 +151,9 @@ router.post(
       if (io) {
         const baseRoom = `lec:${lectureId}:cls:${cid}`;
         const liveRoom = `${baseRoom}:live:${newLiveId}`;
+        const lectureRoom = `lec:${lectureId}`; // 강좌 전체 룸
         
-        io.to(baseRoom).emit("live:started", {
+        const eventData = {
           lecture_id: lectureId,
           class_id: cid,
           live_id: newLiveId,
@@ -148,7 +163,24 @@ router.post(
             id: String(user._id),
             name: user.name || "교수",
           },
-        });
+        };
+        
+        console.log("[live:start] Emitting to baseRoom:", baseRoom, "eventData:", eventData);
+        console.log("[live:start] Emitting to lectureRoom:", lectureRoom, "eventData:", eventData);
+        
+        // 클래스별 룸과 강좌 전체 룸 모두에 이벤트 발송
+        io.to(baseRoom).emit("live:started", eventData);
+        
+        // 강좌 전체 룸에도 발송 (학생이 강좌 전체를 리스닝하는 경우)
+        io.to(lectureRoom).emit("live:started", eventData);
+        
+        // 디버깅: 각 룸의 클라이언트 수 확인
+        const baseRoomSockets = await io.in(baseRoom).fetchSockets();
+        const lectureRoomSockets = await io.in(lectureRoom).fetchSockets();
+        console.log(`[live:start] baseRoom (${baseRoom}) clients:`, baseRoomSockets.length);
+        console.log(`[live:start] lectureRoom (${lectureRoom}) clients:`, lectureRoomSockets.length);
+      } else {
+        console.error("[live:start] Socket.IO instance not found!");
       }
 
       return res.status(200).json({

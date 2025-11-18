@@ -140,4 +140,73 @@ router.delete(
   }
 );
 
+// ✅ 학생이 라이브 방송에 참여하기 위한 정보 조회
+router.get("/participate", authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const { lectureId, classId } = req.query;
+
+    // 학생 권한 확인
+    if (user.user_type !== "student") {
+      return res
+        .status(403)
+        .json({ message: "학생만 접근할 수 있습니다." });
+    }
+
+    // 필수 파라미터 확인
+    if (!lectureId || !classId) {
+      return res.status(400).json({
+        message: "lectureId와 classId가 필요합니다.",
+      });
+    }
+
+    const cid = Number(classId);
+    if (!Number.isFinite(cid)) {
+      return res.status(400).json({ message: "classId는 숫자여야 합니다." });
+    }
+
+    // 강좌 조회
+    const lecture = await Lecture.findOne({ lecture_id: lectureId });
+    if (!lecture) {
+      return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+    }
+
+    // 학생이 해당 강좌에 등록되어 있는지 확인
+    if (!lecture.student_id_list.includes(user._id)) {
+      return res.status(403).json({
+        message: "해당 강좌에 등록되어 있지 않습니다.",
+      });
+    }
+
+    // 클래스 조회
+    const cls = lecture.classes.find((c) => Number(c.id) === cid);
+    if (!cls) {
+      return res.status(404).json({ message: "해당 클래스를 찾을 수 없습니다." });
+    }
+
+    // 현재 활성 라이브 정보 확인
+    const isLiveActive = cls.isLiveActive === true;
+    const currentLiveId = cls.currentLiveId || null;
+    const currentLive = currentLiveId
+      ? (cls.lives || []).find((l) => Number(l.liveId) === Number(currentLiveId))
+      : null;
+
+    return res.status(200).json({
+      lecture_id: lecture.lecture_id,
+      lecture_name: lecture.name,
+      class_id: cid,
+      class_title: cls.title,
+      is_live_active: isLiveActive,
+      live_id: currentLiveId,
+      started_at: currentLive ? currentLive.startedAt : null,
+      live_path: isLiveActive && currentLiveId
+        ? `/student/participate?lectureId=${lectureId}&classId=${cid}`
+        : null,
+    });
+  } catch (err) {
+    console.error("학생 라이브 참여 정보 조회 오류:", err);
+    res.status(500).json({ message: "서버 오류가 발생했습니다." });
+  }
+});
+
 module.exports = router;
