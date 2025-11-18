@@ -1312,6 +1312,109 @@ paths:
         '404':
           description: 강좌를 찾을 수 없음
 
+  /api/student/participate:
+    get:
+      tags: [Student]
+      summary: 학생 라이브 참여 정보 조회
+      description: 학생이 특정 강좌의 특정 클래스에 참여하기 위한 라이브 방송 정보를 조회합니다. 현재 활성 라이브 상태, 라이브 ID, 시작 시간, 입장 경로 등을 반환합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 강좌 ID
+          example: LEC-32AEBA14
+        - name: classId
+          in: query
+          required: true
+          schema:
+            type: number
+          description: 클래스 ID
+          example: 1
+      responses:
+        '200':
+          description: 라이브 참여 정보 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  lecture_name:
+                    type: string
+                    example: 웹서비스설계및실습
+                  class_id:
+                    type: number
+                    example: 1
+                  class_title:
+                    type: string
+                    example: Orientation, 웹기초
+                  is_live_active:
+                    type: boolean
+                    description: 현재 라이브 방송이 활성화되어 있는지 여부
+                    example: true
+                  live_id:
+                    type: number
+                    nullable: true
+                    description: 현재 활성 라이브 ID (라이브가 없으면 null)
+                    example: 1
+                  started_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: 라이브 시작 시간 (라이브가 없으면 null)
+                    example: 2025-11-18T09:14:18.468Z
+                  live_path:
+                    type: string
+                    nullable: true
+                    description: 라이브 입장 경로 (라이브가 활성화되어 있을 때만 제공)
+                    example: /student/participate?lectureId=LEC-32AEBA14&classId=1
+        '400':
+          description: 잘못된 요청 (lectureId 또는 classId 누락, classId가 숫자가 아님)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: lectureId와 classId가 필요합니다.
+        '403':
+          description: 권한 없음 (학생만 가능 또는 해당 강좌에 등록되지 않음)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 해당 강좌에 등록되어 있지 않습니다.
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 강좌를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 서버 오류가 발생했습니다.
+
   # ==================== 질문 API ====================
   /api/questions/lectures/{lectureId}/classes/{classId}:
     get:
