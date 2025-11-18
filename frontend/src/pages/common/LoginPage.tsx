@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import UserTypeSelector from "../../components/auth/UserTypeSelector";
 import LoginForm from "../../components/auth/LoginForm";
@@ -16,12 +16,39 @@ const LoginPage: React.FC = () => {
   const [rememberId, setRememberId] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { user, login } = useAuth();
 
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      const redirectPath =
+        user.role === "professor"
+          ? "/professor/dashboard"
+          : "/student/dashboard";
+      navigate(redirectPath, { replace: true });
+      return;
+    }
+
+    const rawAuth = localStorage.getItem("lecq.auth");
+    if (!rawAuth) return;
+    try {
+      const parsed = JSON.parse(rawAuth) as {
+        id?: string;
+        name?: string;
+        role?: "student" | "professor";
+      };
+      if (parsed.id && parsed.name && parsed.role) {
+        login({ id: parsed.id, name: parsed.name, role: parsed.role });
+      }
+    } catch (error) {
+      console.warn("잘못된 인증 정보가 발견되어 초기화합니다.", error);
+      localStorage.removeItem("lecq.auth");
+    }
+  }, [navigate, user, login]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +58,12 @@ const LoginPage: React.FC = () => {
         password: formData.password,
       });
 
-      if (!res.success || !res.user || !res.token) {
+      if (
+        !res.success ||
+        !res.user ||
+        !res.access_token ||
+        !res.refresh_token
+      ) {
         setToast({
           message: res.message || "로그인에 실패했습니다.",
           type: "error",
@@ -40,7 +72,14 @@ const LoginPage: React.FC = () => {
       }
 
       // 토큰 저장
-      localStorage.setItem("lecq.token", res.token);
+      localStorage.setItem("lecq.token", res.access_token);
+      localStorage.setItem("lecq.refreshToken", res.refresh_token);
+      if (typeof res.expires_in === "number") {
+        const expiresAt = Date.now() + res.expires_in * 1000;
+        localStorage.setItem("lecq.tokenExpiresAt", String(expiresAt));
+      } else {
+        localStorage.removeItem("lecq.tokenExpiresAt");
+      }
 
       const role = (
         res.user.user_type === "professor" ? "professor" : "student"
