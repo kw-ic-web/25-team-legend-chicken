@@ -8,6 +8,7 @@ interface UserInfo {
   title: string;
   affiliation: string;
   currentLectures?: number;
+  profileImage?: string;
 }
 
 interface CommonSidebarProps {
@@ -53,8 +54,16 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       {/* 사용자 프로필 섹션 */}
       <div className="pt-10 p-6 border-b border-gray-200">
         <div className="flex items-center space-x-4 mb-4">
-          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-            <Users className="w-8 h-8 text-gray-600" />
+          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+            {userInfo.profileImage ? (
+              <img
+                src={userInfo.profileImage}
+                alt={userInfo.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Users className="w-8 h-8 text-gray-600" />
+            )}
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">{userInfo.name}</h2>

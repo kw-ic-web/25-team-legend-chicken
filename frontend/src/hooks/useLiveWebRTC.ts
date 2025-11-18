@@ -171,9 +171,21 @@ export function useLiveWebRTC({
       if (!socket || !peer) return;
       if (makingOfferRef.current.get(remoteSocketId)) return;
 
+      // Signaling state 확인: offer는 "stable" 상태에서만 생성 가능
+      const currentState = peer.signalingState;
+      if (currentState === "closed") {
+        console.warn("[WebRTC] sendOffer: peer is closed");
+        return;
+      }
+      
+      // 이미 offer를 보낸 상태이거나, answer를 기다리는 상태면 무시
+      if (currentState === "have-local-offer" || currentState === "have-remote-offer") {
+        console.warn(`[WebRTC] sendOffer: already in ${currentState} state, ignoring`);
+        return;
+      }
+
       makingOfferRef.current.set(remoteSocketId, true);
       try {
-        if (peer.signalingState === "closed") return;
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
         socket.emit("webrtc:offer", {
@@ -188,6 +200,14 @@ export function useLiveWebRTC({
         });
       } catch (offerError) {
         console.error("[WebRTC] offer error", offerError);
+        // InvalidStateError는 이미 처리된 경우이므로 무시
+        if (
+          offerError instanceof Error &&
+          offerError.name === "InvalidStateError"
+        ) {
+          console.warn("[WebRTC] sendOffer: InvalidStateError (likely already set)");
+          return;
+        }
         setError(
           offerError instanceof Error
             ? offerError.message
@@ -211,8 +231,13 @@ export function useLiveWebRTC({
       syncLocalTracks(peer);
 
       peer.ontrack = (event) => {
+        console.log("[WebRTC] ontrack event received from", remoteSocketId, event);
         const [stream] = event.streams;
-        if (!stream) return;
+        if (!stream) {
+          console.warn("[WebRTC] ontrack: no stream in event");
+          return;
+        }
+        console.log("[WebRTC] ontrack: stream found, tracks:", stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState })));
         remoteStreamRef.current.set(remoteSocketId, stream);
         updateRemoteParticipants();
       };
@@ -262,10 +287,12 @@ export function useLiveWebRTC({
       if (payload.socket_id === socketRef.current.id) return;
       if (!payload.socket_id) return;
 
+      console.log("[WebRTC] handleRemoteJoin: user joined", payload);
       metadataRef.current.set(payload.socket_id, {
         role: payload.role,
         userId: payload.user_id,
       });
+      console.log("[WebRTC] handleRemoteJoin: metadata set", { socketId: payload.socket_id, role: payload.role, userId: payload.user_id });
       updateRemoteParticipants();
 
       ensurePeerConnection(payload.socket_id);
@@ -278,12 +305,46 @@ export function useLiveWebRTC({
 
   const handleOffer = useCallback(
     async ({ from, sdp }: WebRTCSignalPayload) => {
-      if (!from || !sdp) return;
+      if (!from || !sdp) {
+        console.warn("[WebRTC] handleOffer: missing from or sdp", { from, hasSdp: !!sdp });
+        return;
+      }
+      
+      console.log("[WebRTC] handleOffer: received offer from", from);
       const peer = ensurePeerConnection(from);
+      
       try {
+        // Signaling state 확인: offer는 "stable" 또는 "have-local-offer" 상태에서 설정 가능
+        const currentState = peer.signalingState;
+        console.log("[WebRTC] handleOffer: current signaling state", currentState);
+        
+        if (currentState === "closed") {
+          console.warn("[WebRTC] handleOffer: peer is closed");
+          return;
+        }
+        
+        // 이미 remote description이 설정된 경우 확인
+        if (currentState === "have-remote-offer") {
+          console.warn("[WebRTC] handleOffer: already have remote offer, ignoring");
+          return;
+        }
+        
+        // stable 상태에서 remoteDescription이 있으면 이미 처리된 것
+        if (currentState === "stable" && peer.remoteDescription) {
+          console.warn("[WebRTC] handleOffer: already stable with remote description, ignoring");
+          return;
+        }
+        
+        // stable 상태지만 remoteDescription이 없으면 새로 설정
+        console.log("[WebRTC] handleOffer: setting remote description");
         await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+        console.log("[WebRTC] handleOffer: remote description set, creating answer");
+        
         const answer = await peer.createAnswer();
+        console.log("[WebRTC] handleOffer: answer created, setting local description");
         await peer.setLocalDescription(answer);
+        
+        console.log("[WebRTC] handleOffer: sending answer to", from);
         socketRef.current?.emit("webrtc:answer", {
           to: from,
           sdp: answer,
@@ -294,9 +355,18 @@ export function useLiveWebRTC({
             role,
           },
         });
+        console.log("[WebRTC] handleOffer: answer sent, setting status to connected");
         setStatus("connected");
       } catch (offerError) {
         console.error("[WebRTC] handle offer error", offerError);
+        // InvalidStateError는 이미 처리된 경우이므로 무시
+        if (
+          offerError instanceof Error &&
+          offerError.name === "InvalidStateError"
+        ) {
+          console.warn("[WebRTC] handleOffer: InvalidStateError (likely already set)");
+          return;
+        }
         setError(
           offerError instanceof Error
             ? offerError.message
@@ -312,12 +382,52 @@ export function useLiveWebRTC({
     async ({ from, sdp }: WebRTCSignalPayload) => {
       if (!from || !sdp) return;
       const peer = peersRef.current.get(from);
-      if (!peer) return;
+      if (!peer) {
+        console.warn("[WebRTC] handleAnswer: peer not found for", from);
+        return;
+      }
+      
       try {
+        // Signaling state 확인: answer는 "have-local-offer" 상태에서만 설정 가능
+        const currentState = peer.signalingState;
+        if (currentState === "closed") {
+          console.warn("[WebRTC] handleAnswer: peer is closed");
+          return;
+        }
+        
+        if (currentState !== "have-local-offer") {
+          console.warn(
+            `[WebRTC] handleAnswer: wrong signaling state ${currentState}, expected have-local-offer`
+          );
+          // 이미 answer가 설정되었거나, offer가 없는 상태
+          // 이 경우 무시하거나 재연결 시도
+          if (currentState === "stable") {
+            // 이미 완료된 상태이므로 무시
+            return;
+          }
+          // 다른 상태면 잠시 대기 후 재시도 (race condition 대응)
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          if (peer.signalingState === "have-local-offer") {
+            await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+            setStatus("connected");
+          } else {
+            console.warn("[WebRTC] handleAnswer: state still not ready after wait");
+          }
+          return;
+        }
+
         await peer.setRemoteDescription(new RTCSessionDescription(sdp));
         setStatus("connected");
       } catch (answerError) {
         console.error("[WebRTC] handle answer error", answerError);
+        // InvalidStateError는 이미 처리된 경우이므로 무시
+        if (
+          answerError instanceof Error &&
+          answerError.name === "InvalidStateError"
+        ) {
+          console.warn("[WebRTC] handleAnswer: InvalidStateError (likely already set)");
+          return;
+        }
         setError(
           answerError instanceof Error
             ? answerError.message
@@ -331,12 +441,45 @@ export function useLiveWebRTC({
 
   const handleIceCandidate = useCallback(
     async ({ from, candidate }: WebRTCSignalPayload) => {
-      if (!from || !candidate) return;
+      if (!from || !candidate) {
+        console.warn("[WebRTC] handleIceCandidate: missing from or candidate", { from, hasCandidate: !!candidate });
+        return;
+      }
       const peer = ensurePeerConnection(from);
       try {
+        // ICE candidate 추가 전에 connection state 확인
+        if (peer.connectionState === "closed" || peer.connectionState === "failed") {
+          console.warn("[WebRTC] handleIceCandidate: peer connection is", peer.connectionState);
+          return;
+        }
+        
+        // remoteDescription이 설정되지 않았으면 큐에 저장
+        if (!peer.remoteDescription) {
+          console.log("[WebRTC] handleIceCandidate: remoteDescription not set yet, queuing candidate");
+          // remoteDescription이 설정될 때까지 대기
+          const checkInterval = setInterval(() => {
+            if (peer.remoteDescription) {
+              clearInterval(checkInterval);
+              peer.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+            }
+          }, 100);
+          setTimeout(() => clearInterval(checkInterval), 5000); // 5초 후 타임아웃
+          return;
+        }
+        
         await peer.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log("[WebRTC] handleIceCandidate: ICE candidate added successfully");
       } catch (iceError) {
         console.error("[WebRTC] handle ICE error", iceError);
+        // 이미 추가된 candidate는 무시
+        if (
+          iceError instanceof Error &&
+          (iceError.message.includes("already exists") || 
+           iceError.message.includes("InvalidStateError"))
+        ) {
+          console.warn("[WebRTC] handleIceCandidate: candidate already added, ignoring");
+          return;
+        }
       }
     },
     [ensurePeerConnection]
@@ -401,9 +544,15 @@ export function useLiveWebRTC({
       }
     };
     socket.on("live:user-left", handleUserLeft);
-    socket.on("webrtc:offer", handleOffer);
+    socket.on("webrtc:offer", (payload) => {
+      console.log("[WebRTC] Received webrtc:offer event:", payload);
+      handleOffer(payload);
+    });
     socket.on("webrtc:answer", handleAnswer);
-    socket.on("webrtc:ice-candidate", handleIceCandidate);
+    socket.on("webrtc:ice-candidate", (payload) => {
+      console.log("[WebRTC] Received webrtc:ice-candidate event:", payload);
+      handleIceCandidate(payload);
+    });
     const peersSnapshot = peersRef.current;
 
     return () => {

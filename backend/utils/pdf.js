@@ -67,6 +67,9 @@ async function createPdfFromImage(imagePath, { lectureId, classId, pageNumber })
 }
 
 const toAbsolutePath = (publicPath) => {
+  if (!publicPath || typeof publicPath !== "string") {
+    throw new Error("publicPath must be a non-empty string");
+  }
   const normalized = publicPath.startsWith("/") ? publicPath.slice(1) : publicPath;
   return path.resolve(process.cwd(), normalized);
 };
