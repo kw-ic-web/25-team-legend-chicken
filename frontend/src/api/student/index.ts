@@ -143,5 +143,35 @@ export async function getClasses(
   return getProfessorClasses(lectureId);
 }
 
+export type ParticipateResponse = {
+  lecture_id: string;
+  lecture_name: string;
+  class_id: number;
+  class_title: string;
+  is_live_active: boolean;
+  live_id: number | null;
+  started_at: string | null;
+  live_path: string | null;
+};
+
+export async function getParticipateInfo(
+  lectureId: string,
+  classId: number
+): Promise<ParticipateResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+  return apiFetch<ParticipateResponse>(
+    `/api/student/participate?lectureId=${lectureId}&classId=${classId}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
 export type { LectureClass };
 
