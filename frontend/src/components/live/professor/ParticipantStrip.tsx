@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { VideoOff } from "lucide-react";
 
 interface ParticipantStripProps {
@@ -14,13 +14,13 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  const updateScrollState = () => {
+  const updateScrollState = useCallback(() => {
     const container = scrollRef.current;
     if (!container) return;
     const { scrollLeft, clientWidth, scrollWidth } = container;
     setCanScrollLeft(scrollLeft > 4);
     setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 4);
-  };
+  }, []);
 
   useEffect(() => {
     updateScrollState();
@@ -33,8 +33,7 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
       container.removeEventListener("scroll", updateScrollState);
       window.removeEventListener("resize", handleResize);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [updateScrollState]);
 
   const scrollByDelta = (delta: number) => {
     const container = scrollRef.current;

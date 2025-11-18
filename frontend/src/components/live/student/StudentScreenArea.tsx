@@ -34,6 +34,7 @@ const StudentScreenArea: React.FC<Props> = ({
             ref={videoRef as React.RefObject<HTMLVideoElement>} // TS 만족용 캐스팅
             autoPlay
             playsInline
+            muted
             className={`w-full h-full object-contain ${isLive ? "opacity-100" : "opacity-0"}`}
           />
           {!isLive && (
