@@ -31,7 +31,12 @@ const LoginPage: React.FC = () => {
         password: formData.password,
       });
 
-      if (!res.success || !res.user || !res.token) {
+      if (
+        !res.success ||
+        !res.user ||
+        !res.access_token ||
+        !res.refresh_token
+      ) {
         setToast({
           message: res.message || "로그인에 실패했습니다.",
           type: "error",
@@ -40,7 +45,14 @@ const LoginPage: React.FC = () => {
       }
 
       // 토큰 저장
-      localStorage.setItem("lecq.token", res.token);
+      localStorage.setItem("lecq.token", res.access_token);
+      localStorage.setItem("lecq.refreshToken", res.refresh_token);
+      if (typeof res.expires_in === "number") {
+        const expiresAt = Date.now() + res.expires_in * 1000;
+        localStorage.setItem("lecq.tokenExpiresAt", String(expiresAt));
+      } else {
+        localStorage.removeItem("lecq.tokenExpiresAt");
+      }
 
       const role = (
         res.user.user_type === "professor" ? "professor" : "student"
