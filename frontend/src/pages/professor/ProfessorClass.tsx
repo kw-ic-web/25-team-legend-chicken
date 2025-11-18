@@ -14,8 +14,13 @@ import {
   getLiveStatus,
   startLive,
   endLive,
+  getClassQuestions,
+  getMyInfo,
+  getLectures,
   type LiveStatusClass,
   type GetClassDetailResponse,
+  type ClassQuestion,
+  type MyInfoUser,
 } from "../../api/professor";
 import Toast from "../../components/common/Toast";
 import { getBaseUrl } from "../../api/auth/client";
@@ -67,6 +72,17 @@ const ProfessorClass: React.FC = () => {
     id: number;
     title: string;
   } | null>(null);
+  const [selectedQuestionClassId, setSelectedQuestionClassId] = useState<
+    number | null
+  >(null);
+  const [latestQuestions, setLatestQuestions] = useState<ClassQuestion[]>([]);
+  const [isLatestQuestionsLoading, setIsLatestQuestionsLoading] =
+    useState(false);
+  const [latestQuestionsError, setLatestQuestionsError] = useState<
+    string | null
+  >(null);
+  const [myInfo, setMyInfo] = useState<MyInfoUser | null>(null);
+  const [lectureCount, setLectureCount] = useState(0);
   const navigate = useNavigate();
   const lectureIdForAnalysis = course.id || id || "";
   const firstClassIdForAnalysis =
@@ -166,11 +182,73 @@ const ProfessorClass: React.FC = () => {
     fetchData();
   }, [id, resolveUrl]);
 
-  const latestQuestions = [
-    { q: "과목에 대한 질문을 해도 되나요?", a: "네, 얼마든지요..." },
-    { q: "실습 환경은 어떻게 구성하나요?", a: "Colab을 권장합니다." },
-    { q: "과제 제출 형식이 궁금해요", a: "PDF 혹은 노트북 파일" },
-  ];
+  useEffect(() => {
+    const fetchMyInfo = async () => {
+      try {
+        const response = await getMyInfo();
+        setMyInfo(response.user);
+      } catch (error) {
+        console.error("내 정보 조회 실패:", error);
+      }
+    };
+    fetchMyInfo();
+  }, []);
+
+  useEffect(() => {
+    const fetchLectureCount = async () => {
+      try {
+        const response = await getLectures();
+        setLectureCount(response.lectures?.length ?? 0);
+      } catch (error) {
+        console.error("강좌 목록 조회 실패:", error);
+        setLectureCount(0);
+      }
+    };
+    fetchLectureCount();
+  }, []);
+
+  useEffect(() => {
+    if (weeks.length > 0 && selectedQuestionClassId === null) {
+      setSelectedQuestionClassId(Number(weeks[0].week));
+    }
+  }, [weeks, selectedQuestionClassId]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLatestQuestions = async () => {
+      if (!course.id || !selectedQuestionClassId) return;
+      setIsLatestQuestionsLoading(true);
+      setLatestQuestionsError(null);
+      try {
+        const response = await getClassQuestions(
+          course.id,
+          selectedQuestionClassId,
+          { limit: 200 }
+        );
+        if (!isMounted) return;
+        const sorted = [...(response.questions ?? [])].sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        setLatestQuestions(sorted.slice(0, 5));
+      } catch (error) {
+        if (!isMounted) return;
+        const message =
+          error instanceof Error ? error.message : "질문을 불러오지 못했어요.";
+        setLatestQuestions([]);
+        setLatestQuestionsError(message);
+      } finally {
+        if (isMounted) {
+          setIsLatestQuestionsLoading(false);
+        }
+      }
+    };
+
+    fetchLatestQuestions();
+    return () => {
+      isMounted = false;
+    };
+  }, [course.id, selectedQuestionClassId]);
 
   const handleStartBroadcast = () => {
     if (weeks.length === 0) {
@@ -421,16 +499,32 @@ const ProfessorClass: React.FC = () => {
     }
   };
 
+  const formatQuestionTimestamp = (isoString?: string) => {
+    if (!isoString) return "-";
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return "-";
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mm = String(date.getMinutes()).padStart(2, "0");
+    return `${y}.${m}.${d} ${hh}:${mm}`;
+  };
+
   return (
     <div className="flex-1 flex">
       {/* 사이드바: 공용 컴포넌트 사용 */}
       <CommonSidebar
         userType="professor"
         userInfo={{
-          name: "김철수",
-          title: "강의자",
-          affiliation: "광운대학교 정보융합학부",
-          currentLectures: 13,
+          name: myInfo?.name || "교수자",
+          title:
+            myInfo?.user_type === "professor"
+              ? "교수"
+              : myInfo?.user_type || "강의자",
+          affiliation: course.description || "강의자 정보",
+          currentLectures: lectureCount,
+          profileImage: myInfo?.profile_image,
         }}
         showBroadcastControls={false}
         additionalContent={
@@ -445,7 +539,7 @@ const ProfessorClass: React.FC = () => {
                 </span>
                 <span className="inline-flex items-center space-x-1 text-base">
                   <Users className="w-4 h-4 text-gray-500" />
-                  <span>{course.participants}+</span>
+                  <span>{course.participants}</span>
                 </span>
               </div>
               <div className="mt-6 space-y-5 text-gray-700 text-[12px]">
@@ -457,18 +551,58 @@ const ProfessorClass: React.FC = () => {
               </div>
             </div>
             <div>
-              <h4 className="text-md font-semibold text-gray-900 mb-3 border-t border-gray-200 pt-2">
-                최신 질문
-              </h4>
-              <div className="space-y-3 max-h-60 overflow-y-visible pr-1">
-                {latestQuestions.map((item, idx) => (
-                  <div key={idx} className="border border-gray-200 rounded p-3">
-                    <div className="text-sm font-medium text-gray-800">
-                      Q. {item.q}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">{item.a}</div>
+              <div className="flex items-center justify-between border-t border-gray-200 pt-2">
+                <h4 className="text-md font-semibold text-gray-900 mb-3">
+                  최신 질문
+                </h4>
+                {weeks.length > 0 && (
+                  <select
+                    className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                    value={selectedQuestionClassId ?? ""}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      setSelectedQuestionClassId(
+                        Number.isNaN(value) ? null : value
+                      );
+                    }}
+                  >
+                    {weeks.map((week) => (
+                      <option key={week.week} value={week.week}>
+                        {week.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="space-y-3 h-56 overflow-auto pr-1">
+                {isLatestQuestionsLoading ? (
+                  <div className="text-sm text-gray-500 py-6 text-center">
+                    질문을 불러오는 중입니다...
                   </div>
-                ))}
+                ) : latestQuestionsError ? (
+                  <div className="text-sm text-red-500 py-6 text-center">
+                    {latestQuestionsError}
+                  </div>
+                ) : latestQuestions.length === 0 ? (
+                  <div className="text-sm text-gray-500 py-6 text-center">
+                    아직 질문이 없습니다.
+                  </div>
+                ) : (
+                  latestQuestions.map((item) => (
+                    <div
+                      key={item._id}
+                      className="border border-gray-200 rounded-lg p-3 bg-white/60"
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 mb-1">
+                        <span>{item.author?.name || "익명"}</span>
+                        <span>{formatQuestionTimestamp(item.timestamp)}</span>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">
+                        Q. {item.text}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
             <div className="pt-2">
