@@ -138,6 +138,8 @@ const StudentProfile: React.FC = () => {
     }
 
     localStorage.removeItem("lecq.token");
+    localStorage.removeItem("lecq.refreshToken");
+    localStorage.removeItem("lecq.tokenExpiresAt");
     logout();
     setIsLoggingOut(false);
     setTimeout(() => {
