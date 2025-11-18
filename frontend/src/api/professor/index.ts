@@ -282,6 +282,40 @@ export type LiveStatusResponse = {
   classes: LiveStatusClass[];
 };
 
+export type ClassQuestionPosition = {
+  x: number;
+  y: number;
+};
+
+export type ClassQuestionAuthor = {
+  id?: string;
+  name?: string;
+};
+
+export type ClassQuestion = {
+  _id: string;
+  lecture_id: string;
+  class_id: number;
+  live_id?: number | null;
+  page?: number;
+  section?: string;
+  position?: ClassQuestionPosition;
+  timestamp: string;
+  type?: string;
+  author?: ClassQuestionAuthor;
+  text: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type GetClassQuestionsResponse = {
+  lecture_id: string;
+  class_id: number;
+  count: number;
+  questions: ClassQuestion[];
+};
+
 export async function getLiveStatus(
   lectureId: string
 ): Promise<LiveStatusResponse> {
@@ -344,6 +378,38 @@ export async function endLive(
     `/api/professor/lectures/${lectureId}/classes/${classId}/live/end`,
     {
       method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export async function getClassQuestions(
+  lectureId: string,
+  classId: number,
+  options?: { page?: number; limit?: number }
+): Promise<GetClassQuestionsResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const params = new URLSearchParams();
+  if (options?.page !== undefined) {
+    params.set("page", String(options.page));
+  }
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+  const query = params.toString();
+
+  return apiFetch<GetClassQuestionsResponse>(
+    `/api/questions/lectures/${lectureId}/classes/${classId}${
+      query ? `?${query}` : ""
+    }`,
+    {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
       },
