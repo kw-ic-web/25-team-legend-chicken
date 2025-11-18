@@ -173,5 +173,70 @@ export async function getParticipateInfo(
   );
 }
 
+export type StudentQuestion = {
+  _id: string;
+  lecture_id: string;
+  lecture_name: string;
+  class_id?: number;
+  page?: number;
+  section?: string;
+  position?: {
+    x: number;
+    y: number;
+  };
+  timestamp?: string;
+  type?: string;
+  author: {
+    id: string;
+    name: string;
+  };
+  text: string;
+  answer?: string;
+  upvote_count?: number;
+  metadata?: Record<string, unknown>;
+  live_id?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type GetMyQuestionsResponse = {
+  student_id: string;
+  student_name: string;
+  total_count: number;
+  questions: StudentQuestion[];
+};
+
+export type GetMyQuestionsParams = {
+  lectureId?: string;
+  classId?: number;
+  limit?: number;
+};
+
+export async function getMyQuestions(
+  params: GetMyQuestionsParams = {}
+): Promise<GetMyQuestionsResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const searchParams = new URLSearchParams();
+  if (params.lectureId) searchParams.set("lectureId", params.lectureId);
+  if (typeof params.classId === "number")
+    searchParams.set("classId", params.classId.toString());
+  if (typeof params.limit === "number")
+    searchParams.set("limit", Math.min(params.limit, 200).toString());
+
+  const query = searchParams.toString();
+  const url = `/api/student/my-questions${query ? `?${query}` : ""}`;
+
+  return apiFetch<GetMyQuestionsResponse>(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export type { LectureClass };
 
