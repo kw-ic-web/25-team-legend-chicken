@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Download, ChevronDown, ChevronUp, Users } from "lucide-react";
-import { getClasses, getLectureDetail, getMyLectures } from "../../api/student";
+import { getClasses, getLectureDetail } from "../../api/student";
 import Toast from "../../components/common/Toast";
 import { getBaseUrl, apiFetch } from "../../api/auth/client";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
@@ -69,13 +69,6 @@ const StudentClass: React.FC = () => {
     title: "학생",
     affiliation: "광운대학교 정보융합학부",
   });
-  const [myLectures, setMyLectures] = useState<
-    Array<{
-      title: string;
-      participants: number;
-    }>
-  >([]);
-
   // 최신 질문 (임시 데이터, 나중에 API로 교체)
   const latestQuestions = [
     { q: "과목에 대한 질문을 해도 되나요?", a: "네, 얼마든지요..." },
@@ -92,10 +85,7 @@ const StudentClass: React.FC = () => {
   useEffect(() => {
     const fetchStudentData = async () => {
       try {
-        const [myInfoResponse, lecturesResponse] = await Promise.all([
-          getMyInfo().catch(() => null),
-          getMyLectures().catch(() => null),
-        ]);
+        const myInfoResponse = await getMyInfo().catch(() => null);
 
         if (myInfoResponse?.success && myInfoResponse.user) {
           setStudentInfo({
@@ -105,15 +95,6 @@ const StudentClass: React.FC = () => {
           });
         }
 
-        if (lecturesResponse?.lectures) {
-          const lecturesList = lecturesResponse.lectures.map(
-            (lecture: { name: string }) => ({
-              title: lecture.name,
-              participants: 0,
-            })
-          );
-          setMyLectures(lecturesList.slice(0, 4));
-        }
       } catch (error) {
         console.error("학생 정보 조회 실패:", error);
       }
@@ -631,8 +612,6 @@ const StudentClass: React.FC = () => {
       <CommonSidebar
         userType="student"
         userInfo={studentInfo}
-        myLectures={myLectures}
-        hideStudentMyLectures
         additionalContent={
           <div className="p-6 border-t border-gray-200 space-y-6">
             <div>
