@@ -517,6 +517,7 @@ const ProfessorClass: React.FC = () => {
       <CommonSidebar
         userType="professor"
         userInfo={{
+          id: myInfo?.id,
           name: myInfo?.name || "교수자",
           title:
             myInfo?.user_type === "professor"
