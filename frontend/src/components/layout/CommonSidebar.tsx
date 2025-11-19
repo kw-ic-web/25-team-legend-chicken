@@ -22,7 +22,9 @@ interface CommonSidebarProps {
   }>;
   myLectures?: Array<{
     title: string;
-    participants: number;
+    participants?: number;
+    subtitle?: string;
+    meta?: string;
   }>;
   additionalContent?: React.ReactNode;
   onStartBroadcast?: () => void;
@@ -226,16 +228,43 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
         </div>
       )}
 
+      {/* 학생 내 강의 섹션 */}
+      {userType === "student" && myLectures.length > 0 && (
+        <div className="p-6 border-b border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">내 강의</h3>
+          <div className="space-y-3">
+            {myLectures.map((lecture, idx) => (
+              <div key={`${lecture.title}-${idx}`}>
+                <div className="flex items-start space-x-3">
+                  <BookOpen className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {lecture.title}
+                    </p>
+                    {lecture.subtitle && (
+                      <p className="text-xs text-gray-600 truncate">
+                        {lecture.subtitle}
+                      </p>
+                    )}
+                    {typeof lecture.participants === "number" && (
+                      <div className="flex flex-wrap items-center text-xs text-gray-500 mt-1 gap-2">
+                        <span className="flex items-center space-x-1">
+                          <Users className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{lecture.participants}</span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 학생용 액션 버튼들 */}
       {userType === "student" && (
         <div className="p-6 space-y-3">
-          <Link
-            to="/student/participate"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-          >
-            <BookOpen className="w-5 h-5" />
-            <span>강의 참여하기</span>
-          </Link>
           <Link
             to="/student/questions"
             className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"

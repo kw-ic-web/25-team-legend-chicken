@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import LectureCard from "../../components/common/LectureCard";
 import Pagination from "../../components/common/Pagination";
 import { getMyLectures } from "../../api/student";
+import { getBaseUrl } from "../../api/auth/client";
 import Toast from "../../components/common/Toast";
 
 const StudentDashboard: React.FC = () => {
@@ -18,6 +19,7 @@ const StudentDashboard: React.FC = () => {
       status: "broadcasting" | "scheduled" | "completed";
       newQuestions: number;
       subject: string;
+      image?: string;
     }>
   >([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,15 +33,23 @@ const StudentDashboard: React.FC = () => {
       try {
         setIsLoading(true);
         const response = await getMyLectures();
-        const mappedLectures = response.lectures.map((lec) => ({
-          id: lec.lecture_id,
-          title: lec.name,
-          instructor: lec.professor_name,
-          participants: 0, // API에서 제공하지 않음
-          status: "scheduled" as const, // 기본값
-          newQuestions: 0,
-          subject: "Python", // 기본값
-        }));
+        const mappedLectures = response.lectures.map((lec) => {
+          const thumbnail = lec.thumbnail
+            ? lec.thumbnail.startsWith("http")
+              ? lec.thumbnail
+              : `${getBaseUrl()}${lec.thumbnail}`
+            : undefined;
+          return {
+            id: lec.lecture_id,
+            title: lec.name,
+            instructor: lec.professor_name,
+            participants: 0, // API에서 제공하지 않음
+            status: "scheduled" as const, // 기본값
+            newQuestions: 0,
+            subject: "Python", // 기본값
+            image: thumbnail,
+          };
+        });
         setLectures(mappedLectures);
       } catch (error) {
         console.error("강의 목록 조회 실패:", error);
@@ -147,6 +157,7 @@ const StudentDashboard: React.FC = () => {
                   newQuestions={lecture.newQuestions}
                   subject={lecture.subject}
                   userType="student"
+                  image={lecture.image}
                 />
               ))}
             </div>
