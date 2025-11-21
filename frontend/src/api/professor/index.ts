@@ -137,6 +137,103 @@ export async function getClassDetail(
   );
 }
 
+export type AddClassRequest = {
+  title: string;
+  description: string;
+  date: string;
+  materials?: string[];
+};
+
+export type AddClassResponse = {
+  message: string;
+  lecture_id: string;
+  class: LectureClass;
+};
+
+export async function addLectureClass(
+  lectureId: string,
+  payload: AddClassRequest
+): Promise<AddClassResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<AddClassResponse>(
+    `/api/professor/lectures/${lectureId}/classes`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      json: payload,
+    }
+  );
+}
+
+export type UpdateClassesPayload = {
+  classes: Array<{
+    id: number;
+    title: string;
+    description: string;
+    date: string;
+    materials: string[];
+  }>;
+};
+
+export type UpdateClassesResponse = {
+  message: string;
+  lecture_id: string;
+  classes: LectureClass[];
+};
+
+export async function updateLectureClasses(
+  lectureId: string,
+  payload: UpdateClassesPayload
+): Promise<UpdateClassesResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<UpdateClassesResponse>(
+    `/api/professor/lectures/${lectureId}/classes`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      json: payload,
+    }
+  );
+}
+
+export type DeleteClassResponse = {
+  message: string;
+  lecture_id: string;
+  deleted_class: LectureClass;
+};
+
+export async function deleteLectureClass(
+  lectureId: string,
+  classId: number
+): Promise<DeleteClassResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<DeleteClassResponse>(
+    `/api/professor/lectures/${lectureId}/classes/${classId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
 export type GetClassPdfsResponse = {
   lecture_id: string;
   lecture_name: string;

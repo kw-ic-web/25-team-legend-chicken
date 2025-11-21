@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Play, Users, Download, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Play,
+  Users,
+  Download,
+  ChevronDown,
+  ChevronUp,
+  PenSquare,
+  Trash2,
+  Plus,
+} from "lucide-react";
 import CommonSidebar from "../../components/layout/CommonSidebar";
 import BroadcastAgreementModal from "../../components/modal/startBroadcast/BroadcastAgreementModal";
 import LectureReservationModal from "../../components/modal/reserveBroadcast/LectureReservationModal";
@@ -17,13 +26,20 @@ import {
   getClassQuestions,
   getMyInfo,
   getLectures,
-  type LiveStatusClass,
-  type GetClassDetailResponse,
-  type ClassQuestion,
-  type MyInfoUser,
+  addLectureClass,
+  updateLectureClasses,
+  deleteLectureClass,
+} from "../../api/professor";
+import type {
+  LectureClass,
+  LiveStatusClass,
+  GetClassDetailResponse,
+  ClassQuestion,
+  MyInfoUser,
 } from "../../api/professor";
 import Toast from "../../components/common/Toast";
 import { getBaseUrl } from "../../api/auth/client";
+import Modal from "../../components/common/Modal";
 
 const ProfessorClass: React.FC = () => {
   const { id } = useParams();
@@ -83,6 +99,17 @@ const ProfessorClass: React.FC = () => {
   >(null);
   const [myInfo, setMyInfo] = useState<MyInfoUser | null>(null);
   const [lectureCount, setLectureCount] = useState(0);
+  const [classList, setClassList] = useState<LectureClass[]>([]);
+  const [isAddClassModalOpen, setIsAddClassModalOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<LectureClass | null>(null);
+  const [deletingClass, setDeletingClass] = useState<LectureClass | null>(null);
+  const [classForm, setClassForm] = useState({
+    title: "",
+    description: "",
+    date: "",
+    materialsInput: "",
+  });
+  const [isClassSubmitting, setIsClassSubmitting] = useState(false);
   const navigate = useNavigate();
   const lectureIdForAnalysis = course.id || id || "";
   const firstClassIdForAnalysis =
@@ -98,89 +125,218 @@ const ProfessorClass: React.FC = () => {
     return url.startsWith("http") ? url : `${getBaseUrl()}${url}`;
   }, []);
 
-  // 클래스 목록 및 강좌 정보 조회
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!id) return;
+  const fetchClassesData = useCallback(async () => {
+    if (!id) return;
 
-      setIsLoading(true);
-      try {
-        // 클래스 목록과 멤버 정보를 병렬로 조회
-        const [classesResponse, membersResponse] = await Promise.all([
-          getClasses(id),
-          getMembers(id).catch(() => null), // 실패해도 계속 진행
-        ]);
+    setIsLoading(true);
+    try {
+      const [classesResponse, membersResponse] = await Promise.all([
+        getClasses(id),
+        getMembers(id).catch(() => null),
+      ]);
 
-        // 강좌 정보 업데이트
-        setCourse({
-          id: classesResponse.lecture_id,
-          title: classesResponse.lecture_name,
-          instructor: "", // API 응답에 교수자명이 없으므로 나중에 별도 API로 가져와야 함
-          description: "",
-          participants: membersResponse?.student_count || 0,
-        });
+      setCourse({
+        id: classesResponse.lecture_id,
+        title: classesResponse.lecture_name,
+        instructor: "",
+        description: "",
+        participants: membersResponse?.student_count || 0,
+      });
 
-        // 학생 목록 업데이트
-        if (membersResponse) {
-          setStudents(
-            membersResponse.students.map((student) => ({
-              id: student.id,
-              name: student.name,
-              email: student.email,
-            }))
-          );
-        }
+      const normalizedClasses =
+        classesResponse.classes?.map((cls, index) => ({
+          ...cls,
+          id:
+            cls.id !== undefined && cls.id !== null
+              ? Number(cls.id)
+              : index + 1,
+        })) ?? [];
+      setClassList(normalizedClasses);
 
-        // 클래스를 weeks 형식으로 변환
-        const transformedWeeks =
-          classesResponse.classes && classesResponse.classes.length > 0
-            ? classesResponse.classes.map((cls, index) => {
-                const classId = Number(
-                  cls.id !== undefined && cls.id !== null ? cls.id : index + 1
-                );
-                // materials URL에서 파일명 추출
-                const items = cls.materials
-                  ? cls.materials.map((materialUrl) => {
-                      const resolvedUrl = resolveUrl(materialUrl);
-                      const urlParts = resolvedUrl.split("/");
-                      const fileName = urlParts[urlParts.length - 1] || "파일";
-                      // 파일 크기는 API에 없으므로 기본값 사용
-                      return {
-                        name: fileName,
-                        size: "파일",
-                        url: resolvedUrl,
-                      };
-                    })
-                  : [];
-
-                return {
-                  week: classId,
-                  title: cls.title || `${index + 1}주차`,
-                  items: items.length > 0 ? items : [],
-                };
-              })
-            : [];
-
-        setWeeks(transformedWeeks);
-        setLoadedClassIds([]);
-        setIsPdfLoadingFor(null);
-      } catch (error) {
-        console.error("데이터 조회 오류:", error);
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "데이터를 불러오는 중 오류가 발생했습니다.";
-        setToast({ message: errorMessage, type: "error" });
-        setWeeks([]);
-        setLoadedClassIds([]);
-        setIsPdfLoadingFor(null);
-      } finally {
-        setIsLoading(false);
+      if (membersResponse) {
+        setStudents(
+          membersResponse.students.map((student) => ({
+            id: student.id,
+            name: student.name,
+            email: student.email,
+          }))
+        );
       }
-    };
 
-    fetchData();
+      const transformedWeeks =
+        normalizedClasses.length > 0
+          ? normalizedClasses.map((cls, idx) => {
+              const classId = Number(cls.id);
+              const items = cls.materials
+                ? cls.materials.map((materialUrl) => {
+                    const resolvedUrl = resolveUrl(materialUrl);
+                    const urlParts = resolvedUrl.split("/");
+                    const fileName = urlParts[urlParts.length - 1] || "파일";
+                    return {
+                      name: fileName,
+                      size: "파일",
+                      url: resolvedUrl,
+                    };
+                  })
+                : [];
+
+              return {
+                week: classId,
+                title: cls.title || `${idx + 1}주차`,
+                items: items.length > 0 ? items : [],
+              };
+            })
+          : [];
+
+      setWeeks(transformedWeeks);
+      setLoadedClassIds([]);
+      setIsPdfLoadingFor(null);
+    } catch (error) {
+      console.error("데이터 조회 오류:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "데이터를 불러오는 중 오류가 발생했습니다.";
+      setToast({ message: errorMessage, type: "error" });
+      setWeeks([]);
+      setLoadedClassIds([]);
+      setIsPdfLoadingFor(null);
+    } finally {
+      setIsLoading(false);
+    }
   }, [id, resolveUrl]);
+
+  useEffect(() => {
+    fetchClassesData();
+  }, [fetchClassesData]);
+
+  const resetClassForm = () => {
+    setClassForm({
+      title: "",
+      description: "",
+      date: "",
+      materialsInput: "",
+    });
+  };
+
+  const openAddClassModal = () => {
+    resetClassForm();
+    setIsAddClassModalOpen(true);
+  };
+
+  const closeClassModals = () => {
+    setIsAddClassModalOpen(false);
+    setEditingClass(null);
+    setDeletingClass(null);
+    setIsClassSubmitting(false);
+    resetClassForm();
+  };
+
+  const openEditClassModal = (cls: LectureClass) => {
+    setEditingClass(cls);
+    setClassForm({
+      title: cls.title ?? "",
+      description: cls.description ?? "",
+      date: cls.date ? new Date(cls.date).toISOString().slice(0, 16) : "",
+      materialsInput: (cls.materials || []).join("\n"),
+    });
+  };
+
+  const openDeleteClassModal = (cls: LectureClass) => {
+    setDeletingClass(cls);
+  };
+
+  const parseMaterialsInput = () =>
+    classForm.materialsInput
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+  const toISOString = (value: string) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toISOString();
+  };
+
+  const handleSubmitAddClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const lectureId = course.id || id;
+    if (!lectureId) return;
+    setIsClassSubmitting(true);
+    try {
+      await addLectureClass(lectureId, {
+        title: classForm.title,
+        description: classForm.description,
+        date: toISOString(classForm.date),
+        materials: parseMaterialsInput(),
+      });
+      setToast({ message: "클래스가 추가되었습니다.", type: "success" });
+      await fetchClassesData();
+      closeClassModals();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "클래스를 추가하는 중 오류가 발생했습니다.";
+      setToast({ message, type: "error" });
+    } finally {
+      setIsClassSubmitting(false);
+    }
+  };
+
+  const handleSubmitEditClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClass) return;
+    const lectureId = course.id || id;
+    if (!lectureId) return;
+    setIsClassSubmitting(true);
+    try {
+      await updateLectureClasses(lectureId, {
+        classes: [
+          {
+            id: editingClass.id,
+            title: classForm.title,
+            description: classForm.description,
+            date: toISOString(classForm.date),
+            materials: parseMaterialsInput(),
+          },
+        ],
+      });
+      setToast({ message: "클래스가 수정되었습니다.", type: "success" });
+      await fetchClassesData();
+      closeClassModals();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "클래스를 수정하는 중 오류가 발생했습니다.";
+      setToast({ message, type: "error" });
+    } finally {
+      setIsClassSubmitting(false);
+    }
+  };
+
+  const handleConfirmDeleteClass = async () => {
+    if (!deletingClass) return;
+    const lectureId = course.id || id;
+    if (!lectureId) return;
+    setIsClassSubmitting(true);
+    try {
+      await deleteLectureClass(lectureId, deletingClass.id);
+      setToast({ message: "클래스가 삭제되었습니다.", type: "success" });
+      await fetchClassesData();
+      closeClassModals();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "클래스를 삭제하는 중 오류가 발생했습니다.";
+      setToast({ message, type: "error" });
+    } finally {
+      setIsClassSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     const fetchMyInfo = async () => {
@@ -517,6 +673,7 @@ const ProfessorClass: React.FC = () => {
       <CommonSidebar
         userType="professor"
         userInfo={{
+          id: myInfo?.id,
           name: myInfo?.name || "교수자",
           title:
             myInfo?.user_type === "professor"
@@ -717,7 +874,7 @@ const ProfessorClass: React.FC = () => {
                           <span>전체 다운로드</span>
                         </button>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 flex-wrap gap-2 justify-end">
                         <button
                           className={`px-3 py-1 rounded text-sm transition-colors duration-200 ${
                             isLiveActive
@@ -736,6 +893,48 @@ const ProfessorClass: React.FC = () => {
                             : isLiveActive
                               ? "라이브 종료"
                               : "라이브 시작"}
+                        </button>
+                        <button
+                          className="px-3 py-1 rounded text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center space-x-1 transition-colors duration-200"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const original = classList.find(
+                              (cls) => cls.id === classId
+                            );
+                            if (original) {
+                              openEditClassModal(original);
+                            } else {
+                              setToast({
+                                message: "클래스 정보를 찾을 수 없습니다.",
+                                type: "error",
+                              });
+                            }
+                          }}
+                        >
+                          <PenSquare className="w-4 h-4" />
+                          <span>수정</span>
+                        </button>
+                        <button
+                          className="px-3 py-1 rounded text-sm border border-red-200 text-red-600 hover:bg-red-50 flex items-center space-x-1 transition-colors duration-200"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const original = classList.find(
+                              (cls) => cls.id === classId
+                            );
+                            if (original) {
+                              openDeleteClassModal(original);
+                            } else {
+                              setToast({
+                                message: "클래스 정보를 찾을 수 없습니다.",
+                                type: "error",
+                              });
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>삭제</span>
                         </button>
                       </div>
                     </div>
@@ -794,6 +993,15 @@ const ProfessorClass: React.FC = () => {
             })}
           </div>
         )}
+        <div className="mt-6">
+          <button
+            onClick={openAddClassModal}
+            className="inline-flex items-center space-x-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>클래스 추가</span>
+          </button>
+        </div>
       </section>
 
       {/* 실시간 방송 시작 모달 */}
@@ -881,6 +1089,216 @@ const ProfessorClass: React.FC = () => {
         onInviteByLink={handleInviteByLink}
         onInviteById={handleInviteById}
       />
+
+      <Modal
+        isOpen={isAddClassModalOpen}
+        onClose={closeClassModals}
+        title="클래스 추가"
+        size="lg"
+      >
+        <form onSubmit={handleSubmitAddClass} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              제목
+            </label>
+            <input
+              type="text"
+              value={classForm.title}
+              onChange={(e) =>
+                setClassForm((prev) => ({ ...prev, title: e.target.value }))
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="클래스 제목을 입력하세요"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              설명
+            </label>
+            <textarea
+              value={classForm.description}
+              onChange={(e) =>
+                setClassForm((prev) => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={3}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              일정
+            </label>
+            <input
+              type="datetime-local"
+              value={classForm.date}
+              onChange={(e) =>
+                setClassForm((prev) => ({ ...prev, date: e.target.value }))
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              자료 링크 (줄바꿈으로 구분)
+            </label>
+            <textarea
+              value={classForm.materialsInput}
+              onChange={(e) =>
+                setClassForm((prev) => ({
+                  ...prev,
+                  materialsInput: e.target.value,
+                }))
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={4}
+            />
+          </div>
+          <div className="flex justify-end space-x-2">
+            <button
+              type="button"
+              onClick={closeClassModals}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+              disabled={isClassSubmitting}
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+              disabled={isClassSubmitting}
+            >
+              {isClassSubmitting ? "저장 중..." : "추가"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(editingClass)}
+        onClose={closeClassModals}
+        title="클래스 수정"
+        size="lg"
+      >
+        <form onSubmit={handleSubmitEditClass} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              제목
+            </label>
+            <input
+              type="text"
+              value={classForm.title}
+              onChange={(e) =>
+                setClassForm((prev) => ({ ...prev, title: e.target.value }))
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              설명
+            </label>
+            <textarea
+              value={classForm.description}
+              onChange={(e) =>
+                setClassForm((prev) => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={3}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              일정
+            </label>
+            <input
+              type="datetime-local"
+              value={classForm.date}
+              onChange={(e) =>
+                setClassForm((prev) => ({ ...prev, date: e.target.value }))
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              자료 링크 (줄바꿈으로 구분)
+            </label>
+            <textarea
+              value={classForm.materialsInput}
+              onChange={(e) =>
+                setClassForm((prev) => ({
+                  ...prev,
+                  materialsInput: e.target.value,
+                }))
+              }
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={4}
+            />
+          </div>
+          <div className="flex justify-end space-x-2">
+            <button
+              type="button"
+              onClick={closeClassModals}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+              disabled={isClassSubmitting}
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+              disabled={isClassSubmitting}
+            >
+              {isClassSubmitting ? "저장 중..." : "저장"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(deletingClass)}
+        onClose={closeClassModals}
+        title="클래스 삭제"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-700">
+            선택한 클래스를 삭제하시겠어요? 이 작업은 되돌릴 수 없습니다.
+          </p>
+          <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
+            <div className="font-semibold text-gray-900">
+              {deletingClass?.title}
+            </div>
+            <div>{deletingClass?.description || "-"}</div>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <button
+              onClick={closeClassModals}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+              disabled={isClassSubmitting}
+            >
+              취소
+            </button>
+            <button
+              onClick={handleConfirmDeleteClass}
+              className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+              disabled={isClassSubmitting}
+            >
+              {isClassSubmitting ? "삭제 중..." : "삭제"}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Toast */}
       {toast && (
