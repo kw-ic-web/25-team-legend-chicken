@@ -29,6 +29,7 @@ import {
   addLectureClass,
   updateLectureClasses,
   deleteLectureClass,
+  uploadClassPdf,
 } from "../../api/professor";
 import type {
   LectureClass,
@@ -109,6 +110,8 @@ const ProfessorClass: React.FC = () => {
     date: "",
     materialsInput: "",
   });
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   const [isClassSubmitting, setIsClassSubmitting] = useState(false);
   const navigate = useNavigate();
   const lectureIdForAnalysis = course.id || id || "";
@@ -257,6 +260,8 @@ const ProfessorClass: React.FC = () => {
       date: "",
       materialsInput: "",
     });
+    setSelectedFiles([]);
+    setUploadingFiles(new Set());
   };
 
   const openAddClassModal = () => {
@@ -278,8 +283,10 @@ const ProfessorClass: React.FC = () => {
       title: cls.title ?? "",
       description: cls.description ?? "",
       date: cls.date ? new Date(cls.date).toISOString().slice(0, 16) : "",
-      materialsInput: (cls.materials || []).join("\n"),
+      materialsInput: "",
     });
+    setSelectedFiles([]);
+    setUploadingFiles(new Set());
   };
 
   const openDeleteClassModal = (cls: LectureClass) => {
@@ -332,6 +339,38 @@ const ProfessorClass: React.FC = () => {
     if (!lectureId) return;
     setIsClassSubmitting(true);
     try {
+      // 먼저 선택된 파일들을 업로드
+      const uploadedMaterialUrls: string[] = [];
+      if (selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          const fileKey = `${file.name}-${file.size}`;
+          setUploadingFiles((prev) => new Set(prev).add(fileKey));
+          try {
+            const result = await uploadClassPdf(lectureId, editingClass.id, file);
+            // result.materials는 전체 materials 배열이므로, 새로 추가된 것만 추출
+            // result.pdf_url이 새로 업로드된 파일의 URL
+            uploadedMaterialUrls.push(result.pdf_url);
+            setUploadingFiles((prev) => {
+              const next = new Set(prev);
+              next.delete(fileKey);
+              return next;
+            });
+          } catch (error) {
+            setUploadingFiles((prev) => {
+              const next = new Set(prev);
+              next.delete(fileKey);
+              return next;
+            });
+            throw error;
+          }
+        }
+      }
+
+      // 기존 materials와 새로 업로드한 materials 합치기
+      const existingMaterials = editingClass.materials || [];
+      const allMaterials = [...existingMaterials, ...uploadedMaterialUrls];
+
+      // 클래스 정보 업데이트
       await updateLectureClasses(lectureId, {
         classes: [
           {
@@ -339,7 +378,7 @@ const ProfessorClass: React.FC = () => {
             title: classForm.title,
             description: classForm.description,
             date: toISOString(classForm.date),
-            materials: parseMaterialsInput(),
+            materials: allMaterials,
           },
         ],
       });
@@ -355,6 +394,22 @@ const ProfessorClass: React.FC = () => {
     } finally {
       setIsClassSubmitting(false);
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const pdfFiles = files.filter((file) => file.type === "application/pdf");
+    if (pdfFiles.length !== files.length) {
+      setToast({
+        message: "PDF 파일만 업로드할 수 있습니다.",
+        type: "error",
+      });
+    }
+    setSelectedFiles((prev) => [...prev, ...pdfFiles]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleConfirmDeleteClass = async () => {
@@ -1271,19 +1326,54 @@ const ProfessorClass: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              자료 링크 (줄바꿈으로 구분)
+              자료 파일 (PDF)
             </label>
-            <textarea
-              value={classForm.materialsInput}
-              onChange={(e) =>
-                setClassForm((prev) => ({
-                  ...prev,
-                  materialsInput: e.target.value,
-                }))
-              }
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={4}
-            />
+            <div className="space-y-2">
+              <input
+                type="file"
+                accept=".pdf"
+                multiple
+                onChange={handleFileSelect}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {selectedFiles.length > 0 && (
+                <div className="space-y-1">
+                  {selectedFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded border"
+                    >
+                      <span className="text-sm text-gray-700 truncate flex-1">
+                        {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(index)}
+                        className="ml-2 text-red-500 hover:text-red-700 text-sm"
+                        disabled={uploadingFiles.has(`${file.name}-${file.size}`)}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {editingClass && editingClass.materials && editingClass.materials.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-500 mb-1">기존 자료:</p>
+                  <div className="space-y-1">
+                    {editingClass.materials.map((material, index) => (
+                      <div
+                        key={index}
+                        className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded"
+                      >
+                        {material.split("/").pop() || material}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex justify-end space-x-2">
             <button
