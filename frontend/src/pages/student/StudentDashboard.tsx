@@ -76,6 +76,11 @@ const StudentDashboard: React.FC = () => {
     };
   }, []);
 
+  // 검색어나 탭 변경 시 첫 페이지로
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeTab]);
+
   // 라이브 상태 확인
   useEffect(() => {
     const checkLiveStatuses = async () => {
@@ -181,42 +186,81 @@ const StudentDashboard: React.FC = () => {
           <div className="flex items-center justify-center h-64">
             <div className="text-gray-500">수강 중인 강의가 없습니다.</div>
           </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {lectures.map((lecture) => {
-                // 라이브 상태 확인 (live-status API 결과 사용)
-                const isLiveActive = liveStatusMap.get(lecture.id);
-                const status: "broadcasting" | "scheduled" | "completed" = 
-                  isLiveActive === true ? "broadcasting" : lecture.status;
-                
+        ) : (() => {
+          // 필터링된 강좌 목록
+          const filteredLectures = lectures
+            .map((lecture) => {
+              // 라이브 상태 확인 (live-status API 결과 사용)
+              const isLiveActive = liveStatusMap.get(lecture.id);
+              const status: "broadcasting" | "scheduled" | "completed" = 
+                isLiveActive === true ? "broadcasting" : lecture.status;
+              
+              return {
+                ...lecture,
+                status,
+              };
+            })
+            .filter((lecture) => {
+              // 검색어 필터
+              if (searchTerm.trim()) {
+                const searchLower = searchTerm.toLowerCase();
                 return (
+                  lecture.title.toLowerCase().includes(searchLower) ||
+                  lecture.instructor.toLowerCase().includes(searchLower) ||
+                  lecture.subject.toLowerCase().includes(searchLower)
+                );
+              }
+              return true;
+            })
+            .filter((lecture) => {
+              // 탭 필터
+              if (activeTab === "all") return true;
+              if (activeTab === "ongoing") return lecture.status !== "completed"; // 종료되지 않은 모든 강좌
+              if (activeTab === "completed") return lecture.status === "completed";
+              return true;
+            });
+
+          // 페이지네이션
+          const itemsPerPage = 9;
+          const totalPages = Math.ceil(filteredLectures.length / itemsPerPage);
+          const startIndex = (currentPage - 1) * itemsPerPage;
+          const paginatedLectures = filteredLectures.slice(
+            startIndex,
+            startIndex + itemsPerPage
+          );
+
+          return (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedLectures.map((lecture) => (
                   <LectureCard
                     key={lecture.id}
                     id={lecture.id}
                     title={lecture.title}
                     instructor={lecture.instructor}
                     participants={lecture.participants}
-                    status={status}
+                    status={lecture.status}
                     newQuestions={lecture.newQuestions}
                     subject={lecture.subject}
                     userType="student"
                     image={lecture.image}
                   />
-                );
-              })}
-            </div>
+                ))}
+              </div>
 
-            {/* 페이지네이션 */}
-            <Pagination
-              currentPage={currentPage}
-              totalPages={Math.ceil(lectures.length / 9)}
-              onPageChange={setCurrentPage}
-              showFirstLast={true}
-              maxVisiblePages={5}
-            />
-          </>
-        )}
+              {/* 페이지네이션 */}
+              {totalPages > 1 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  showFirstLast={true}
+                  maxVisiblePages={5}
+                />
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {toast && (

@@ -159,7 +159,7 @@ const ProfessorDashboard: React.FC = () => {
     .filter((lecture) => {
       // 탭 필터
       if (activeTab === "all") return true;
-      if (activeTab === "ongoing") return lecture.status === "broadcasting";
+      if (activeTab === "ongoing") return lecture.status !== "completed"; // 종료되지 않은 모든 강좌
       if (activeTab === "completed") return lecture.status === "completed";
       return true;
     });
