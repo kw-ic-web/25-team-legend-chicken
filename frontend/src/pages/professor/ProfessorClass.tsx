@@ -9,6 +9,8 @@ import {
   PenSquare,
   Trash2,
   Plus,
+  Upload,
+  X,
 } from "lucide-react";
 import CommonSidebar from "../../components/layout/CommonSidebar";
 import BroadcastAgreementModal from "../../components/modal/startBroadcast/BroadcastAgreementModal";
@@ -112,6 +114,8 @@ const ProfessorClass: React.FC = () => {
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
+  const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(new Map());
+  const [isDragOver, setIsDragOver] = useState(false);
   const [isClassSubmitting, setIsClassSubmitting] = useState(false);
   const navigate = useNavigate();
   const lectureIdForAnalysis = course.id || id || "";
@@ -129,22 +133,22 @@ const ProfessorClass: React.FC = () => {
   }, []);
 
   const fetchClassesData = useCallback(async () => {
-    if (!id) return;
+      if (!id) return;
 
-    setIsLoading(true);
-    try {
-      const [classesResponse, membersResponse] = await Promise.all([
-        getClasses(id),
+      setIsLoading(true);
+      try {
+        const [classesResponse, membersResponse] = await Promise.all([
+          getClasses(id),
         getMembers(id).catch(() => null),
-      ]);
+        ]);
 
-      setCourse({
-        id: classesResponse.lecture_id,
-        title: classesResponse.lecture_name,
+        setCourse({
+          id: classesResponse.lecture_id,
+          title: classesResponse.lecture_name,
         instructor: "",
-        description: "",
-        participants: membersResponse?.student_count || 0,
-      });
+          description: "",
+          participants: membersResponse?.student_count || 0,
+        });
 
       const normalizedClasses =
         classesResponse.classes?.map((cls, index) => ({
@@ -156,44 +160,44 @@ const ProfessorClass: React.FC = () => {
         })) ?? [];
       setClassList(normalizedClasses);
 
-      if (membersResponse) {
-        setStudents(
-          membersResponse.students.map((student) => ({
-            id: student.id,
-            name: student.name,
-            email: student.email,
-          }))
-        );
-      }
+        if (membersResponse) {
+          setStudents(
+            membersResponse.students.map((student) => ({
+              id: student.id,
+              name: student.name,
+              email: student.email,
+            }))
+          );
+        }
 
-      const transformedWeeks =
+        const transformedWeeks =
         normalizedClasses.length > 0
           ? normalizedClasses.map((cls, idx) => {
               const classId = Number(cls.id);
-              const items = cls.materials
-                ? cls.materials.map((materialUrl) => {
-                    const resolvedUrl = resolveUrl(materialUrl);
-                    const urlParts = resolvedUrl.split("/");
-                    const fileName = urlParts[urlParts.length - 1] || "파일";
-                    return {
-                      name: fileName,
-                      size: "파일",
-                      url: resolvedUrl,
-                    };
-                  })
-                : [];
+                const items = cls.materials
+                  ? cls.materials.map((materialUrl) => {
+                      const resolvedUrl = resolveUrl(materialUrl);
+                      const urlParts = resolvedUrl.split("/");
+                      const fileName = urlParts[urlParts.length - 1] || "파일";
+                      return {
+                        name: fileName,
+                        size: "파일",
+                        url: resolvedUrl,
+                      };
+                    })
+                  : [];
 
-              return {
-                week: classId,
+                return {
+                  week: classId,
                 title: cls.title || `${idx + 1}주차`,
-                items: items.length > 0 ? items : [],
-              };
-            })
-          : [];
+                  items: items.length > 0 ? items : [],
+                };
+              })
+            : [];
 
-      setWeeks(transformedWeeks);
-      setLoadedClassIds([]);
-      setIsPdfLoadingFor(null);
+        setWeeks(transformedWeeks);
+        setLoadedClassIds([]);
+        setIsPdfLoadingFor(null);
 
       // 모든 클래스의 PDF 목록 자동 로드
       if (normalizedClasses.length > 0 && classesResponse.lecture_id) {
@@ -227,31 +231,85 @@ const ProfessorClass: React.FC = () => {
                 prev.includes(classId) ? prev : [...prev, classId]
               );
             } catch (error) {
-              console.error(`클래스 ${classId} PDF 로드 실패:`, error);
+              // 404 에러는 PDF가 없는 경우이므로 조용히 처리
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              if (errorMessage.includes("404") || errorMessage.includes("찾을 수 없습니다")) {
+                // PDF가 없는 경우 빈 배열로 설정
+                setWeeks((prev) =>
+                  prev.map((w) =>
+                    Number(w.week) === Number(classId)
+                      ? {
+                          ...w,
+                          items: [],
+                        }
+                      : w
+                  )
+                );
+                setLoadedClassIds((prev) =>
+                  prev.includes(classId) ? prev : [...prev, classId]
+                );
+              } else {
+                console.error(`클래스 ${classId} PDF 로드 실패:`, error);
+              }
             } finally {
               setIsPdfLoadingFor((current) => (current === classId ? null : current));
             }
           })();
         });
       }
-    } catch (error) {
-      console.error("데이터 조회 오류:", error);
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "데이터를 불러오는 중 오류가 발생했습니다.";
-      setToast({ message: errorMessage, type: "error" });
-      setWeeks([]);
-      setLoadedClassIds([]);
-      setIsPdfLoadingFor(null);
-    } finally {
-      setIsLoading(false);
-    }
+      } catch (error) {
+        console.error("데이터 조회 오류:", error);
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "데이터를 불러오는 중 오류가 발생했습니다.";
+        setToast({ message: errorMessage, type: "error" });
+        setWeeks([]);
+        setLoadedClassIds([]);
+        setIsPdfLoadingFor(null);
+      } finally {
+        setIsLoading(false);
+      }
   }, [id, resolveUrl]);
 
   useEffect(() => {
     fetchClassesData();
   }, [fetchClassesData]);
+
+  // editingClass가 변경될 때 classForm 업데이트
+  useEffect(() => {
+    if (editingClass) {
+      // 날짜 형식 변환 (datetime-local input 형식: YYYY-MM-DDTHH:mm)
+      let dateValue = "";
+      if (editingClass.date) {
+        try {
+          const date = new Date(editingClass.date);
+          if (!Number.isNaN(date.getTime())) {
+            // 로컬 시간대로 변환하여 datetime-local 형식에 맞춤
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, "0");
+            const day = String(date.getDate()).padStart(2, "0");
+            const hours = String(date.getHours()).padStart(2, "0");
+            const minutes = String(date.getMinutes()).padStart(2, "0");
+            dateValue = `${year}-${month}-${day}T${hours}:${minutes}`;
+          }
+        } catch (error) {
+          console.error("날짜 변환 오류:", error);
+        }
+      }
+
+      setClassForm({
+        title: editingClass.title ?? "",
+        description: editingClass.description ?? "",
+        date: dateValue,
+        materialsInput: "",
+      });
+      setSelectedFiles([]);
+      setUploadingFiles(new Set());
+      setUploadProgress(new Map());
+      setIsDragOver(false);
+    }
+  }, [editingClass]);
 
   const resetClassForm = () => {
     setClassForm({
@@ -262,6 +320,8 @@ const ProfessorClass: React.FC = () => {
     });
     setSelectedFiles([]);
     setUploadingFiles(new Set());
+    setUploadProgress(new Map());
+    setIsDragOver(false);
   };
 
   const openAddClassModal = () => {
@@ -312,12 +372,100 @@ const ProfessorClass: React.FC = () => {
     if (!lectureId) return;
     setIsClassSubmitting(true);
     try {
-      await addLectureClass(lectureId, {
+      // 먼저 클래스를 추가 (materials는 빈 배열로)
+      const addResponse = await addLectureClass(lectureId, {
         title: classForm.title,
         description: classForm.description,
         date: toISOString(classForm.date),
-        materials: parseMaterialsInput(),
+        materials: [],
       });
+
+      const newClassId = addResponse.class.id;
+
+      // 선택된 파일들을 업로드
+      const uploadedMaterialUrls: string[] = [];
+      if (selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          const fileKey = `${file.name}-${file.size}`;
+          setUploadingFiles((prev) => new Set(prev).add(fileKey));
+          setUploadProgress((prev) => new Map(prev).set(fileKey, 0));
+          try {
+            const result = await uploadClassPdf(
+              lectureId,
+              newClassId,
+              file,
+              (progress) => {
+                setUploadProgress((prev) => new Map(prev).set(fileKey, progress));
+              }
+            );
+            // whiteboard/upload-pdf API는 original_pdf_url을 반환
+            if (result.original_pdf_url) {
+              const pdfUrl = result.original_pdf_url.startsWith("http")
+                ? result.original_pdf_url.replace(/^https?:\/\/[^/]+/, "")
+                : result.original_pdf_url;
+              uploadedMaterialUrls.push(pdfUrl);
+            } else if (result.pdf_url) {
+              const pdfUrl = result.pdf_url.startsWith("http")
+                ? result.pdf_url.replace(/^https?:\/\/[^/]+/, "")
+                : result.pdf_url;
+              uploadedMaterialUrls.push(pdfUrl);
+            }
+            setUploadingFiles((prev) => {
+              const next = new Set(prev);
+              next.delete(fileKey);
+              return next;
+            });
+            setUploadProgress((prev) => {
+              const next = new Map(prev);
+              next.delete(fileKey);
+              return next;
+            });
+          } catch (error) {
+            setUploadingFiles((prev) => {
+              const next = new Set(prev);
+              next.delete(fileKey);
+              return next;
+            });
+            setUploadProgress((prev) => {
+              const next = new Map(prev);
+              next.delete(fileKey);
+              return next;
+            });
+            throw error;
+          }
+        }
+      }
+
+      // 업로드된 파일이 있으면 클래스 materials 업데이트
+      if (uploadedMaterialUrls.length > 0) {
+        // 최신 클래스 목록을 가져옴
+        await fetchClassesData();
+        
+        // 업데이트된 classList를 사용하여 materials 업데이트
+        const updatedClasses = classList.map((cls) => {
+          if (Number(cls.id) === Number(newClassId)) {
+            return {
+              ...cls,
+              materials: uploadedMaterialUrls,
+            };
+          }
+          return cls;
+        });
+        
+        // 새로 추가된 클래스가 classList에 없을 수 있으므로 확인
+        const newClassInList = updatedClasses.find((c) => Number(c.id) === Number(newClassId));
+        if (!newClassInList) {
+          updatedClasses.push({
+            ...addResponse.class,
+            materials: uploadedMaterialUrls,
+          });
+        }
+
+        await updateLectureClasses(lectureId, {
+          classes: updatedClasses,
+        });
+      }
+
       setToast({ message: "클래스가 추가되었습니다.", type: "success" });
       await fetchClassesData();
       closeClassModals();
@@ -345,19 +493,46 @@ const ProfessorClass: React.FC = () => {
         for (const file of selectedFiles) {
           const fileKey = `${file.name}-${file.size}`;
           setUploadingFiles((prev) => new Set(prev).add(fileKey));
+          setUploadProgress((prev) => new Map(prev).set(fileKey, 0));
           try {
-            const result = await uploadClassPdf(lectureId, editingClass.id, file);
-            // result.materials는 전체 materials 배열이므로, 새로 추가된 것만 추출
-            // result.pdf_url이 새로 업로드된 파일의 URL
-            uploadedMaterialUrls.push(result.pdf_url);
+            const result = await uploadClassPdf(
+              lectureId,
+              Number(editingClass.id),
+              file,
+              (progress) => {
+                setUploadProgress((prev) => new Map(prev).set(fileKey, progress));
+              }
+            );
+            // whiteboard/upload-pdf API는 original_pdf_url을 반환
+            if (result.original_pdf_url) {
+              const pdfUrl = result.original_pdf_url.startsWith("http")
+                ? result.original_pdf_url.replace(/^https?:\/\/[^/]+/, "")
+                : result.original_pdf_url;
+              uploadedMaterialUrls.push(pdfUrl);
+            } else if (result.pdf_url) {
+              const pdfUrl = result.pdf_url.startsWith("http")
+                ? result.pdf_url.replace(/^https?:\/\/[^/]+/, "")
+                : result.pdf_url;
+              uploadedMaterialUrls.push(pdfUrl);
+            }
             setUploadingFiles((prev) => {
               const next = new Set(prev);
+              next.delete(fileKey);
+              return next;
+            });
+            setUploadProgress((prev) => {
+              const next = new Map(prev);
               next.delete(fileKey);
               return next;
             });
           } catch (error) {
             setUploadingFiles((prev) => {
               const next = new Set(prev);
+              next.delete(fileKey);
+              return next;
+            });
+            setUploadProgress((prev) => {
+              const next = new Map(prev);
               next.delete(fileKey);
               return next;
             });
@@ -370,17 +545,23 @@ const ProfessorClass: React.FC = () => {
       const existingMaterials = editingClass.materials || [];
       const allMaterials = [...existingMaterials, ...uploadedMaterialUrls];
 
-      // 클래스 정보 업데이트
-      await updateLectureClasses(lectureId, {
-        classes: [
-          {
-            id: editingClass.id,
+      // 전체 클래스 목록을 가져와서 수정할 클래스만 업데이트
+      const updatedClasses = classList.map((cls) => {
+        if (Number(cls.id) === Number(editingClass.id)) {
+          return {
+            ...cls,
             title: classForm.title,
             description: classForm.description,
             date: toISOString(classForm.date),
             materials: allMaterials,
-          },
-        ],
+          };
+        }
+        return cls;
+      });
+
+      // 클래스 정보 업데이트
+      await updateLectureClasses(lectureId, {
+        classes: updatedClasses,
       });
       setToast({ message: "클래스가 수정되었습니다.", type: "success" });
       await fetchClassesData();
@@ -410,6 +591,43 @@ const ProfessorClass: React.FC = () => {
 
   const handleRemoveFile = (index: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    const file = selectedFiles[index];
+    if (file) {
+      const fileKey = `${file.name}-${file.size}`;
+      setUploadProgress((prev) => {
+        const next = new Map(prev);
+        next.delete(fileKey);
+        return next;
+      });
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    const pdfFiles = files.filter((file) => file.type === "application/pdf");
+    if (pdfFiles.length !== files.length) {
+      setToast({
+        message: "PDF 파일만 업로드할 수 있습니다.",
+        type: "error",
+      });
+    }
+    setSelectedFiles((prev) => [...prev, ...pdfFiles]);
   };
 
   const handleConfirmDeleteClass = async () => {
@@ -604,12 +822,31 @@ const ProfessorClass: React.FC = () => {
           prev.includes(classId) ? prev : [...prev, classId]
         );
       } catch (error) {
+        // 404 에러는 PDF가 없는 경우이므로 조용히 처리
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes("404") || errorMessage.includes("찾을 수 없습니다")) {
+          // PDF가 없는 경우 빈 배열로 설정
+          setWeeks((prev) =>
+            prev.map((w) =>
+              Number(w.week) === Number(classId)
+                ? {
+                    ...w,
+                    items: [],
+                  }
+                : w
+            )
+          );
+          setLoadedClassIds((prev) =>
+            prev.includes(classId) ? prev : [...prev, classId]
+          );
+        } else {
         console.error("PDF 목록 조회 실패:", error);
         const message =
           error instanceof Error
             ? error.message
             : "PDF 목록을 불러오는 중 오류가 발생했습니다.";
         setToast({ message, type: "error" });
+        }
       } finally {
         setIsPdfLoadingFor((current) => (current === classId ? null : current));
       }
@@ -1239,19 +1476,82 @@ const ProfessorClass: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              자료 링크 (줄바꿈으로 구분)
+              자료 파일 (PDF)
             </label>
-            <textarea
-              value={classForm.materialsInput}
-              onChange={(e) =>
-                setClassForm((prev) => ({
-                  ...prev,
-                  materialsInput: e.target.value,
-                }))
-              }
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={4}
-            />
+            <div className="space-y-2">
+              {/* 드래그 앤 드롭 영역 */}
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                  isDragOver
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-300 hover:border-gray-400"
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-600 mb-2">
+                  PDF 파일을 여기에 끌어다 놓거나
+                </p>
+                <label className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  <span>파일 선택</span>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* 선택된 파일 목록 */}
+              {selectedFiles.length > 0 && (
+                <div className="space-y-2">
+                  {selectedFiles.map((file, index) => {
+                    const fileKey = `${file.name}-${file.size}`;
+                    const isUploading = uploadingFiles.has(fileKey);
+                    const progress = uploadProgress.get(fileKey) || 0;
+                    return (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="bg-gray-50 px-3 py-2 rounded border"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm text-gray-700 truncate flex-1">
+                            {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(index)}
+                            className="ml-2 text-red-500 hover:text-red-700"
+                            disabled={isUploading}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {isUploading && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                              <span>업로드 중...</span>
+                              <span>{progress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex justify-end space-x-2">
             <button
@@ -1329,35 +1629,79 @@ const ProfessorClass: React.FC = () => {
               자료 파일 (PDF)
             </label>
             <div className="space-y-2">
-              <input
-                type="file"
-                accept=".pdf"
-                multiple
-                onChange={handleFileSelect}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {/* 드래그 앤 드롭 영역 */}
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                  isDragOver
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-300 hover:border-gray-400"
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-600 mb-2">
+                  PDF 파일을 여기에 끌어다 놓거나
+                </p>
+                <label className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  <span>파일 선택</span>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* 선택된 파일 목록 */}
               {selectedFiles.length > 0 && (
-                <div className="space-y-1">
-                  {selectedFiles.map((file, index) => (
-                    <div
-                      key={`${file.name}-${index}`}
-                      className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded border"
-                    >
-                      <span className="text-sm text-gray-700 truncate flex-1">
-                        {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFile(index)}
-                        className="ml-2 text-red-500 hover:text-red-700 text-sm"
-                        disabled={uploadingFiles.has(`${file.name}-${file.size}`)}
+                <div className="space-y-2">
+                  {selectedFiles.map((file, index) => {
+                    const fileKey = `${file.name}-${file.size}`;
+                    const isUploading = uploadingFiles.has(fileKey);
+                    const progress = uploadProgress.get(fileKey) || 0;
+                    return (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="bg-gray-50 px-3 py-2 rounded border"
                       >
-                        삭제
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm text-gray-700 truncate flex-1">
+                            {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(index)}
+                            className="ml-2 text-red-500 hover:text-red-700"
+                            disabled={isUploading}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {isUploading && (
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                              <span>업로드 중...</span>
+                              <span>{progress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+              {/* 기존 자료 표시 */}
               {editingClass && editingClass.materials && editingClass.materials.length > 0 && (
                 <div className="mt-2">
                   <p className="text-xs text-gray-500 mb-1">기존 자료:</p>

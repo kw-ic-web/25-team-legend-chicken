@@ -252,15 +252,33 @@ export async function getClassPdfs(
     throw new Error("인증 토큰이 필요합니다.");
   }
 
-  return apiFetch<GetClassPdfsResponse>(
-    `/api/professor/lectures/${lectureId}/classes/${classId}/pdf`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+  try {
+    return await apiFetch<GetClassPdfsResponse>(
+      `/api/professor/lectures/${lectureId}/classes/${classId}/pdf`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+  } catch (error) {
+    // 404 에러는 PDF가 없는 경우이므로 조용히 처리
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("404") || errorMessage.includes("찾을 수 없습니다")) {
+      // 빈 응답 반환
+      return {
+        lecture_id: lectureId,
+        lecture_name: "",
+        class_id: classId,
+        class_title: "",
+        pdf_count: 0,
+        pdfs: [],
+      };
     }
-  );
+    // 다른 에러는 그대로 throw
+    throw error;
+  }
 }
 
 export type Student = {
@@ -543,19 +561,28 @@ export async function getMyInfo(): Promise<MyInfoResponse> {
 }
 
 export type UploadPdfResponse = {
+  success: boolean;
   message: string;
   lecture_id: string;
   class_id: number;
-  class_title: string;
-  pdf_url: string;
-  filename: string;
-  materials: string[];
+  total_pages?: number;
+  pages?: Array<{
+    page_number: number;
+    image_path: string;
+    pdf_path: string;
+    text: string;
+    status: string;
+  }>;
+  materials_count?: number;
+  original_pdf_url: string;
+  pdf_url?: string; // 호환성을 위해 유지
 };
 
 export async function uploadClassPdf(
   lectureId: string,
   classId: number,
-  file: File
+  file: File,
+  onProgress?: (progress: number) => void
 ): Promise<UploadPdfResponse> {
   const token = localStorage.getItem("lecq.token");
   if (!token) {
@@ -567,21 +594,49 @@ export async function uploadClassPdf(
 
   const { getBaseUrl } = await import("../auth/client");
   const baseUrl = getBaseUrl();
-  const response = await fetch(
-    `${baseUrl}/api/professor/lectures/${lectureId}/classes/${classId}/uploadpdf`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
+  
+  // XMLHttpRequest를 사용하여 진행 상황 추적
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    // 진행 상황 이벤트 리스너
+    if (onProgress) {
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const progress = Math.round((e.loaded / e.total) * 100);
+          onProgress(progress);
+        }
+      });
     }
-  );
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: "PDF 업로드 실패" }));
-    throw new Error(error.message || "PDF 업로드에 실패했습니다.");
-  }
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const response = JSON.parse(xhr.responseText);
+          resolve(response);
+        } catch (error) {
+          reject(new Error("응답 파싱 실패"));
+        }
+      } else {
+        try {
+          const error = JSON.parse(xhr.responseText);
+          reject(new Error(error.message || "PDF 업로드에 실패했습니다."));
+        } catch {
+          reject(new Error(`PDF 업로드 실패 (${xhr.status})`));
+        }
+      }
+    });
 
-  return response.json();
+    xhr.addEventListener("error", () => {
+      reject(new Error("네트워크 오류가 발생했습니다."));
+    });
+
+    xhr.addEventListener("abort", () => {
+      reject(new Error("업로드가 취소되었습니다."));
+    });
+
+    xhr.open("POST", `${baseUrl}/api/lectures/${lectureId}/classes/${classId}/whiteboard/upload-pdf`);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.send(formData);
+  });
 }
