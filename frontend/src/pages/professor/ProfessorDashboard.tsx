@@ -33,7 +33,11 @@ const ProfessorDashboard: React.FC = () => {
           error instanceof Error
             ? error.message
             : "강의 목록을 불러오는 중 오류가 발생했습니다.";
-        setToast({ message: errorMessage, type: "error" });
+        // 419 에러(토큰 만료)는 handleTokenExpiration에서 처리되므로 조용히 처리
+        const errorStr = errorMessage.toLowerCase();
+        if (!errorStr.includes("419") && !errorStr.includes("인증") && !errorStr.includes("만료")) {
+          setToast({ message: errorMessage, type: "error" });
+        }
         setLectures([]);
       } finally {
         setIsLoading(false);
