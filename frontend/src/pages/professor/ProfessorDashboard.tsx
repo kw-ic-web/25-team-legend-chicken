@@ -4,7 +4,7 @@ import FilterTabs from "../../components/common/FilterTabs";
 import SearchBar from "../../components/common/SearchBar";
 import LectureCard from "../../components/common/LectureCard";
 import Pagination from "../../components/common/Pagination";
-import { getLectures, type Lecture } from "../../api/professor";
+import { getLectures, type Lecture, getLiveStatus } from "../../api/professor";
 import Toast from "../../components/common/Toast";
 import { getBaseUrl } from "../../api/auth/client";
 
@@ -14,6 +14,7 @@ const ProfessorDashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [lectures, setLectures] = useState<Lecture[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [liveStatusMap, setLiveStatusMap] = useState<Map<string, boolean>>(new Map());
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -42,15 +43,57 @@ const ProfessorDashboard: React.FC = () => {
     fetchLectures();
   }, []);
 
+  // 라이브 상태 확인
+  useEffect(() => {
+    const checkLiveStatuses = async () => {
+      if (lectures.length === 0) return;
+
+      const statusMap = new Map<string, boolean>();
+
+      // 각 강좌의 라이브 상태 확인
+      const promises = lectures.map(async (lecture) => {
+        try {
+          const liveStatus = await getLiveStatus(lecture.lecture_id);
+          // classes 배열에서 isLiveActive가 true인 클래스가 있는지 확인
+          const hasActiveLive = liveStatus.classes.some(
+            (cls) => cls.isLiveActive === true
+          );
+          statusMap.set(lecture.lecture_id, hasActiveLive);
+        } catch (error) {
+          console.error(`강좌 ${lecture.lecture_id} 라이브 상태 확인 오류:`, error);
+          statusMap.set(lecture.lecture_id, false);
+        }
+      });
+
+      await Promise.all(promises);
+      setLiveStatusMap(statusMap);
+    };
+
+    // 초기 확인
+    checkLiveStatuses();
+
+    // 주기적으로 확인 (10초마다)
+    const interval = setInterval(checkLiveStatuses, 10000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [lectures]);
+
   // 강의 데이터를 LectureCard 형식으로 변환
   const transformLectureToCard = (lecture: Lecture) => {
     // lecture_id를 그대로 사용 (URL 파라미터로 사용)
     const id = lecture.lecture_id;
 
-    // 상태 판단: classes 배열의 날짜를 기준으로 판단
-    // 현재는 간단하게 scheduled로 설정 (실제로는 현재 시간과 비교 필요)
+    // 상태 판단: 라이브 상태를 우선 확인, 없으면 날짜 기반으로 판단
     let status: "broadcasting" | "scheduled" | "completed" = "scheduled";
-    if (lecture.classes && lecture.classes.length > 0) {
+    
+    // 라이브 상태 확인 (live-status API 결과 사용)
+    const isLiveActive = liveStatusMap.get(lecture.lecture_id);
+    if (isLiveActive === true) {
+      status = "broadcasting";
+    } else if (lecture.classes && lecture.classes.length > 0) {
+      // 라이브가 없으면 날짜 기반으로 판단
       const now = new Date();
       const firstClassDate = new Date(lecture.classes[0].date);
       const lastClassDate = new Date(
@@ -58,7 +101,7 @@ const ProfessorDashboard: React.FC = () => {
       );
 
       if (now >= firstClassDate && now <= lastClassDate) {
-        status = "broadcasting";
+        status = "scheduled";
       } else if (now > lastClassDate) {
         status = "completed";
       }
