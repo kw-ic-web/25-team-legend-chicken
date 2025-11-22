@@ -541,3 +541,47 @@ export async function getMyInfo(): Promise<MyInfoResponse> {
     },
   });
 }
+
+export type UploadPdfResponse = {
+  message: string;
+  lecture_id: string;
+  class_id: number;
+  class_title: string;
+  pdf_url: string;
+  filename: string;
+  materials: string[];
+};
+
+export async function uploadClassPdf(
+  lectureId: string,
+  classId: number,
+  file: File
+): Promise<UploadPdfResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const formData = new FormData();
+  formData.append("pdf", file);
+
+  const { getBaseUrl } = await import("../auth/client");
+  const baseUrl = getBaseUrl();
+  const response = await fetch(
+    `${baseUrl}/api/professor/lectures/${lectureId}/classes/${classId}/uploadpdf`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: "PDF 업로드 실패" }));
+    throw new Error(error.message || "PDF 업로드에 실패했습니다.");
+  }
+
+  return response.json();
+}
