@@ -191,6 +191,46 @@ const ProfessorClass: React.FC = () => {
       setWeeks(transformedWeeks);
       setLoadedClassIds([]);
       setIsPdfLoadingFor(null);
+
+      // 모든 클래스의 PDF 목록 자동 로드
+      if (normalizedClasses.length > 0 && classesResponse.lecture_id) {
+        normalizedClasses.forEach((cls) => {
+          const classId = Number(cls.id);
+          const classTitle = cls.title || `${normalizedClasses.indexOf(cls) + 1}주차`;
+          
+          // PDF 목록 로드 (비동기로 실행)
+          (async () => {
+            try {
+              setIsPdfLoadingFor(classId);
+              const resp = await getClassPdfs(classesResponse.lecture_id, classId);
+              const newItems = (resp.pdfs || []).map((pdfUrl) => {
+                const url = resolveUrl(pdfUrl);
+                const name = url.split("/").pop() || "자료";
+                return { name, size: "파일", url };
+              });
+              
+              setWeeks((prev) =>
+                prev.map((w) =>
+                  Number(w.week) === Number(classId)
+                    ? {
+                        ...w,
+                        title: resp.class_title || classTitle || w.title,
+                        items: newItems,
+                      }
+                    : w
+                )
+              );
+              setLoadedClassIds((prev) =>
+                prev.includes(classId) ? prev : [...prev, classId]
+              );
+            } catch (error) {
+              console.error(`클래스 ${classId} PDF 로드 실패:`, error);
+            } finally {
+              setIsPdfLoadingFor((current) => (current === classId ? null : current));
+            }
+          })();
+        });
+      }
     } catch (error) {
       console.error("데이터 조회 오류:", error);
       const errorMessage =
