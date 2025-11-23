@@ -240,7 +240,7 @@ export type GetClassPdfsResponse = {
   class_id: number;
   class_title: string;
   pdf_count: number;
-  pdfs: string[];
+  pdfs: Array<string | { url: string; originalName: string }>;
 };
 
 export async function getClassPdfs(
@@ -558,6 +558,64 @@ export async function getMyInfo(): Promise<MyInfoResponse> {
       Authorization: `Bearer ${token}`,
     },
   });
+}
+
+export type WhiteboardPage = {
+  page_number: number;
+  image_path: string;
+  pdf_path: string;
+  text: string;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type GetWhiteboardPagesResponse = {
+  lecture_id: string;
+  class_id: number;
+  count: number;
+  pages: WhiteboardPage[];
+};
+
+export async function getWhiteboardPages(
+  lectureId: string,
+  classId: number,
+  status?: "draft" | "finalized"
+): Promise<GetWhiteboardPagesResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const params = new URLSearchParams();
+  if (status) {
+    params.set("status", status);
+  }
+  const query = params.toString();
+  const url = `/api/lectures/${lectureId}/classes/${classId}/whiteboard/pages${
+    query ? `?${query}` : ""
+  }`;
+
+  console.log("[DEBUG] getWhiteboardPages 호출:", {
+    url,
+    lectureId,
+    classId,
+    status,
+  });
+
+  try {
+    const response = await apiFetch<GetWhiteboardPagesResponse>(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    console.log("[DEBUG] getWhiteboardPages 응답:", response);
+    return response;
+  } catch (error) {
+    console.error("[DEBUG] getWhiteboardPages 에러:", error);
+    throw error;
+  }
 }
 
 export type UploadPdfResponse = {

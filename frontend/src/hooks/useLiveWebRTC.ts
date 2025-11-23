@@ -71,7 +71,7 @@ export function useLiveWebRTC({
 
   const socketRef = useRef<Socket | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const remoteStreamRef = useRef<Map<string, MediaStream>>(new Map());
+  const remoteStreamRef = useRef<Map<string, MediaStream[]>>(new Map()); // 여러 스트림 저장
   const metadataRef = useRef<Map<string, { role?: UserRole; userId?: string }>>(
     new Map()
   );
@@ -96,314 +96,21 @@ export function useLiveWebRTC({
     typeof role === "string";
 
   const updateRemoteParticipants = useCallback(() => {
-    console.log("[WebRTC] updateRemoteParticipants called", {
-      streamCount: remoteStreamRef.current.size,
-      metadataCount: metadataRef.current.size,
-    });
-    
     const participants: RemoteParticipant[] = [];
-    
-    // 각 socketId별로 stream을 분석하여 화면 공유와 카메라를 구분
-    remoteStreamRef.current.forEach((stream, socketId) => {
-      const meta = metadataRef.current.get(socketId);
-      if (!meta) {
-        console.warn("[WebRTC] updateRemoteParticipants: no metadata for", socketId);
-        return;
-      }
-      
-      console.log("[WebRTC] updateRemoteParticipants: processing stream", {
-        socketId,
-        role: meta.role,
-        userId: meta.userId,
-        videoTracks: stream.getVideoTracks().length,
-        audioTracks: stream.getAudioTracks().length,
-      });
-      
-      const videoTracks = stream.getVideoTracks();
-      if (videoTracks.length === 0) {
-        // 비디오 track이 없으면 오디오만 있는 경우
+    Array.from(remoteStreamRef.current.entries()).forEach(([id, streams]) => {
+      const meta = metadataRef.current.get(id);
+      console.log("[WebRTC] updateRemoteParticipants: socketId:", id, "metadata:", meta, "streams count:", streams.length);
+      // 각 스트림을 별도의 participant로 추가
+      streams.forEach((stream) => {
         participants.push({
-          socketId,
+          socketId: id,
           stream,
-          role: meta.role,
-          userId: meta.userId,
+          role: meta?.role,
+          userId: meta?.userId,
         });
-        return;
-      }
-      
-      // 각 video track을 분석하여 화면 공유와 카메라를 구분
-      const screenTracks: MediaStreamTrack[] = [];
-      const cameraTracks: MediaStreamTrack[] = [];
-      
-      console.log("[WebRTC] Total video tracks to analyze:", videoTracks.length);
-      
-      // track을 분석하기 전에 모든 track의 정보를 먼저 수집
-      const trackInfo = videoTracks.map((track, index) => {
-        try {
-          const settings = track.getSettings();
-          return {
-            track,
-            index,
-            width: settings.width,
-            height: settings.height,
-            frameRate: settings.frameRate,
-            deviceId: settings.deviceId,
-            facingMode: settings.facingMode,
-            displaySurface: settings.displaySurface,
-          };
-        } catch {
-          return {
-            track,
-            index,
-            width: undefined,
-            height: undefined,
-            frameRate: undefined,
-            deviceId: undefined,
-            facingMode: undefined,
-            displaySurface: undefined,
-          };
-        }
       });
-      
-      console.log("[WebRTC] Track info collected:", trackInfo.map(t => ({
-        index: t.index,
-        width: t.width,
-        height: t.height,
-        displaySurface: t.displaySurface,
-      })));
-      
-      videoTracks.forEach((track, trackIndex) => {
-        let isScreenShare = false;
-        
-        console.log("[WebRTC] Analyzing track:", {
-          id: track.id,
-          label: track.label,
-          kind: track.kind,
-          enabled: track.enabled,
-          readyState: track.readyState,
-        });
-        
-        // 방법 1: getSettings().displaySurface 확인 (가장 확실)
-        try {
-          const settings = track.getSettings();
-          console.log("[WebRTC] Track settings:", {
-            displaySurface: settings.displaySurface,
-            width: settings.width,
-            height: settings.height,
-            frameRate: settings.frameRate,
-            deviceId: settings.deviceId,
-            facingMode: settings.facingMode,
-          });
-          
-          if (settings.displaySurface) {
-            isScreenShare = ["screen", "window", "browser"].includes(settings.displaySurface);
-            console.log("[WebRTC] Track displaySurface detected:", settings.displaySurface, "isScreenShare:", isScreenShare);
-          }
-        } catch (e) {
-          console.warn("[WebRTC] getSettings() error:", e);
-        }
-        
-        // 방법 2: getCapabilities() 확인
-        if (!isScreenShare) {
-          try {
-            const capabilities = track.getCapabilities();
-            console.log("[WebRTC] Track capabilities:", {
-              displaySurface: capabilities.displaySurface,
-              width: capabilities.width,
-              height: capabilities.height,
-            });
-            
-            if (capabilities.displaySurface) {
-              isScreenShare = ["screen", "window", "browser"].includes(capabilities.displaySurface);
-              console.log("[WebRTC] Track capabilities.displaySurface detected:", capabilities.displaySurface, "isScreenShare:", isScreenShare);
-            }
-          } catch (e) {
-            console.warn("[WebRTC] getCapabilities() error:", e);
-          }
-        }
-        
-        // 방법 3: getConstraints() 확인 - 화면 공유는 deviceId가 false이거나 없음
-        if (!isScreenShare) {
-          try {
-            const constraints = track.getConstraints();
-            console.log("[WebRTC] Track constraints:", {
-              deviceId: constraints.deviceId,
-              width: constraints.width,
-              height: constraints.height,
-            });
-            
-            // 화면 공유는 deviceId가 false이거나 없고, facingMode도 없음
-            if (constraints.deviceId === false || 
-                (typeof constraints.deviceId === "object" && constraints.deviceId.exact === false) ||
-                (!constraints.deviceId && !constraints.facingMode)) {
-              // 추가 확인: 화면 공유는 보통 큰 해상도를 가짐
-              const settings = track.getSettings();
-              if (settings.width && settings.width >= 1280) {
-                isScreenShare = true;
-                console.log("[WebRTC] Track detected as screen share by constraints and resolution");
-              }
-            }
-          } catch (e) {
-            console.warn("[WebRTC] getConstraints() error:", e);
-          }
-        }
-        
-        // 방법 4: label 확인 (fallback) - UUID만 있는 경우는 제외
-        if (!isScreenShare) {
-          const label = track.label.toLowerCase();
-          // UUID 패턴이 아니고 화면 공유 관련 키워드가 있으면
-          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(track.label);
-          if (!isUUID && (label.includes("screen") || 
-                         label.includes("display") || 
-                         label.includes("monitor") || 
-                         label.includes("window") ||
-                         label.includes("desktop"))) {
-            isScreenShare = true;
-            console.log("[WebRTC] Track detected as screen share by label:", track.label);
-          }
-        }
-        
-        // 방법 5: 해상도 기반 추론 (화면 공유는 보통 큰 해상도)
-        if (!isScreenShare && videoTracks.length > 1) {
-          try {
-            const settings = track.getSettings();
-            console.log("[WebRTC] Track settings for resolution check:", {
-              width: settings.width,
-              height: settings.height,
-              frameRate: settings.frameRate,
-            });
-            
-            // 해상도 정보가 있으면 비교
-            if (settings.width && settings.height) {
-              // 다른 track과 비교하여 더 큰 해상도면 화면 공유로 간주
-              const otherTracks = videoTracks.filter(t => t.id !== track.id);
-              let isLargest = true;
-              
-              for (const otherTrack of otherTracks) {
-                try {
-                  const otherSettings = otherTrack.getSettings();
-                  if (otherSettings.width && otherSettings.height) {
-                    const thisArea = settings.width * settings.height;
-                    const otherArea = otherSettings.width * otherSettings.height;
-                    if (otherArea > thisArea) {
-                      isLargest = false;
-                      break;
-                    }
-                  }
-                } catch {
-                  // 무시
-                }
-              }
-              
-              if (isLargest) {
-                isScreenShare = true;
-                console.log("[WebRTC] Track detected as screen share by resolution (largest):", settings.width, "x", settings.height);
-              }
-            } else {
-              // 해상도 정보가 없으면, track의 순서나 다른 방법으로 추론
-              // 일반적으로 화면 공유는 나중에 추가되므로, 마지막 track을 화면 공유로 간주
-              if (trackIndex === videoTracks.length - 1 && videoTracks.length > 1) {
-                // 마지막 track이고 해상도 정보가 없으면, track의 contentHint 확인
-                try {
-                  const contentHint = (track as any).contentHint;
-                  console.log("[WebRTC] Track contentHint:", contentHint);
-                  if (contentHint === "detail" || contentHint === "motion") {
-                    isScreenShare = true;
-                    console.log("[WebRTC] Track detected as screen share by contentHint:", contentHint);
-                  } else {
-                    // contentHint가 없고 마지막 track이면 화면 공유로 간주
-                    // (일반적으로 카메라를 먼저 켜고 화면 공유를 나중에 켜므로)
-                    isScreenShare = true;
-                    console.log("[WebRTC] Track detected as screen share by order (last track, no resolution info)");
-                  }
-                } catch {
-                  // contentHint가 없으면, 마지막 track을 화면 공유로 간주
-                  isScreenShare = true;
-                  console.log("[WebRTC] Track detected as screen share by order (last track, no contentHint)");
-                }
-              }
-            }
-          } catch (e) {
-            console.warn("[WebRTC] Resolution check error:", e);
-          }
-        } else if (!isScreenShare && videoTracks.length === 1) {
-          // track이 하나만 있으면, 해상도가 크면 화면 공유일 가능성
-          try {
-            const settings = track.getSettings();
-            if (settings.width && settings.height) {
-              const area = settings.width * settings.height;
-              // 1920x1080 이상이면 화면 공유일 가능성이 높음
-              if (area >= 1920 * 1080) {
-                isScreenShare = true;
-                console.log("[WebRTC] Single track detected as screen share by high resolution:", settings.width, "x", settings.height);
-              }
-            }
-          } catch (e) {
-            // 무시
-          }
-        }
-        
-        console.log("[WebRTC] Final decision for track:", track.id, "isScreenShare:", isScreenShare);
-        
-        if (isScreenShare) {
-          screenTracks.push(track);
-        } else {
-          cameraTracks.push(track);
-        }
-      });
-      
-      // 화면 공유 track이 있으면 별도 stream으로 추가
-      if (screenTracks.length > 0) {
-        const screenStream = new MediaStream([...screenTracks, ...stream.getAudioTracks()]);
-        participants.push({
-          socketId: `${socketId}-screen`,
-          stream: screenStream,
-          role: meta.role,
-          userId: meta.userId,
-        });
-        console.log("[WebRTC] updateRemoteParticipants: added screen stream", {
-          socketId: `${socketId}-screen`,
-          role: meta.role,
-        });
-      }
-      
-      // 카메라 track이 있으면 별도 stream으로 추가
-      if (cameraTracks.length > 0) {
-        const cameraStream = new MediaStream([...cameraTracks, ...stream.getAudioTracks()]);
-        participants.push({
-          socketId: `${socketId}-camera`,
-          stream: cameraStream,
-          role: meta.role,
-          userId: meta.userId,
-        });
-        console.log("[WebRTC] updateRemoteParticipants: added camera stream", {
-          socketId: `${socketId}-camera`,
-          role: meta.role,
-        });
-      }
-      
-      // 비디오 track이 없으면 오디오만 있는 경우
-      if (screenTracks.length === 0 && cameraTracks.length === 0) {
-        participants.push({
-          socketId,
-          stream,
-          role: meta.role,
-          userId: meta.userId,
-        });
-      }
     });
-    
-    console.log("[WebRTC] updateRemoteParticipants: final participants", {
-      count: participants.length,
-      participants: participants.map(p => ({
-        socketId: p.socketId,
-        role: p.role,
-        userId: p.userId,
-        hasStream: !!p.stream,
-        videoTracks: p.stream?.getVideoTracks().length || 0,
-      })),
-    });
-    
+    console.log("[WebRTC] updateRemoteParticipants: 총 participants 수:", participants.length);
     setRemoteParticipants(participants);
   }, []);
 
@@ -422,10 +129,11 @@ export function useLiveWebRTC({
         }
         peersRef.current.delete(remoteSocketId);
       }
-      const stream = remoteStreamRef.current.get(remoteSocketId);
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+      // 모든 스트림 정리
+      const streams = remoteStreamRef.current.get(remoteSocketId) || [];
+      streams.forEach(stream => {
+        stream.getTracks().forEach(track => track.stop());
+      });
       remoteStreamRef.current.delete(remoteSocketId);
       metadataRef.current.delete(remoteSocketId);
       makingOfferRef.current.delete(remoteSocketId);
@@ -566,45 +274,22 @@ export function useLiveWebRTC({
           }
           return;
         }
+        console.log("[WebRTC] ontrack: stream found, tracks:", stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState, label: t.label })));
+        console.log("[WebRTC] ontrack: current metadata for", remoteSocketId, ":", metadataRef.current.get(remoteSocketId));
         
-        console.log("[WebRTC] ontrack: stream found", {
-          remoteSocketId,
-          streamId: stream.id,
-          videoTracks: stream.getVideoTracks().length,
-          audioTracks: stream.getAudioTracks().length,
-        });
-        
-        // stream이 있으면 기존 stream과 병합 또는 교체
-        const existingStream = remoteStreamRef.current.get(remoteSocketId);
-        if (existingStream && existingStream.id !== stream.id) {
-          console.log("[WebRTC] ontrack: merging tracks into existing stream", remoteSocketId);
-          // 다른 stream이면 track들을 기존 stream에 추가
-          stream.getTracks().forEach((track) => {
-            if (!existingStream.getTracks().some((t) => t.id === track.id)) {
-              existingStream.addTrack(track);
-            }
-          });
+        // 여러 스트림 저장 (카메라와 화면 공유를 모두 저장)
+        const existingStreams = remoteStreamRef.current.get(remoteSocketId) || [];
+        // 중복 스트림 체크 (stream ID로)
+        const streamId = stream.id;
+        if (!existingStreams.some(s => s.id === streamId)) {
+          console.log("[WebRTC] ontrack: 새 스트림 추가:", streamId, "기존 스트림 수:", existingStreams.length);
+          existingStreams.push(stream);
+          remoteStreamRef.current.set(remoteSocketId, existingStreams);
+          updateRemoteParticipants();
+          console.log("[WebRTC] ontrack: 스트림 추가 후 metadata:", metadataRef.current.get(remoteSocketId));
         } else {
-          console.log("[WebRTC] ontrack: setting new stream", remoteSocketId);
-          // 같은 stream이거나 없으면 교체
-          remoteStreamRef.current.set(remoteSocketId, stream);
+          console.log("[WebRTC] ontrack: 중복 스트림 무시:", streamId);
         }
-        
-        // track이 종료되면 제거
-        event.track.onended = () => {
-          console.log("[WebRTC] track ended", remoteSocketId, event.track.id);
-          const currentStream = remoteStreamRef.current.get(remoteSocketId);
-          if (currentStream) {
-            currentStream.removeTrack(event.track);
-            // 모든 track이 종료되면 stream 제거
-            if (currentStream.getTracks().length === 0) {
-              remoteStreamRef.current.delete(remoteSocketId);
-            }
-            updateRemoteParticipants();
-          }
-        };
-        
-        updateRemoteParticipants();
       };
 
       peer.onicecandidate = (event) => {

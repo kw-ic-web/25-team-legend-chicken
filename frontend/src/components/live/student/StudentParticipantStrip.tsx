@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef } from "react";
+import { VideoOff } from "lucide-react";
 import type { RefObject, MutableRefObject } from "react";
 import type { RemoteParticipant } from "../../../hooks/useLiveWebRTC";
 
@@ -11,9 +12,12 @@ interface Props {
   professorCameraRef?: AnyVideoRef;
   studentVideoRef?: AnyVideoRef;
   isStudentCameraOn?: boolean;
-  remoteParticipants?: RemoteParticipant[];
-  currentUserId?: string;
-  currentUserName?: string;
+  remoteParticipants?: Array<{
+    socketId: string;
+    userId?: string;
+    role?: string;
+    stream: MediaStream;
+  }>;
 }
 
 const StudentParticipantStrip: React.FC<Props> = ({
@@ -22,68 +26,115 @@ const StudentParticipantStrip: React.FC<Props> = ({
   studentVideoRef,
   isStudentCameraOn,
   remoteParticipants = [],
-  currentUserId,
-  currentUserName = "나",
 }) => {
-  // 교수자 카메라 스트림 찾기 (socketId로 구분)
-  const professorParticipant = useMemo(() => {
-    return remoteParticipants.find((p) => {
-      return p.role === "professor" && p.socketId.includes("-camera");
-    });
-  }, [remoteParticipants]);
+  const [hasProfessorVideo, setHasProfessorVideo] = useState(false);
 
-  const otherStudents = useMemo(() => {
-    return remoteParticipants.filter((p) => {
-      // 학생이어야 하고, 현재 사용자가 아니어야 하며, 카메라 스트림이어야 함 (화면 공유 제외)
-      if (p.role !== "student" || p.userId === currentUserId) return false;
-      // socketId에 -screen이 포함되어 있으면 제외 (화면 공유는 학생이 보내지 않음)
-      if (p.socketId.includes("-screen")) return false;
-      return true;
-    });
-  }, [remoteParticipants, currentUserId]);
-
-  // 동적 학생 비디오 refs 관리
-  const studentVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
-
-  // 교수자 카메라 스트림 연결
+  // 교수자 비디오 스트림 상태 확인
   useEffect(() => {
-    const videoElement = professorCameraRef
-      ? (professorCameraRef as React.RefObject<HTMLVideoElement>).current
-      : null;
-    
-    if (videoElement && professorParticipant?.stream) {
-      console.log("[StudentParticipantStrip] Setting professor camera stream");
-      videoElement.srcObject = professorParticipant.stream;
-      videoElement.play().catch((err) => {
-        console.error("[StudentParticipantStrip] Professor camera play error:", err);
-      });
-    } else if (videoElement) {
-      videoElement.srcObject = null;
+    if (!videoRef) {
+      setHasProfessorVideo(false);
+      return;
     }
-  }, [professorCameraRef, professorParticipant]);
 
-  // 다른 학생들의 스트림 연결
-  useEffect(() => {
-    otherStudents.forEach((participant) => {
-      const videoElement = studentVideoRefs.current.get(participant.socketId);
-      if (videoElement && participant.stream) {
-        videoElement.srcObject = participant.stream;
-        videoElement.play().catch(console.error);
+    const checkVideo = () => {
+      const videoElement = (videoRef as RefObject<HTMLVideoElement>).current;
+      if (videoElement) {
+        if (videoElement.srcObject) {
+          setHasProfessorVideo(true);
+        } else {
+          setHasProfessorVideo(false);
+        }
+      } else {
+        setHasProfessorVideo(false);
       }
-    });
-  }, [otherStudents]);
+    };
 
-  // 빈 슬롯 개수 계산 (최대 4개까지 표시)
-  const maxSlots = 4;
-  const totalSlots = 1 + 1 + otherStudents.length; // 교수자 + 나 + 다른 학생들
-  const emptySlots = Math.max(0, maxSlots - totalSlots);
+    checkVideo();
+    const interval = setInterval(checkVideo, 500);
+
+    return () => clearInterval(interval);
+  }, [videoRef]);
+
+  // 학생 참여자 필터링 (role이 student인 것만)
+  const studentParticipants = remoteParticipants.filter(
+    (p) => p.role === "student"
+  );
+
+  // 학생 비디오 타일 컴포넌트
+  const StudentVideoTile: React.FC<{ participant: typeof remoteParticipants[0] }> = ({
+    participant,
+  }) => {
+    const studentVideoRef = useRef<HTMLVideoElement | null>(null);
+
+    useEffect(() => {
+      if (studentVideoRef.current && participant.stream) {
+        // 학생의 카메라 스트림 찾기 (화면 공유가 아닌 카메라)
+        const videoTracks = participant.stream.getVideoTracks();
+        const cameraTrack = videoTracks.find(
+          (track) => {
+            try {
+              const settings = track.getSettings();
+              const label = track.label || "";
+              const displaySurface = settings.displaySurface;
+              const isScreen = (
+                label.toLowerCase().includes("screen") ||
+                label.toLowerCase().includes("화면") ||
+                displaySurface === "monitor" ||
+                displaySurface === "window" ||
+                displaySurface === "browser"
+              );
+              return !isScreen;
+            } catch {
+              return !track.label?.toLowerCase().includes("screen");
+            }
+          }
+        );
+
+        if (cameraTrack && studentVideoRef.current) {
+          const cameraStream = new MediaStream([cameraTrack]);
+          if (participant.stream.getAudioTracks().length > 0) {
+            cameraStream.addTrack(participant.stream.getAudioTracks()[0]);
+          }
+          studentVideoRef.current.srcObject = cameraStream;
+          studentVideoRef.current.play().catch(console.error);
+        } else if (studentVideoRef.current && videoTracks.length > 0) {
+          studentVideoRef.current.srcObject = participant.stream;
+          studentVideoRef.current.play().catch(console.error);
+        }
+      }
+    }, [participant.stream]);
+
+    const hasVideo = studentVideoRef.current?.srcObject !== null;
+
+    return (
+      <div className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden">
+        <video
+          ref={studentVideoRef}
+          autoPlay
+          muted
+          playsInline
+          className={`w-full h-full object-cover transition-opacity duration-200 ${
+            hasVideo ? "opacity-100 visible" : "opacity-0 invisible"
+          }`}
+        />
+        {!hasVideo && (
+          <div className="absolute inset-0 w-full h-full flex items-center justify-center text-xs text-gray-300 bg-gray-800">
+            <VideoOff className="w-6 h-6 text-gray-400" />
+          </div>
+        )}
+        <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded z-20">
+          {participant.userId || "학생"}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="px-6 py-4 border-b border-gray-200">
       <div className="flex items-center space-x-3 overflow-x-auto no-scrollbar">
         {/* 교수자 카메라 */}
         <div className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden">
-          {professorCameraRef && professorParticipant?.stream ? (
+          {videoRef && (
             <video
               ref={professorCameraRef as React.RefObject<HTMLVideoElement>}
               autoPlay
@@ -91,13 +142,14 @@ const StudentParticipantStrip: React.FC<Props> = ({
               muted
               className="w-full h-full object-cover"
             />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs text-gray-300 bg-gray-800">
-              강의자
+          )}
+          {!hasProfessorVideo && (
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center text-xs text-gray-300 bg-gray-800 z-10">
+              <div>강의자</div>
             </div>
           )}
-          <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded">
-            {professorParticipant?.userId ? teacherName : "교수자"}
+          <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded z-20">
+            {teacherName}
           </div>
         </div>
 
@@ -122,39 +174,8 @@ const StudentParticipantStrip: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* 다른 학생들의 카메라 */}
-        {otherStudents.map((participant) => (
-          <div
-            key={participant.socketId}
-            className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden"
-          >
-            <video
-              ref={(el) => {
-                if (el) {
-                  studentVideoRefs.current.set(participant.socketId, el);
-                } else {
-                  studentVideoRefs.current.delete(participant.socketId);
-                }
-              }}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded">
-              학생
-            </div>
-          </div>
-        ))}
-
-        {/* 빈 슬롯 */}
-        {Array.from({ length: emptySlots }).map((_, i) => (
-          <div
-            key={`empty-${i}`}
-            className="flex-none w-28 h-20 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center text-xs text-gray-500"
-          >
-            빈 슬롯
-          </div>
+        {studentParticipants.map((participant) => (
+          <StudentVideoTile key={participant.socketId} participant={participant} />
         ))}
       </div>
     </div>

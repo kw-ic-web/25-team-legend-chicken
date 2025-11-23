@@ -32,6 +32,8 @@ import {
   updateLectureClasses,
   deleteLectureClass,
   uploadClassPdf,
+  getWhiteboardPages,
+  type WhiteboardPage,
 } from "../../api/professor";
 import type {
   LectureClass,
@@ -54,6 +56,10 @@ const ProfessorClass: React.FC = () => {
     title: string;
     fileName: string;
     fileSize: string;
+    url?: string;
+    lectureId?: string;
+    classId?: number;
+    pages?: WhiteboardPage[];
   } | null>(null);
   const [isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
   const [isPersonnelModalOpen, setIsPersonnelModalOpen] = useState(false);
@@ -175,10 +181,18 @@ const ProfessorClass: React.FC = () => {
           ? normalizedClasses.map((cls, idx) => {
               const classId = Number(cls.id);
                 const items = cls.materials
-                  ? cls.materials.map((materialUrl) => {
+                  ? cls.materials.map((material) => {
+                      // materials가 객체인지 문자열인지 확인
+                      const materialUrl = typeof material === 'string' 
+                        ? material 
+                        : material.url || material;
+                      const originalName = typeof material === 'object' && material.originalName
+                        ? material.originalName
+                        : null;
                       const resolvedUrl = resolveUrl(materialUrl);
                       const urlParts = resolvedUrl.split("/");
-                      const fileName = urlParts[urlParts.length - 1] || "파일";
+                      // 원본 파일명이 있으면 사용, 없으면 URL에서 추출
+                      const fileName = originalName || urlParts[urlParts.length - 1] || "파일";
                       return {
                         name: fileName,
                         size: "파일",
@@ -210,9 +224,14 @@ const ProfessorClass: React.FC = () => {
             try {
               setIsPdfLoadingFor(classId);
               const resp = await getClassPdfs(classesResponse.lecture_id, classId);
-              const newItems = (resp.pdfs || []).map((pdfUrl) => {
+              const newItems = (resp.pdfs || []).map((pdfItem) => {
+                // pdfs가 객체 배열인지 문자열 배열인지 확인
+                const pdfUrl = typeof pdfItem === 'string' ? pdfItem : pdfItem.url || pdfItem;
+                const originalName = typeof pdfItem === 'object' && pdfItem.originalName
+                  ? pdfItem.originalName
+                  : null;
                 const url = resolveUrl(pdfUrl);
-                const name = url.split("/").pop() || "자료";
+                const name = originalName || url.split("/").pop() || "자료";
                 return { name, size: "파일", url };
               });
               
@@ -761,7 +780,7 @@ const ProfessorClass: React.FC = () => {
   const handleLessonQuestionModalOpen = async (
     classId: number,
     defaultTitle: string,
-    material?: { name: string; size: string }
+    material?: { name: string; size: string; url?: string }
   ) => {
     if (!course.id) return;
     setIsLessonDetailLoading(true);
@@ -771,18 +790,62 @@ const ProfessorClass: React.FC = () => {
         classId
       );
       const materials = detail.class?.materials ?? [];
-      const firstMaterialName =
-        material?.name ||
-        (materials.length > 0
-          ? materials[0].split("/").pop() || "자료"
-          : "자료");
+      
+      // materials에서 첫 번째 자료 찾기
+      let firstMaterial: { url: string; originalName: string } | null = null;
+      if (materials.length > 0) {
+        const firstMat = materials[0];
+        if (typeof firstMat === 'string') {
+          firstMaterial = {
+            url: firstMat,
+            originalName: firstMat.split("/").pop() || "자료"
+          };
+        } else if (firstMat && typeof firstMat === 'object') {
+          firstMaterial = {
+            url: firstMat.url || firstMat,
+            originalName: firstMat.originalName || firstMat.url?.split("/").pop() || "자료"
+          };
+        }
+      }
+      
+      // material prop이 있으면 우선 사용
+      const materialUrl = material?.url || firstMaterial?.url;
+      const firstMaterialName = material?.name || firstMaterial?.originalName || "자료";
       const firstMaterialSize = material?.size || "파일";
 
-      setSelectedLesson({
+      // whiteboard pages 가져오기 시도
+      let pages: WhiteboardPage[] | undefined;
+      try {
+        console.log("[DEBUG] Whiteboard pages 요청 시작:", {
+          lectureId: course.id,
+          classId: classId,
+        });
+        const pagesResponse = await getWhiteboardPages(course.id, classId, "finalized");
+        console.log("[DEBUG] Whiteboard pages 응답:", {
+          count: pagesResponse.count,
+          pagesLength: pagesResponse.pages?.length,
+          pages: pagesResponse.pages,
+        });
+        pages = pagesResponse.pages || [];
+        console.log("[DEBUG] 처리된 pages:", pages);
+      } catch (error) {
+        // whiteboard pages가 없으면 무시 (fallback으로 전체 PDF 사용)
+        console.error("[DEBUG] Whiteboard pages 조회 실패:", error);
+        console.log("[DEBUG] Whiteboard pages를 찾을 수 없습니다. 전체 PDF를 사용합니다.");
+        pages = undefined;
+      }
+
+      const lessonData = {
         title: detail.class?.title || defaultTitle,
         fileName: firstMaterialName,
         fileSize: firstMaterialSize,
-      });
+        url: materialUrl ? resolveUrl(materialUrl) : undefined,
+        lectureId: course.id,
+        classId: classId,
+        pages: pages,
+      };
+      console.log("[DEBUG] selectedLesson 설정:", lessonData);
+      setSelectedLesson(lessonData);
       setIsLessonQuestionModalOpen(true);
     } catch (error) {
       console.error("클래스 정보 조회 실패:", error);
@@ -802,9 +865,14 @@ const ProfessorClass: React.FC = () => {
       setIsPdfLoadingFor(classId);
       try {
         const resp = await getClassPdfs(course.id, classId);
-        const newItems = (resp.pdfs || []).map((pdfUrl) => {
+        const newItems = (resp.pdfs || []).map((pdfItem) => {
+          // pdfs가 객체 배열인지 문자열 배열인지 확인
+          const pdfUrl = typeof pdfItem === 'string' ? pdfItem : pdfItem.url || pdfItem;
+          const originalName = typeof pdfItem === 'object' && pdfItem.originalName
+            ? pdfItem.originalName
+            : null;
           const url = resolveUrl(pdfUrl);
-          const name = url.split("/").pop() || "자료";
+          const name = originalName || url.split("/").pop() || "자료";
           return { name, size: "파일", url };
         });
         setWeeks((prev) =>
@@ -1358,6 +1426,10 @@ const ProfessorClass: React.FC = () => {
           lessonTitle={selectedLesson.title}
           fileName={selectedLesson.fileName}
           fileSize={selectedLesson.fileSize}
+          pdfUrl={selectedLesson.url}
+          lectureId={selectedLesson.lectureId}
+          classId={selectedLesson.classId}
+          pages={selectedLesson.pages}
           questions={[
             {
               id: 1,
