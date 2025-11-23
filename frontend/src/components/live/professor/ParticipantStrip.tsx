@@ -17,6 +17,28 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
+  // 학생들만 필터링 (교수자 자신 제외, 화면 공유 제외)
+  const studentParticipants = remoteParticipants.filter((p) => {
+    if (p.role !== "student" || p.userId === currentUserId) return false;
+    // socketId에 -screen이 포함되어 있으면 제외 (화면 공유는 학생이 보내지 않음)
+    if (p.socketId.includes("-screen")) return false;
+    return true;
+  });
+
+  // 동적 학생 비디오 refs 관리
+  const studentVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
+
+  // 학생들의 스트림 연결
+  useEffect(() => {
+    studentParticipants.forEach((participant) => {
+      const videoElement = studentVideoRefs.current.get(participant.socketId);
+      if (videoElement && participant.stream) {
+        videoElement.srcObject = participant.stream;
+        videoElement.play().catch(console.error);
+      }
+    });
+  }, [studentParticipants]);
+
   const updateScrollState = useCallback(() => {
     const container = scrollRef.current;
     if (!container) return;
@@ -36,7 +58,7 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
       container.removeEventListener("scroll", updateScrollState);
       window.removeEventListener("resize", handleResize);
     };
-  }, [updateScrollState]);
+  }, [updateScrollState, studentParticipants.length]);
 
   const scrollByDelta = (delta: number) => {
     const container = scrollRef.current;
