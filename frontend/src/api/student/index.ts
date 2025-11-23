@@ -40,6 +40,7 @@ export type StudentLecture = {
   professor_email: string;
   professor_phone: string;
   lecture_description: string;
+  thumbnail?: string;
 };
 
 export type GetMyLecturesResponse = {

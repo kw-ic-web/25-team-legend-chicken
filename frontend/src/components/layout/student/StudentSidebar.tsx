@@ -23,7 +23,9 @@ const StudentSidebar: React.FC = () => {
   const [myLectures, setMyLectures] = useState<
     Array<{
       title: string;
-      participants: number;
+      participants?: number;
+      subtitle?: string;
+      meta?: string;
     }>
   >([]);
 
@@ -55,7 +57,10 @@ const StudentSidebar: React.FC = () => {
       if (lecturesResponse?.lectures) {
         const lecturesList = lecturesResponse.lectures.map((lecture) => ({
           title: lecture.name,
-          participants: 0, // API 응답에 참가자 수가 없으므로 기본값
+          subtitle: lecture.professor_name
+            ? `${lecture.professor_name} 교수님`
+            : undefined,
+          meta: lecture.schedule,
         }));
         setMyLectures(lecturesList.slice(0, 4)); // 최대 4개만 표시
       }

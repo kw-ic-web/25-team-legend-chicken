@@ -5,7 +5,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Send } from "lucide-react";
 import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
 import ParticipantStrip from "../../components/live/professor/ParticipantStrip";
@@ -14,7 +14,9 @@ import LiveControls from "../../components/live/professor/LiveControls";
 import EndBroadcastConfirmModal from "../../components/modal/live/EndBroadcastConfirmModal";
 import Toast from "../../components/common/Toast";
 import { useAuth } from "../../contexts/AuthContext";
+import { useToast } from "../../contexts/ToastContext";
 import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
+import { endLive } from "../../api/professor";
 
 interface Question {
   id: number;
@@ -35,6 +37,7 @@ type LiveNavigationState = {
 
 const RealtimeDashboard: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const params = useParams<{
     lectureId?: string;
     classId?: string;
@@ -42,6 +45,7 @@ const RealtimeDashboard: React.FC = () => {
   }>();
   const liveState = (location.state as LiveNavigationState) || null;
   const { user } = useAuth();
+  const { showToast: showGlobalToast } = useToast();
   const [isMicOn, setIsMicOn] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
@@ -53,6 +57,7 @@ const RealtimeDashboard: React.FC = () => {
     message: string;
     type: "success" | "error";
   } | null>(null);
+  const [isEndingLive, setIsEndingLive] = useState(false);
   const showError = useCallback((message: string) => {
     setToast({ message, type: "error" });
   }, []);
@@ -541,6 +546,46 @@ const RealtimeDashboard: React.FC = () => {
     };
   }, [stopCamera, stopScreenShare, isSharing]);
 
+  const handleConfirmEndLive = useCallback(async () => {
+    if (!resolvedLectureId || resolvedClassId === undefined) {
+      showError("라이브 정보를 찾을 수 없습니다.");
+      return;
+    }
+    if (isEndingLive) return;
+    setIsEndingLive(true);
+    try {
+      const response = await endLive(resolvedLectureId, resolvedClassId);
+      const successMessage = response.message || "라이브가 종료되었습니다.";
+      setToast({
+        message: successMessage,
+        type: "success",
+      });
+      showGlobalToast(successMessage, "success");
+      stopScreenShare();
+      stopCamera();
+      setIsEndConfirmOpen(false);
+      navigate(`/professor/courses/${resolvedLectureId}`, { replace: true });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "라이브 종료 중 오류가 발생했습니다.";
+      showError(message);
+    } finally {
+      setIsEndingLive(false);
+    }
+  }, [
+    endLive,
+    isEndingLive,
+    navigate,
+    resolvedClassId,
+    resolvedLectureId,
+    showError,
+    showGlobalToast,
+    stopCamera,
+    stopScreenShare,
+  ]);
+
   return (
     <div className="flex h-full bg-gray-50">
       <div className="flex flex-1 overflow-hidden">
@@ -729,13 +774,12 @@ const RealtimeDashboard: React.FC = () => {
       )}
       <EndBroadcastConfirmModal
         isOpen={isEndConfirmOpen}
-        onClose={() => setIsEndConfirmOpen(false)}
-        onConfirm={() => {
+        isProcessing={isEndingLive}
+        onClose={() => {
+          if (isEndingLive) return;
           setIsEndConfirmOpen(false);
-          stopScreenShare();
-          stopCamera();
-          console.log("방송 종료됨");
         }}
+        onConfirm={handleConfirmEndLive}
       />
     </div>
   );
