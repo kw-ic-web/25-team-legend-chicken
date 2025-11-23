@@ -1430,57 +1430,6 @@ const ProfessorClass: React.FC = () => {
           lectureId={selectedLesson.lectureId}
           classId={selectedLesson.classId}
           pages={selectedLesson.pages}
-          questions={[
-            {
-              id: 1,
-              question: "과목에 대한 질문을 해도 되나요?",
-              answer: "네, 얼마든지요...",
-              isOpen: true,
-            },
-            {
-              id: 2,
-              question: "실습 환경은 어떻게 구성하나요?",
-              answer: "Colab을 권장합니다.",
-              isOpen: false,
-            },
-            {
-              id: 3,
-              question: "과제 제출 형식이 궁금해요",
-              answer: "PDF 혹은 노트북 파일",
-              isOpen: false,
-            },
-            {
-              id: 4,
-              question: "파이썬 설치 방법을 알려주세요",
-              answer: "공식 홈페이지에서 다운로드하세요",
-              isOpen: false,
-            },
-            {
-              id: 5,
-              question: "코딩 테스트는 언제 하나요?",
-              answer: "매주 금요일에 진행됩니다",
-              isOpen: false,
-            },
-            {
-              id: 6,
-              question: "교재는 어디서 구할 수 있나요?",
-              answer: "온라인 서점에서 구매 가능합니다",
-              isOpen: false,
-            },
-            {
-              id: 7,
-              question: "프로젝트 제출 기한이 언제인가요?",
-              answer: "12월 말까지 제출해주세요",
-              isOpen: false,
-            },
-            {
-              id: 8,
-              question: "오프라인 수업은 있나요?",
-              answer: "온라인으로만 진행됩니다",
-              isOpen: false,
-            },
-          ]}
-          onAddAnswer={handleAddAnswer}
         />
       )}
 

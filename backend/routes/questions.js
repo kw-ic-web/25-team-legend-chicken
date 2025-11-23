@@ -210,6 +210,59 @@ router.post("/:id/upvote", authenticateToken, async (req, res) => {
   }
 });
 
+// 교수자 답변 추가/수정
+router.post("/:id/answer", authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const questionId = req.params.id;
+    const { answer } = req.body;
+
+    if (!answer || typeof answer !== "string" || !answer.trim()) {
+      return res
+        .status(400)
+        .json({ message: "답변 내용이 필요합니다." });
+    }
+
+    const q = await Question.findById(questionId);
+    if (!q) {
+      return res.status(404).json({ message: "질문을 찾을 수 없습니다." });
+    }
+
+    const access = await canAccess(user, q.lecture_id);
+    if (!access.ok) {
+      return res.status(access.code).json({ message: access.msg });
+    }
+
+    // 교수자만 답변을 추가/수정할 수 있도록 체크 (선택사항)
+    // if (user.user_type !== "professor") {
+    //   return res.status(403).json({ message: "교수자만 답변을 추가할 수 있습니다." });
+    // }
+
+    q.answer = answer.trim();
+    await q.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      const room = `lec:${q.lecture_id}:cls:${q.class_id}`;
+      io.to(room).emit("question:answer", {
+        question_id: questionId,
+        answer: q.answer,
+        question: q.toObject(),
+      });
+    }
+
+    return res.json({
+      message: "답변이 저장되었습니다.",
+      question: q,
+    });
+  } catch (err) {
+    console.error("답변 저장 오류:", err);
+    return res
+      .status(500)
+      .json({ message: "서버 오류가 발생했습니다.", error: err.message });
+  }
+});
+
 
 router.get(
   "/lectures/:lectureId/classes/:classId",

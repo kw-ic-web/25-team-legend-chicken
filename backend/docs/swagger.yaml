@@ -2266,6 +2266,127 @@ paths:
         '500':
           description: 서버 오류
 
+  /api/questions/{id}/answer:
+    post:
+      tags: [Questions, Working]
+      summary: 질문 답변 추가/수정
+      description: 교수자가 질문에 대한 답변을 추가하거나 수정합니다. GPT가 생성한 답변을 보완하거나 수정할 수 있습니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 질문 ID
+          example: 6914001daba488eae7586b8f
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer:
+                  type: string
+                  description: 답변 내용
+                  example: 이 부분은 교안의 3페이지에 자세히 설명되어 있습니다. 핵심 개념은...
+      responses:
+        '200':
+          description: 답변 저장 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 답변이 저장되었습니다.
+                  question:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        example: 6914001daba488eae7586b8f
+                      lecture_id:
+                        type: string
+                        example: LEC-32AEBA14
+                      class_id:
+                        type: number
+                        example: 2
+                      page:
+                        type: number
+                        example: 3
+                      position:
+                        type: object
+                        properties:
+                          x:
+                            type: number
+                            example: 0.12
+                          y:
+                            type: number
+                            example: 0.34
+                      text:
+                        type: string
+                        example: 이 부분이 이해가 안 됩니다.
+                      answer:
+                        type: string
+                        description: 교수자가 추가/수정한 답변
+                        example: 이 부분은 교안의 3페이지에 자세히 설명되어 있습니다. 핵심 개념은...
+                      author:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          role:
+                            type: string
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: 2025-11-12T03:33:49.974Z
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: 2025-11-12T04:15:30.123Z
+        '400':
+          description: 잘못된 요청 (답변 내용이 없음)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 답변 내용이 필요합니다.
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 해당 강좌에 접근할 수 없습니다.
+        '404':
+          description: 질문을 찾을 수 없습니다.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 질문을 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 서버 오류가 발생했습니다.
+
   /api/professor/lectures/{lectureId}/statistics:
     get:
       tags: [Professor, Working]
