@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
+import { VideoOff } from "lucide-react";
 import type { RefObject, MutableRefObject } from "react";
 
 type AnyVideoRef =
@@ -10,6 +11,12 @@ interface Props {
   videoRef?: AnyVideoRef;
   studentVideoRef?: AnyVideoRef;
   isStudentCameraOn?: boolean;
+  remoteParticipants?: Array<{
+    socketId: string;
+    userId?: string;
+    role?: string;
+    stream: MediaStream;
+  }>;
 }
 
 const StudentParticipantStrip: React.FC<Props> = ({
@@ -17,16 +24,14 @@ const StudentParticipantStrip: React.FC<Props> = ({
   videoRef,
   studentVideoRef,
   isStudentCameraOn,
+  remoteParticipants = [],
 }) => {
-  const placeholders = Array.from({ length: 4 }).map((_, i) => i);
   const [hasProfessorVideo, setHasProfessorVideo] = useState(false);
-  const [professorStreamInfo, setProfessorStreamInfo] = useState<string>("");
 
   // 교수자 비디오 스트림 상태 확인
   useEffect(() => {
     if (!videoRef) {
       setHasProfessorVideo(false);
-      setProfessorStreamInfo("videoRef 없음");
       return;
     }
 
@@ -34,20 +39,12 @@ const StudentParticipantStrip: React.FC<Props> = ({
       const videoElement = (videoRef as RefObject<HTMLVideoElement>).current;
       if (videoElement) {
         if (videoElement.srcObject) {
-          const stream = videoElement.srcObject as MediaStream;
-          const videoTracks = stream.getVideoTracks();
-          const audioTracks = stream.getAudioTracks();
           setHasProfessorVideo(true);
-          setProfessorStreamInfo(
-            `스트림 있음 (비디오: ${videoTracks.length}, 오디오: ${audioTracks.length})`
-          );
         } else {
           setHasProfessorVideo(false);
-          setProfessorStreamInfo("srcObject 없음");
         }
       } else {
         setHasProfessorVideo(false);
-        setProfessorStreamInfo("videoElement 없음");
       }
     };
 
@@ -56,6 +53,80 @@ const StudentParticipantStrip: React.FC<Props> = ({
 
     return () => clearInterval(interval);
   }, [videoRef]);
+
+  // 학생 참여자 필터링 (role이 student인 것만)
+  const studentParticipants = remoteParticipants.filter(
+    (p) => p.role === "student"
+  );
+
+  // 학생 비디오 타일 컴포넌트
+  const StudentVideoTile: React.FC<{ participant: typeof remoteParticipants[0] }> = ({
+    participant,
+  }) => {
+    const studentVideoRef = useRef<HTMLVideoElement | null>(null);
+
+    useEffect(() => {
+      if (studentVideoRef.current && participant.stream) {
+        // 학생의 카메라 스트림 찾기 (화면 공유가 아닌 카메라)
+        const videoTracks = participant.stream.getVideoTracks();
+        const cameraTrack = videoTracks.find(
+          (track) => {
+            try {
+              const settings = track.getSettings();
+              const label = track.label || "";
+              const displaySurface = settings.displaySurface;
+              const isScreen = (
+                label.toLowerCase().includes("screen") ||
+                label.toLowerCase().includes("화면") ||
+                displaySurface === "monitor" ||
+                displaySurface === "window" ||
+                displaySurface === "browser"
+              );
+              return !isScreen;
+            } catch {
+              return !track.label?.toLowerCase().includes("screen");
+            }
+          }
+        );
+
+        if (cameraTrack && studentVideoRef.current) {
+          const cameraStream = new MediaStream([cameraTrack]);
+          if (participant.stream.getAudioTracks().length > 0) {
+            cameraStream.addTrack(participant.stream.getAudioTracks()[0]);
+          }
+          studentVideoRef.current.srcObject = cameraStream;
+          studentVideoRef.current.play().catch(console.error);
+        } else if (studentVideoRef.current && videoTracks.length > 0) {
+          studentVideoRef.current.srcObject = participant.stream;
+          studentVideoRef.current.play().catch(console.error);
+        }
+      }
+    }, [participant.stream]);
+
+    const hasVideo = studentVideoRef.current?.srcObject !== null;
+
+    return (
+      <div className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden">
+        <video
+          ref={studentVideoRef}
+          autoPlay
+          muted
+          playsInline
+          className={`w-full h-full object-cover transition-opacity duration-200 ${
+            hasVideo ? "opacity-100 visible" : "opacity-0 invisible"
+          }`}
+        />
+        {!hasVideo && (
+          <div className="absolute inset-0 w-full h-full flex items-center justify-center text-xs text-gray-300 bg-gray-800">
+            <VideoOff className="w-6 h-6 text-gray-400" />
+          </div>
+        )}
+        <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded z-20">
+          {participant.userId || "학생"}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="px-6 py-4 border-b border-gray-200">
@@ -71,9 +142,8 @@ const StudentParticipantStrip: React.FC<Props> = ({
             />
           )}
           {!hasProfessorVideo && (
-            <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center text-xs text-gray-300 bg-gray-800 z-10">
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center text-xs text-gray-300 bg-gray-800 z-10">
               <div>강의자</div>
-              <div className="text-[10px] text-gray-400 mt-1">{professorStreamInfo}</div>
             </div>
           )}
           <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded z-20">
@@ -101,13 +171,8 @@ const StudentParticipantStrip: React.FC<Props> = ({
           </div>
         </div>
 
-        {placeholders.map((i) => (
-          <div
-            key={i}
-            className="flex-none w-28 h-20 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center text-xs text-gray-500"
-          >
-            학생 {i + 1}
-          </div>
+        {studentParticipants.map((participant) => (
+          <StudentVideoTile key={participant.socketId} participant={participant} />
         ))}
       </div>
     </div>
