@@ -8,11 +8,33 @@ function toAbsoluteUrl(req, path) {
   return `${protocol}://${host}${path.startsWith('/') ? path : '/' + path}`;
 }
 
+// materials를 정규화 (문자열 또는 객체 모두 처리)
+function normalizeMaterial(material) {
+  if (typeof material === 'string') {
+    // 기존 형식: 문자열만 있는 경우
+    return { url: material, originalName: material.split('/').pop() || '' };
+  }
+  if (material && typeof material === 'object') {
+    // 새로운 형식: 객체
+    return {
+      url: material.url || material,
+      originalName: material.originalName || material.url?.split('/').pop() || ''
+    };
+  }
+  return { url: '', originalName: '' };
+}
+
 function convertMaterialsToAbsolute(req, materials) {
   if (!Array.isArray(materials)) {
     return materials;
   }
-  return materials.map(path => toAbsoluteUrl(req, path));
+  return materials.map(material => {
+    const normalized = normalizeMaterial(material);
+    return {
+      url: toAbsoluteUrl(req, normalized.url),
+      originalName: normalized.originalName
+    };
+  });
 }
 
 function convertClassMaterialsToAbsolute(req, classData) {

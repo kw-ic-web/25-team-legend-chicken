@@ -224,12 +224,23 @@ async function handleUploadPdfSplit(req, res) {
     }
 
     const originalPdfUrl = `/uploads/pdfs/${req.file.filename}`;
+    const originalFileName = req.file.originalname || req.file.filename;
     const splitted = await splitPdfIntoPages(req.file.path, { lectureId, classId });
     if (!Array.isArray(lecture.classes[idx].materials)) {
       lecture.classes[idx].materials = [];
     }
-    if (!lecture.classes[idx].materials.includes(originalPdfUrl)) {
-      lecture.classes[idx].materials.push(originalPdfUrl);
+    // materials에 객체 형태로 저장 (기존 문자열과 호환)
+    const materialObj = {
+      url: originalPdfUrl,
+      originalName: originalFileName
+    };
+    // 중복 체크 (URL 기준)
+    const exists = lecture.classes[idx].materials.some(m => {
+      const url = typeof m === 'string' ? m : m.url;
+      return url === originalPdfUrl;
+    });
+    if (!exists) {
+      lecture.classes[idx].materials.push(materialObj);
     }
     await lecture.save();
 
@@ -245,20 +256,42 @@ async function handleUploadPdfSplit(req, res) {
       const page = splitted[i];
       const absolutePdfPath = toAbsolutePath(page.pdfPath);
       let text = "";
+      let imagePath = page.pdfPath; // 기본값: PDF 경로 (이미지 변환 실패 시 사용)
+      
       try {
         const imageAbsolutePath = await convertPdfPageToImage(absolutePdfPath);
+        console.log("[DEBUG] PDF를 이미지로 변환:", {
+          pdfPath: absolutePdfPath,
+          imagePath: imageAbsolutePath,
+        });
+        
+        // 절대 경로를 상대 경로로 변환 (public 경로 기준)
+        // imageAbsolutePath는 절대 경로이므로, uploads 기준으로 변환
+        const path = require("path");
+        const relativeImagePath = path.relative(process.cwd(), imageAbsolutePath).replace(/\\/g, "/");
+        imagePath = relativeImagePath.startsWith("/") ? relativeImagePath : `/${relativeImagePath}`;
+        
         const { text: ocrText } = await extractTextFromImage(imageAbsolutePath);
         text = ocrText || "";
       } catch (e) {
-        console.error("PDF 페이지 OCR 실패, 빈 텍스트로 진행:", e?.message || e);
+        console.error("[DEBUG] PDF 페이지 OCR 실패, 빈 텍스트로 진행:", e?.message || e);
+        console.log("[DEBUG] 이미지 변환 실패, PDF 경로 사용:", page.pdfPath);
         text = "";
+        // 이미지 변환 실패 시 PDF 경로 사용
+        imagePath = page.pdfPath;
       }
+
+      console.log("[DEBUG] WhiteboardPage 생성:", {
+        page_number: basePageNumber + i + 1,
+        image_path: imagePath,
+        pdf_path: page.pdfPath,
+      });
 
       const created = await WhiteboardPage.create({
         lecture_id: lectureId,
         class_id: String(classId),
         page_number: basePageNumber + i + 1,
-        image_path: page.pdfPath,
+        image_path: imagePath,
         text: text,
         pdf_path: page.pdfPath,
         status: "finalized",
@@ -285,6 +318,8 @@ async function handleUploadPdfSplit(req, res) {
       materials_count: lecture.classes[idx].materials.length,
       original_pdf_url: toAbsoluteUrl(req, originalPdfUrl),
       pdf_url: toAbsoluteUrl(req, originalPdfUrl), // 호환성을 위해 유지
+      original_filename: originalFileName,
+      filename: req.file.filename,
     });
   } catch (error) {
     console.error("PDF 분할 업로드 오류:", error);
@@ -327,16 +362,61 @@ router.get(
         filter.status = status;
       }
 
+      console.log("[DEBUG] Whiteboard pages 조회 시작:", {
+        lectureId,
+        classId,
+        filter,
+      });
+
       const pages = await WhiteboardPage.find(filter)
         .sort({ page_number: 1 })
         .select("page_number image_path pdf_path text status createdAt updatedAt")
         .lean();
 
+      console.log("[DEBUG] Whiteboard pages 조회 결과:", {
+        count: pages.length,
+        pages: pages.map(p => ({
+          page_number: p.page_number,
+          image_path: p.image_path,
+          pdf_path: p.pdf_path,
+          status: p.status,
+        })),
+      });
+
+      // 페이지의 image_path와 pdf_path를 절대 URL로 변환
+      const pagesWithAbsoluteUrls = pages.map(page => {
+        const absoluteImagePath = toAbsoluteUrl(req, page.image_path);
+        const absolutePdfPath = toAbsoluteUrl(req, page.pdf_path);
+        console.log("[DEBUG] URL 변환:", {
+          page_number: page.page_number,
+          original_image_path: page.image_path,
+          absolute_image_path: absoluteImagePath,
+          original_pdf_path: page.pdf_path,
+          absolute_pdf_path: absolutePdfPath,
+        });
+        return {
+          ...page,
+          image_path: absoluteImagePath,
+          pdf_path: absolutePdfPath,
+        };
+      });
+
+      console.log("[DEBUG] Whiteboard pages 응답:", {
+        lecture_id: lectureId,
+        class_id: Number(classId),
+        count: pagesWithAbsoluteUrls.length,
+        pages: pagesWithAbsoluteUrls.map(p => ({
+          page_number: p.page_number,
+          image_path: p.image_path,
+          pdf_path: p.pdf_path,
+        })),
+      });
+
       return res.json({
         lecture_id: lectureId,
         class_id: Number(classId),
-        count: pages.length,
-        pages,
+        count: pagesWithAbsoluteUrls.length,
+        pages: pagesWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("화이트보드 페이지 목록 조회 오류:", err);

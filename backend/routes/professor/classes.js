@@ -230,7 +230,7 @@ router.get(
         class_id: parseInt(classId),
         class_title: classData.title,
         pdf_count: pdfsWithAbsoluteUrls.length,
-        pdfs: pdfsWithAbsoluteUrls,
+        pdfs: pdfsWithAbsoluteUrls, // [{ url: "...", originalName: "..." }] 형태
       });
     } catch (err) {
       console.error("PDF 목록 조회 오류:", err);
@@ -422,11 +422,16 @@ router.post(
       }
 
       const pdfUrl = `/uploads/pdfs/${req.file.filename}`;
+      const originalFileName = req.file.originalname || req.file.filename;
 
       if (!lecture.classes[classIndex].materials) {
         lecture.classes[classIndex].materials = [];
       }
-      lecture.classes[classIndex].materials.push(pdfUrl);
+      // materials에 객체 형태로 저장 (기존 문자열과 호환)
+      lecture.classes[classIndex].materials.push({
+        url: pdfUrl,
+        originalName: originalFileName
+      });
 
       await lecture.save();
 
@@ -443,6 +448,7 @@ router.post(
         pdf_url: absolutePdfUrl,
         original_pdf_url: absolutePdfUrl,
         filename: req.file.filename,
+        original_filename: originalFileName,
         materials: materialsWithAbsoluteUrls,
       });
     } catch (err) {
