@@ -15,7 +15,10 @@ router.get(
 
       const lecture = await Lecture.findOne({ lecture_id: lectureId });
       if (!lecture) {
-        return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+        return res.status(404).json({ 
+          success: false,
+          message: "강좌를 찾을 수 없습니다." 
+        });
       }
 
       const isProfessor = user.user_type === "professor" && 
@@ -26,19 +29,26 @@ router.get(
       if (!isProfessor && !isStudent) {
         return res
           .status(403)
-          .json({ message: "해당 강좌에 접근할 수 없습니다." });
+          .json({ 
+            success: false,
+            message: "해당 강좌에 접근할 수 없습니다." 
+          });
       }
 
       const classesWithAbsoluteUrls = convertClassesMaterialsToAbsolute(req, lecture.classes);
 
       res.status(200).json({
+        success: true,
         lecture_id: lecture.lecture_id,
         lecture_name: lecture.name,
         classes: classesWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("클래스 조회 오류:", err);
-      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+      res.status(500).json({ 
+        success: false,
+        message: "서버 오류가 발생했습니다." 
+      });
     }
   }
 );
@@ -50,29 +60,50 @@ router.put(
     try {
       const user = req.user;
       const { lectureId } = req.params;
+      
+      // req.body 검증
+      if (!req.body || typeof req.body !== "object") {
+        return res.status(400).json({ 
+          success: false,
+          message: "요청 본문이 올바르지 않습니다." 
+        });
+      }
+
       const { classes } = req.body;
 
       if (user.user_type !== "professor") {
         return res
           .status(403)
-          .json({ message: "교수만 클래스를 수정할 수 있습니다." });
+          .json({ 
+            success: false,
+            message: "교수만 클래스를 수정할 수 있습니다." 
+          });
       }
 
       const lecture = await Lecture.findOne({ lecture_id: lectureId });
       if (!lecture) {
-        return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+        return res.status(404).json({ 
+          success: false,
+          message: "강좌를 찾을 수 없습니다." 
+        });
       }
 
       if (lecture.professor_id.toString() !== user._id.toString()) {
         return res
           .status(403)
-          .json({ message: "본인의 강좌만 수정할 수 있습니다." });
+          .json({ 
+            success: false,
+            message: "본인의 강좌만 수정할 수 있습니다." 
+          });
       }
 
       if (!classes || !Array.isArray(classes)) {
         return res
           .status(400)
-          .json({ message: "클래스 데이터가 올바르지 않습니다." });
+          .json({ 
+            success: false,
+            message: "클래스 데이터가 올바르지 않습니다." 
+          });
       }
 
       const classIds = classes.map((cls) => cls.id);
@@ -80,7 +111,10 @@ router.put(
       if (classIds.length !== uniqueIds.length) {
         return res
           .status(400)
-          .json({ message: "클래스 ID가 중복됩니다." });
+          .json({ 
+            success: false,
+            message: "클래스 ID가 중복됩니다." 
+          });
       }
 
       lecture.classes = classes;
@@ -89,13 +123,18 @@ router.put(
       const classesWithAbsoluteUrls = convertClassesMaterialsToAbsolute(req, lecture.classes);
 
       res.status(200).json({
+        success: true,
         message: "클래스가 성공적으로 수정되었습니다.",
         lecture_id: lecture.lecture_id,
+        lecture_name: lecture.name,
         classes: classesWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("클래스 수정 오류:", err);
-      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+      res.status(500).json({ 
+        success: false,
+        message: "서버 오류가 발생했습니다." 
+      });
     }
   }
 );
@@ -135,13 +174,17 @@ router.get(
       const classWithAbsoluteUrls = convertClassMaterialsToAbsolute(req, classData);
 
       res.status(200).json({
+        success: true,
         lecture_id: lecture.lecture_id,
         lecture_name: lecture.name,
         class: classWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("클래스 정보 조회 오류:", err);
-      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+      res.status(500).json({ 
+        success: false,
+        message: "서버 오류가 발생했습니다." 
+      });
     }
   }
 );
@@ -181,6 +224,7 @@ router.get(
       const pdfsWithAbsoluteUrls = convertMaterialsToAbsolute(req, classData.materials || []);
 
       res.status(200).json({
+        success: true,
         lecture_id: lecture.lecture_id,
         lecture_name: lecture.name,
         class_id: parseInt(classId),
@@ -190,7 +234,10 @@ router.get(
       });
     } catch (err) {
       console.error("PDF 목록 조회 오류:", err);
-      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+      res.status(500).json({ 
+        success: false,
+        message: "서버 오류가 발생했습니다." 
+      });
     }
   }
 );
@@ -202,23 +249,41 @@ router.post(
     try {
       const user = req.user;
       const { lectureId } = req.params;
+      
+      // req.body 검증
+      if (!req.body || typeof req.body !== "object") {
+        return res.status(400).json({ 
+          success: false,
+          message: "요청 본문이 올바르지 않습니다." 
+        });
+      }
+
       const { title, description, date, materials } = req.body;
 
       if (user.user_type !== "professor") {
         return res
           .status(403)
-          .json({ message: "교수만 클래스를 추가할 수 있습니다." });
+          .json({ 
+            success: false,
+            message: "교수만 클래스를 추가할 수 있습니다." 
+          });
       }
 
       const lecture = await Lecture.findOne({ lecture_id: lectureId });
       if (!lecture) {
-        return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+        return res.status(404).json({ 
+          success: false,
+          message: "강좌를 찾을 수 없습니다." 
+        });
       }
 
       if (lecture.professor_id.toString() !== user._id.toString()) {
         return res
           .status(403)
-          .json({ message: "본인의 강좌에만 클래스를 추가할 수 있습니다." });
+          .json({ 
+            success: false,
+            message: "본인의 강좌에만 클래스를 추가할 수 있습니다." 
+          });
       }
 
       if (!lecture.classes) {
@@ -242,14 +307,22 @@ router.post(
       lecture.classes.push(newClass);
       await lecture.save();
 
+      // URL 변환
+      const classWithAbsoluteUrls = convertClassMaterialsToAbsolute(req, newClass);
+
       res.status(201).json({
+        success: true,
         message: "클래스가 성공적으로 추가되었습니다.",
         lecture_id: lecture.lecture_id,
-        class: newClass,
+        lecture_name: lecture.name,
+        class: classWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("클래스 추가 오류:", err);
-      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+      res.status(500).json({ 
+        success: false,
+        message: "서버 오류가 발생했습니다." 
+      });
     }
   }
 );
@@ -296,8 +369,10 @@ router.delete(
       await lecture.save();
 
       res.status(200).json({
+        success: true,
         message: "클래스가 성공적으로 삭제되었습니다.",
         lecture_id: lecture.lecture_id,
+        lecture_name: lecture.name,
         deleted_class: deletedClass,
       });
     } catch (err) {
@@ -359,17 +434,23 @@ router.post(
       const materialsWithAbsoluteUrls = convertMaterialsToAbsolute(req, lecture.classes[classIndex].materials);
 
       res.status(200).json({
+        success: true,
         message: "PDF가 성공적으로 업로드되었습니다.",
         lecture_id: lecture.lecture_id,
+        lecture_name: lecture.name,
         class_id: parseInt(classId),
         class_title: lecture.classes[classIndex].title,
         pdf_url: absolutePdfUrl,
+        original_pdf_url: absolutePdfUrl,
         filename: req.file.filename,
         materials: materialsWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("PDF 업로드 오류:", err);
-      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+      res.status(500).json({ 
+        success: false,
+        message: "서버 오류가 발생했습니다." 
+      });
     }
   }
 );

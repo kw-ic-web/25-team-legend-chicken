@@ -277,11 +277,14 @@ async function handleUploadPdfSplit(req, res) {
       success: true,
       message: "PDF가 업로드되었고, 내부적으로 페이지별 분할 저장되었습니다.",
       lecture_id: lecture.lecture_id,
+      lecture_name: lecture.name,
       class_id: Number(classId),
+      class_title: lecture.classes[idx].title,
       total_pages: splitted.length,
       pages: createdPages,
       materials_count: lecture.classes[idx].materials.length,
       original_pdf_url: toAbsoluteUrl(req, originalPdfUrl),
+      pdf_url: toAbsoluteUrl(req, originalPdfUrl), // 호환성을 위해 유지
     });
   } catch (error) {
     console.error("PDF 분할 업로드 오류:", error);
