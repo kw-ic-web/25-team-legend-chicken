@@ -8,8 +8,10 @@ export const getBaseUrl = (): string => {
   return `http://${base}`;
 };
 
-// 로그아웃 처리 함수
-function handleLogout() {
+// 토큰 만료 시 처리 함수
+function handleTokenExpiration() {
+  // 모든 인증 관련 데이터 정리
+  localStorage.removeItem("lecq.auth");
   localStorage.removeItem("lecq.token");
   localStorage.removeItem("lecq.refreshToken");
   localStorage.removeItem("lecq.tokenExpiresAt");
@@ -116,90 +118,15 @@ export async function apiFetch<T>(
   const text = await resp.text();
   const data = text ? (JSON.parse(text) as T) : ({} as T);
   
-  // 토큰 만료 또는 인증 실패 처리
-  if (resp.status === 401 || resp.status === 419) {
-    // 원래 요청에 Authorization 헤더가 있었는지 확인
-    let hasAuthHeader = false;
-    if (headers) {
-      if (headers instanceof Headers) {
-        hasAuthHeader = headers.has("Authorization");
-      } else if (typeof headers === "object") {
-        hasAuthHeader = "Authorization" in headers;
-      }
-    }
-    
-    // 리프레시 토큰으로 갱신 시도
-    const refreshed = await tryRefreshToken();
-    if (refreshed) {
-      // 토큰 갱신 성공 시 원래 요청 재시도 (Authorization 헤더가 있었던 경우만)
-      if (hasAuthHeader) {
-        const newToken = localStorage.getItem("lecq.token");
-        if (newToken) {
-          // Headers 객체 또는 일반 객체 처리
-          let newHeaders: HeadersInit;
-          if (headers instanceof Headers) {
-            const headersObj = new Headers(headers);
-            headersObj.set("Authorization", `Bearer ${newToken}`);
-            newHeaders = headersObj;
-          } else if (headers && typeof headers === "object") {
-            newHeaders = {
-              ...(headers as Record<string, string>),
-              Authorization: `Bearer ${newToken}`,
-            };
-          } else {
-            newHeaders = {
-              Authorization: `Bearer ${newToken}`,
-            };
-          }
-          
-          // Headers 객체인 경우와 일반 객체인 경우 분리 처리
-          let retryHeaders: HeadersInit;
-          if (newHeaders instanceof Headers) {
-            if (!isFormData) {
-              newHeaders.set("Content-Type", "application/json");
-            }
-            retryHeaders = newHeaders;
-          } else {
-            retryHeaders = {
-              ...(isFormData ? {} : { "Content-Type": "application/json" }),
-              ...newHeaders,
-            };
-          }
-          
-          const retryResp = await fetch(url, {
-            ...rest,
-            headers: retryHeaders,
-            body,
-          });
-          const retryText = await retryResp.text();
-          const retryData = retryText
-            ? (JSON.parse(retryText) as T)
-            : ({} as T);
-          if (!retryResp.ok) {
-            const message =
-              (retryData as unknown as { message?: string })?.message ||
-              `Request failed: ${retryResp.status}`;
-            throw new Error(message);
-          }
-          return retryData;
-        }
-      } else {
-        // Authorization 헤더가 없었던 경우 원래 에러 반환
-        const message =
-          (data as unknown as { message?: string })?.message ||
-          `Request failed: ${resp.status}`;
-        throw new Error(message);
-      }
-    } else {
-      // 토큰 갱신 실패 시 로그아웃 처리
-      handleLogout();
-      const message =
-        (data as unknown as { message?: string })?.message ||
-        "인증이 만료되었습니다. 다시 로그인해주세요.";
-      throw new Error(message);
+  // 토큰 만료 또는 인증 오류 처리
+  if (resp.status === 419 || resp.status === 401) {
+    // 로그인/회원가입 관련 API는 제외
+    const isAuthPath = path.includes("/login") || path.includes("/register") || path.includes("/refresh");
+    if (!isAuthPath) {
+      handleTokenExpiration();
     }
   }
-
+  
   if (!resp.ok) {
     const message =
       (data as unknown as { message?: string })?.message ||

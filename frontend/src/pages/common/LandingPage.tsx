@@ -21,6 +21,16 @@ const LandingPage: React.FC = () => {
   const { user, login } = useAuth();
 
   useEffect(() => {
+    // 토큰이 있는지 확인 (토큰이 없으면 로그인 상태가 아님)
+    const token = localStorage.getItem("lecq.token");
+    if (!token) {
+      // 토큰이 없으면 인증 정보도 정리
+      if (user) {
+        localStorage.removeItem("lecq.auth");
+      }
+      return;
+    }
+
     if (user) {
       const redirectPath =
         user.role === "professor"
