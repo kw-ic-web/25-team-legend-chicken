@@ -132,29 +132,32 @@ const LiveWatching: React.FC = () => {
         (p) => p.role === "professor"
       );
 
-      // 교수자의 화면 공유 스트림 찾기 (screen 트랙이 있는 것)
+      // 교수자의 화면 공유 스트림 찾기 (screen 트랙이 있는 것만)
       let screenShareStream = professorParticipants.find((p) => {
         const videoTracks = p.stream.getVideoTracks();
         return videoTracks.some((track) => {
-          const settings = track.getSettings();
-          return (
-            track.label === "screen" ||
-            track.label.includes("screen") ||
-            track.label.includes("Screen") ||
-            settings.displaySurface === "monitor" ||
-            settings.displaySurface === "window" ||
-            settings.displaySurface === "browser"
-          );
+          try {
+            const settings = track.getSettings();
+            return (
+              track.label === "screen" ||
+              track.label.includes("screen") ||
+              track.label.includes("Screen") ||
+              settings.displaySurface === "monitor" ||
+              settings.displaySurface === "window" ||
+              settings.displaySurface === "browser"
+            );
+          } catch {
+            return (
+              track.label === "screen" ||
+              track.label.includes("screen") ||
+              track.label.includes("Screen")
+            );
+          }
         });
       })?.stream;
 
-      // 화면 공유 스트림이 없으면 교수자의 첫 번째 스트림 사용
-      if (!screenShareStream && professorParticipants.length > 0) {
-        screenShareStream = professorParticipants[0]?.stream;
-      }
-
-      // 교수자 스트림이 없으면 첫 번째 스트림 사용
-      const streamToUse = screenShareStream || remoteParticipants[0]?.stream;
+      // 화면 공유 스트림만 사용 (카메라는 사용하지 않음)
+      const streamToUse = screenShareStream;
       
       if (streamToUse && videoRef.current) {
         console.log("[LiveWatching] Setting video srcObject", streamToUse);
@@ -347,7 +350,13 @@ const LiveWatching: React.FC = () => {
 
   // 채팅 메시지 조회 및 Socket.io 연결
   useEffect(() => {
-    if (!lectureInfo) return;
+    if (!lectureInfo || !lectureInfo.liveId) return;
+
+    // 기존 소켓 연결 정리
+    if (chatSocketRef.current) {
+      chatSocketRef.current.disconnect();
+      chatSocketRef.current = null;
+    }
 
     // 기존 메시지 조회
     const loadMessages = async () => {
@@ -376,15 +385,25 @@ const LiveWatching: React.FC = () => {
     // Socket.io 연결
     const baseUrl = getBaseUrl();
     const token = localStorage.getItem("lecq.token");
+    
+    if (!token) {
+      console.warn("[LiveWatching] No token found, skipping socket connection");
+      return;
+    }
+
     const socket = io(baseUrl, {
       transports: ["websocket", "polling"],
       withCredentials: true,
-      auth: token ? { token } : undefined,
+      auth: { token },
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
     });
     chatSocketRef.current = socket;
 
-    // 라이브 룸 입장
+    // 연결 성공 시
     socket.on("connect", () => {
+      console.log("[LiveWatching] Socket connected:", socket.id);
       socket.emit("live:join", {
         lecture_id: lectureInfo.lectureId,
         class_id: lectureInfo.classId,
@@ -392,6 +411,33 @@ const LiveWatching: React.FC = () => {
         role: "student",
         user_id: user?.id,
       });
+    });
+
+    // 연결 에러 핸들링
+    socket.on("connect_error", (error) => {
+      console.error("[LiveWatching] Socket connect error:", error);
+    });
+
+    // 재연결 시도 중
+    socket.on("reconnect_attempt", (attemptNumber) => {
+      console.log("[LiveWatching] Reconnection attempt:", attemptNumber);
+    });
+
+    // 재연결 성공
+    socket.on("reconnect", (attemptNumber) => {
+      console.log("[LiveWatching] Reconnected after", attemptNumber, "attempts");
+      socket.emit("live:join", {
+        lecture_id: lectureInfo.lectureId,
+        class_id: lectureInfo.classId,
+        live_id: lectureInfo.liveId ?? null,
+        role: "student",
+        user_id: user?.id,
+      });
+    });
+
+    // 재연결 실패
+    socket.on("reconnect_failed", () => {
+      console.error("[LiveWatching] Reconnection failed");
     });
 
     // 실시간 메시지 수신
@@ -415,6 +461,11 @@ const LiveWatching: React.FC = () => {
     socket.on("chat:message", handleChatMessage);
 
     return () => {
+      socket.off("connect");
+      socket.off("connect_error");
+      socket.off("reconnect_attempt");
+      socket.off("reconnect");
+      socket.off("reconnect_failed");
       socket.off("chat:message", handleChatMessage);
       socket.disconnect();
       chatSocketRef.current = null;
