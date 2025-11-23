@@ -1,14 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { VideoOff } from "lucide-react";
+import type { RemoteParticipant } from "../../../hooks/useLiveWebRTC";
 
 interface ParticipantStripProps {
   isCameraOn: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  remoteParticipants?: RemoteParticipant[];
 }
 
 const ParticipantStrip: React.FC<ParticipantStripProps> = ({
   isCameraOn,
   videoRef,
+  remoteParticipants = [],
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -41,6 +44,64 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
     container.scrollBy({ left: delta, behavior: "smooth" });
   };
 
+  // 학생 참여자 카메라 컴포넌트
+  const StudentVideoTile: React.FC<{ participant: RemoteParticipant }> = ({
+    participant,
+  }) => {
+    const studentVideoRef = useRef<HTMLVideoElement | null>(null);
+
+    useEffect(() => {
+      if (studentVideoRef.current && participant.stream) {
+        // 학생의 카메라 스트림 찾기 (화면 공유가 아닌 카메라)
+        const videoTracks = participant.stream.getVideoTracks();
+        const cameraTrack = videoTracks.find(
+          (track) => track.kind === "video" && track.label !== "screen"
+        );
+
+        if (cameraTrack && studentVideoRef.current) {
+          const cameraStream = new MediaStream([cameraTrack]);
+          if (participant.stream.getAudioTracks().length > 0) {
+            cameraStream.addTrack(participant.stream.getAudioTracks()[0]);
+          }
+          studentVideoRef.current.srcObject = cameraStream;
+          studentVideoRef.current.play().catch(console.error);
+        } else if (studentVideoRef.current && videoTracks.length > 0) {
+          studentVideoRef.current.srcObject = participant.stream;
+          studentVideoRef.current.play().catch(console.error);
+        }
+      }
+    }, [participant.stream]);
+
+    const hasVideo = studentVideoRef.current?.srcObject !== null;
+
+    return (
+      <div className="min-w-[120px] w-28 h-20 bg-gray-200 rounded-xl overflow-hidden flex items-center justify-center relative">
+        <video
+          ref={studentVideoRef}
+          autoPlay
+          muted
+          playsInline
+          className={`w-full h-full object-cover transition-opacity duration-200 ${
+            hasVideo ? "opacity-100 visible" : "opacity-0 invisible"
+          }`}
+        />
+        {!hasVideo && (
+          <div className="absolute inset-0 w-full h-full bg-gray-300 flex items-center justify-center">
+            <VideoOff className="w-6 h-6 text-gray-400" />
+          </div>
+        )}
+        <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded text-white">
+          {participant.userId || "학생"}
+        </div>
+      </div>
+    );
+  };
+
+  // 학생 참여자 필터링 (role이 student인 것만)
+  const studentParticipants = remoteParticipants.filter(
+    (p) => p.role === "student"
+  );
+
   const tiles = [
     {
       id: "professor",
@@ -61,17 +122,28 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
               <VideoOff className="w-6 h-6 text-gray-400" />
             </div>
           )}
+          <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded text-white">
+            교수자
+          </div>
         </div>
       ),
     },
-    ...Array.from({ length: 10 }).map((_v, idx) => ({
-      id: `placeholder-${idx}`,
-      node: (
-        <div className="min-w-[96px] w-24 h-18 bg-gray-100/70 rounded-xl overflow-hidden flex items-center justify-center border border-gray-200/70">
-          <VideoOff className="w-4 h-4 text-gray-300" />
-        </div>
-      ),
+    // 학생 카메라 추가
+    ...studentParticipants.map((participant) => ({
+      id: `student-${participant.socketId}`,
+      node: <StudentVideoTile key={participant.socketId} participant={participant} />,
     })),
+    // 플레이스홀더 (최대 10개까지)
+    ...Array.from({ length: Math.max(0, 10 - studentParticipants.length) }).map(
+      (_v, idx) => ({
+        id: `placeholder-${idx}`,
+        node: (
+          <div className="min-w-[96px] w-24 h-18 bg-gray-100/70 rounded-xl overflow-hidden flex items-center justify-center border border-gray-200/70">
+            <VideoOff className="w-4 h-4 text-gray-300" />
+          </div>
+        ),
+      })
+    ),
   ];
 
   return (
