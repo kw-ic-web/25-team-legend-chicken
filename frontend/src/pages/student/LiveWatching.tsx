@@ -760,6 +760,7 @@ const LiveWatching: React.FC = () => {
               videoRef={professorVideoRef}
               studentVideoRef={studentVideoRef}
               isStudentCameraOn={isStudentCameraOn}
+              remoteParticipants={remoteParticipants}
             />
 
             {/* 강의 콘텐츠(화면 공유 영역) - 컨트롤 제거 */}
