@@ -99,6 +99,7 @@ export function useLiveWebRTC({
     const participants: RemoteParticipant[] = [];
     Array.from(remoteStreamRef.current.entries()).forEach(([id, streams]) => {
       const meta = metadataRef.current.get(id);
+      console.log("[WebRTC] updateRemoteParticipants: socketId:", id, "metadata:", meta, "streams count:", streams.length);
       // 각 스트림을 별도의 participant로 추가
       streams.forEach((stream) => {
         participants.push({
@@ -109,6 +110,7 @@ export function useLiveWebRTC({
         });
       });
     });
+    console.log("[WebRTC] updateRemoteParticipants: 총 participants 수:", participants.length);
     setRemoteParticipants(participants);
   }, []);
 
@@ -245,15 +247,20 @@ export function useLiveWebRTC({
           return;
         }
         console.log("[WebRTC] ontrack: stream found, tracks:", stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState, label: t.label })));
+        console.log("[WebRTC] ontrack: current metadata for", remoteSocketId, ":", metadataRef.current.get(remoteSocketId));
         
         // 여러 스트림 저장 (카메라와 화면 공유를 모두 저장)
         const existingStreams = remoteStreamRef.current.get(remoteSocketId) || [];
         // 중복 스트림 체크 (stream ID로)
         const streamId = stream.id;
         if (!existingStreams.some(s => s.id === streamId)) {
+          console.log("[WebRTC] ontrack: 새 스트림 추가:", streamId, "기존 스트림 수:", existingStreams.length);
           existingStreams.push(stream);
           remoteStreamRef.current.set(remoteSocketId, existingStreams);
           updateRemoteParticipants();
+          console.log("[WebRTC] ontrack: 스트림 추가 후 metadata:", metadataRef.current.get(remoteSocketId));
+        } else {
+          console.log("[WebRTC] ontrack: 중복 스트림 무시:", streamId);
         }
       };
 

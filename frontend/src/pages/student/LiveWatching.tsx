@@ -27,6 +27,7 @@ const LiveWatching: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const professorVideoRef = useRef<HTMLVideoElement>(null);
   const studentVideoRef = useRef<HTMLVideoElement>(null);
   const studentStreamRef = useRef<MediaStream | null>(null);
   const [isLive, setIsLive] = useState(false);
@@ -121,87 +122,341 @@ const LiveWatching: React.FC = () => {
     autoInitiate: false, // 학생은 offer를 보내지 않음
   });
 
-  // 원격 스트림을 videoRef에 연결 (화면 공유 우선)
+  // 원격 스트림을 videoRef에 연결 (화면 공유만)
   useEffect(() => {
+    console.log("[LiveWatching] ===== 화면 공유 스트림 찾기 시작 =====");
     console.log("[LiveWatching] remoteParticipants:", remoteParticipants);
     console.log("[LiveWatching] remoteParticipants.length:", remoteParticipants.length);
+    console.log("[LiveWatching] remoteParticipants 상세:", remoteParticipants.map(p => ({
+      socketId: p.socketId,
+      role: p.role,
+      userId: p.userId,
+      streamId: p.stream.id,
+      videoTracks: p.stream.getVideoTracks().length,
+      audioTracks: p.stream.getAudioTracks().length
+    })));
+    console.log("[LiveWatching] videoRef.current:", videoRef.current);
     
     if (remoteParticipants.length > 0 && videoRef.current) {
-      // 교수자의 스트림 찾기
+      // 교수자의 스트림 찾기 (role이 professor이거나 role이 없는 경우도 포함)
       const professorParticipants = remoteParticipants.filter(
-        (p) => p.role === "professor"
+        (p) => p.role === "professor" || !p.role
       );
 
+      console.log("[LiveWatching] 교수자 참여자 수 (role 포함):", professorParticipants.length);
+
       // 교수자의 화면 공유 스트림 찾기 (screen 트랙이 있는 것만)
-      let screenShareStream = professorParticipants.find((p) => {
-        const videoTracks = p.stream.getVideoTracks();
-        return videoTracks.some((track) => {
+      let screenShareStream: MediaStream | null = null;
+      let cameraStream: MediaStream | null = null;
+      
+      for (const participant of professorParticipants) {
+        const stream = participant.stream;
+        const videoTracks = stream.getVideoTracks();
+        
+        console.log("[LiveWatching] 스트림 확인:", {
+          streamId: stream.id,
+          videoTracksCount: videoTracks.length,
+          tracks: videoTracks.map(t => ({
+            label: t.label,
+            kind: t.kind,
+            enabled: t.enabled,
+            readyState: t.readyState
+          }))
+        });
+        
+        if (videoTracks.length === 0) continue;
+
+        // 화면 공유 트랙인지 확인
+        let hasScreenTrack = false;
+        let trackDetails: any = null;
+        
+        for (const track of videoTracks) {
           try {
             const settings = track.getSettings();
-            return (
-              track.label === "screen" ||
-              track.label.includes("screen") ||
-              track.label.includes("Screen") ||
-              settings.displaySurface === "monitor" ||
-              settings.displaySurface === "window" ||
-              settings.displaySurface === "browser"
+            const label = track.label || "";
+            const displaySurface = settings.displaySurface;
+            const width = settings.width;
+            const height = settings.height;
+            
+            trackDetails = {
+              label: label,
+              displaySurface: displaySurface,
+              width: width,
+              height: height,
+              allSettings: settings
+            };
+            
+            // 화면 공유 트랙 판별 조건
+            const isScreen = (
+              label.toLowerCase().includes("screen") ||
+              label.toLowerCase().includes("화면") ||
+              displaySurface === "monitor" ||
+              displaySurface === "window" ||
+              displaySurface === "browser" ||
+              // 일반 카메라보다 큰 해상도면 화면 공유로 간주
+              (width && height && width > 1280 && height > 720)
             );
-          } catch {
-            return (
-              track.label === "screen" ||
-              track.label.includes("screen") ||
-              track.label.includes("Screen")
-            );
+            
+            console.log("[LiveWatching] 트랙 확인 (화면 공유):", {
+              ...trackDetails,
+              isScreen: isScreen
+            });
+            
+            if (isScreen) {
+              hasScreenTrack = true;
+              break;
+            }
+          } catch (e) {
+            const label = track.label || "";
+            const isScreen = label.toLowerCase().includes("screen") || label.toLowerCase().includes("화면");
+            console.log("[LiveWatching] 트랙 확인 (예외, 화면 공유):", {
+              label: label,
+              isScreen: isScreen,
+              error: e
+            });
+            if (isScreen) {
+              hasScreenTrack = true;
+              break;
+            }
           }
-        });
-      })?.stream;
+        }
+
+        // 화면 공유 트랙이 있는 스트림만 사용
+        if (hasScreenTrack) {
+          console.log("[LiveWatching] 화면 공유 스트림 발견:", stream.id, trackDetails);
+          screenShareStream = stream;
+        } else {
+          // 화면 공유가 아니면 카메라로 간주 (나중에 교수자 카메라로 사용)
+          if (!cameraStream) {
+            cameraStream = stream;
+            console.log("[LiveWatching] 카메라 스트림으로 분류:", stream.id);
+          }
+        }
+      }
+      
+      // 화면 공유 스트림이 없으면, 교수자 카메라가 아닌 다른 스트림 사용
+      if (!screenShareStream) {
+        if (professorParticipants.length > 1 && cameraStream) {
+          // 이미 카메라로 분류된 스트림이 있으면, 다른 스트림을 화면 공유로 사용
+          const otherStream = professorParticipants.find(p => p.stream.id !== cameraStream.id)?.stream;
+          if (otherStream) {
+            console.log("[LiveWatching] 화면 공유 스트림을 찾지 못했지만 다른 스트림 사용:", otherStream.id);
+            screenShareStream = otherStream;
+          }
+        } else if (professorParticipants.length === 1) {
+          // 스트림이 1개만 있으면, 화면 공유로 사용 (카메라가 아닌 것으로 간주)
+          console.log("[LiveWatching] 스트림이 1개만 있어서 화면 공유로 사용:", professorParticipants[0].stream.id);
+          screenShareStream = professorParticipants[0].stream;
+        }
+      }
+
+      console.log("[LiveWatching] 최종 화면 공유 스트림:", screenShareStream ? screenShareStream.id : "없음");
 
       // 화면 공유 스트림만 사용 (카메라는 사용하지 않음)
-      const streamToUse = screenShareStream;
-      
-      if (streamToUse && videoRef.current) {
-        console.log("[LiveWatching] Setting video srcObject", streamToUse);
-        videoRef.current.srcObject = streamToUse;
+      if (screenShareStream && videoRef.current) {
+        // 현재 연결된 스트림과 다를 때만 업데이트
+        console.log("[LiveWatching] 화면 공유 스트림 찾음, 연결 시도:", {
+          streamId: screenShareStream.id,
+          currentSrcObject: videoRef.current.srcObject ? (videoRef.current.srcObject as MediaStream).id : "null",
+          videoTracks: screenShareStream.getVideoTracks().length,
+          audioTracks: screenShareStream.getAudioTracks().length
+        });
         
-        // 비디오 재생 시도 (사용자 상호작용 필요 시 처리)
+        if (videoRef.current.srcObject !== screenShareStream) {
+          console.log("[LiveWatching] Setting video srcObject (화면 공유)", screenShareStream.id);
+          videoRef.current.srcObject = screenShareStream;
+          
+          // 즉시 확인
+          setTimeout(() => {
+            console.log("[LiveWatching] 연결 후 확인:", {
+              srcObject: videoRef.current?.srcObject ? (videoRef.current.srcObject as MediaStream).id : "null"
+            });
+          }, 100);
+        } else {
+          console.log("[LiveWatching] 이미 같은 스트림이 연결되어 있음");
+        }
+        
+        // 비디오 재생 시도
         const playVideo = async () => {
           try {
             if (videoRef.current) {
               await videoRef.current.play();
-              console.log("[LiveWatching] Video playing successfully");
+              console.log("[LiveWatching] 화면 공유 재생 성공");
+              setIsLive(true);
             }
           } catch (playError) {
-            console.warn("[LiveWatching] Auto-play prevented, user interaction required:", playError);
-            // 사용자 상호작용이 필요한 경우, 비디오는 로드되지만 재생되지 않음
-            // 사용자가 클릭하면 재생됨
+            console.warn("[LiveWatching] Auto-play prevented:", playError);
             if (videoRef.current) {
-              videoRef.current.muted = true; // 음소거하면 자동 재생 가능할 수 있음
+              videoRef.current.muted = true;
               try {
                 await videoRef.current.play();
-                console.log("[LiveWatching] Video playing with muted");
+                console.log("[LiveWatching] 화면 공유 재생 성공 (muted)");
+                setIsLive(true);
               } catch (mutedError) {
                 console.warn("[LiveWatching] Even muted play failed:", mutedError);
+                setIsLive(false);
               }
             }
           }
         };
         
         videoRef.current.onloadedmetadata = () => {
-          console.log("[LiveWatching] Video metadata loaded, attempting to play...");
+          console.log("[LiveWatching] 화면 공유 메타데이터 로드됨");
           playVideo();
         };
         
         // 이미 로드되어 있으면 바로 재생 시도
         if (videoRef.current.readyState >= 2) {
+          console.log("[LiveWatching] 비디오 이미 로드됨, 바로 재생 시도");
           playVideo();
         }
-        
-        setIsLive(true);
+      } else {
+        // 화면 공유 스트림이 없으면 빈 화면
+        console.log("[LiveWatching] 화면 공유 스트림 없음, 비우기");
+        if (videoRef.current && videoRef.current.srcObject) {
+          videoRef.current.srcObject = null;
+        }
+        setIsLive(false);
       }
-    } else if (videoRef.current && remoteParticipants.length === 0) {
-      console.log("[LiveWatching] No remote participants, clearing video");
-      videoRef.current.srcObject = null;
-      setIsLive(false);
+    } else {
+      if (remoteParticipants.length === 0) {
+        console.log("[LiveWatching] 원격 참여자 없음");
+      }
+      if (!videoRef.current) {
+        console.log("[LiveWatching] videoRef.current 없음");
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+        setIsLive(false);
+      }
+    }
+  }, [remoteParticipants]);
+
+  // 교수자 카메라 스트림을 professorVideoRef에 연결
+  useEffect(() => {
+    console.log("[LiveWatching] 교수자 카메라 스트림 찾기 시작");
+    
+    if (remoteParticipants.length > 0 && professorVideoRef.current) {
+      // 교수자의 스트림 찾기 (role이 professor이거나 role이 없는 경우도 포함)
+      const professorParticipants = remoteParticipants.filter(
+        (p) => p.role === "professor" || !p.role
+      );
+
+      console.log("[LiveWatching] 교수자 참여자 수 (카메라, role 포함):", professorParticipants.length);
+
+      // 교수자의 카메라 스트림 찾기 (화면 공유가 아닌 것)
+      // 먼저 화면 공유 스트림을 찾아서 제외
+      let professorCameraStream: MediaStream | null = null;
+      let screenShareStreamIds = new Set<string>();
+      
+      // 먼저 화면 공유 스트림 ID 수집
+      for (const participant of professorParticipants) {
+        const stream = participant.stream;
+        const videoTracks = stream.getVideoTracks();
+        
+        if (videoTracks.length === 0) continue;
+
+        const hasScreenTrack = videoTracks.some((track) => {
+          try {
+            const settings = track.getSettings();
+            const label = track.label || "";
+            const displaySurface = settings.displaySurface;
+            const width = settings.width;
+            const height = settings.height;
+            
+            const isScreen = (
+              label.toLowerCase().includes("screen") ||
+              label.toLowerCase().includes("화면") ||
+              displaySurface === "monitor" ||
+              displaySurface === "window" ||
+              displaySurface === "browser" ||
+              (width && height && width > 1280 && height > 720)
+            );
+            
+            return isScreen;
+          } catch {
+            const label = track.label || "";
+            return label.toLowerCase().includes("screen") || label.toLowerCase().includes("화면");
+          }
+        });
+
+        if (hasScreenTrack) {
+          screenShareStreamIds.add(stream.id);
+        }
+      }
+      
+      // 화면 공유가 아닌 스트림을 카메라로 사용
+      for (const participant of professorParticipants) {
+        const stream = participant.stream;
+        
+        if (screenShareStreamIds.has(stream.id)) {
+          console.log("[LiveWatching] 화면 공유 스트림 무시 (카메라용):", stream.id);
+          continue;
+        }
+        
+        console.log("[LiveWatching] 교수자 카메라 스트림 발견:", stream.id);
+        professorCameraStream = stream;
+        break;
+      }
+
+      console.log("[LiveWatching] 최종 교수자 카메라 스트림:", professorCameraStream ? professorCameraStream.id : "없음");
+
+      if (professorCameraStream && professorVideoRef.current) {
+        // 현재 연결된 스트림과 다를 때만 업데이트
+        console.log("[LiveWatching] 교수자 카메라 스트림 찾음, 연결 시도:", {
+          streamId: professorCameraStream.id,
+          currentSrcObject: professorVideoRef.current.srcObject ? (professorVideoRef.current.srcObject as MediaStream).id : "null",
+          videoTracks: professorCameraStream.getVideoTracks().length,
+          audioTracks: professorCameraStream.getAudioTracks().length
+        });
+        
+        if (professorVideoRef.current.srcObject !== professorCameraStream) {
+          console.log("[LiveWatching] Setting professorVideoRef srcObject (카메라)", professorCameraStream.id);
+          professorVideoRef.current.srcObject = professorCameraStream;
+          
+          // 즉시 확인
+          setTimeout(() => {
+            console.log("[LiveWatching] 교수자 카메라 연결 후 확인:", {
+              srcObject: professorVideoRef.current?.srcObject ? (professorVideoRef.current.srcObject as MediaStream).id : "null"
+            });
+          }, 100);
+        } else {
+          console.log("[LiveWatching] 교수자 카메라 이미 같은 스트림이 연결되어 있음");
+        }
+        
+        const playVideo = async () => {
+          try {
+            if (professorVideoRef.current) {
+              await professorVideoRef.current.play();
+              console.log("[LiveWatching] 교수자 카메라 재생 성공");
+            }
+          } catch (error) {
+            console.error("[LiveWatching] 교수자 카메라 재생 실패:", error);
+          }
+        };
+
+        professorVideoRef.current.onloadedmetadata = () => {
+          console.log("[LiveWatching] 교수자 카메라 메타데이터 로드됨");
+          playVideo();
+        };
+
+        if (professorVideoRef.current.readyState >= 2) {
+          playVideo();
+        }
+      } else if (professorVideoRef.current) {
+        console.log("[LiveWatching] 교수자 카메라 스트림 없음, 비우기");
+        professorVideoRef.current.srcObject = null;
+      }
+    } else {
+      if (remoteParticipants.length === 0) {
+        console.log("[LiveWatching] 원격 참여자 없음 (교수자 카메라)");
+      }
+      if (!professorVideoRef.current) {
+        console.log("[LiveWatching] professorVideoRef.current 없음");
+      }
+      if (professorVideoRef.current) {
+        professorVideoRef.current.srcObject = null;
+      }
     }
   }, [remoteParticipants]);
 
@@ -502,6 +757,7 @@ const LiveWatching: React.FC = () => {
 
             {/* 상단 참여자(웹캠) 스트립 */}
             <StudentParticipantStrip
+              videoRef={professorVideoRef}
               studentVideoRef={studentVideoRef}
               isStudentCameraOn={isStudentCameraOn}
             />
@@ -511,7 +767,6 @@ const LiveWatching: React.FC = () => {
               <StudentScreenArea
                 isLive={isLive}
                 videoRef={videoRef}
-                remoteParticipants={remoteParticipants}
                 statusText={
                   isLoading
                     ? "로딩 중..."
@@ -671,22 +926,22 @@ const LiveWatching: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={questionText}
-                    onChange={(e) => setQuestionText(e.target.value)}
-                    placeholder="질문을 입력하세요"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    onKeyDown={(e) => e.key === "Enter" && handleSubmitQuestion()}
-                  />
-                  <button
-                    onClick={handleSubmitQuestion}
-                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={questionText}
+                  onChange={(e) => setQuestionText(e.target.value)}
+                  placeholder="질문을 입력하세요"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  onKeyDown={(e) => e.key === "Enter" && handleSubmitQuestion()}
+                />
+                <button
+                  onClick={handleSubmitQuestion}
+                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
               )}
             </div>
           </div>
