@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Send } from "lucide-react";
+import { io, Socket } from "socket.io-client";
+import { getBaseUrl } from "../../api/auth/client";
 import StudentParticipantStrip from "../../components/live/student/StudentParticipantStrip";
 import StudentScreenArea from "../../components/live/student/StudentScreenArea";
 import StudentLiveControls from "../../components/live/student/StudentLiveControls";
@@ -8,6 +10,11 @@ import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
 import { useAuth } from "../../contexts/AuthContext";
 import { getParticipateInfo } from "../../api/student";
 import Toast from "../../components/common/Toast";
+import {
+  sendChatMessage,
+  getChatMessages,
+  type ChatMessage,
+} from "../../api/chat";
 
 interface Question {
   id: number;
@@ -42,10 +49,14 @@ const LiveWatching: React.FC = () => {
   const classIdParam = searchParams.get("classId");
   const classId = classIdParam ? Number(classIdParam) : null;
 
-  const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
+  const [activeTab, setActiveTab] = useState<"chat" | "questions">("chat");
   const [questionText, setQuestionText] = useState("");
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const chatSocketRef = useRef<Socket | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // 학생의 로컬 스트림 (카메라/마이크)
   const [studentLocalStream, setStudentLocalStream] = useState<MediaStream | null>(null);
@@ -110,22 +121,40 @@ const LiveWatching: React.FC = () => {
     autoInitiate: false, // 학생은 offer를 보내지 않음
   });
 
-  // 원격 스트림을 videoRef에 연결
+  // 원격 스트림을 videoRef에 연결 (화면 공유 우선)
   useEffect(() => {
     console.log("[LiveWatching] remoteParticipants:", remoteParticipants);
     console.log("[LiveWatching] remoteParticipants.length:", remoteParticipants.length);
     
     if (remoteParticipants.length > 0 && videoRef.current) {
-      // 교수자의 스트림 찾기 (화면 공유 또는 카메라)
-      const professorStream = remoteParticipants.find(
+      // 교수자의 스트림 찾기
+      const professorParticipants = remoteParticipants.filter(
         (p) => p.role === "professor"
-      )?.stream;
+      );
 
-      console.log("[LiveWatching] professorStream found:", !!professorStream);
-      console.log("[LiveWatching] All participants:", remoteParticipants.map(p => ({ role: p.role, hasStream: !!p.stream, socketId: p.socketId })));
+      // 교수자의 화면 공유 스트림 찾기 (screen 트랙이 있는 것)
+      let screenShareStream = professorParticipants.find((p) => {
+        const videoTracks = p.stream.getVideoTracks();
+        return videoTracks.some((track) => {
+          const settings = track.getSettings();
+          return (
+            track.label === "screen" ||
+            track.label.includes("screen") ||
+            track.label.includes("Screen") ||
+            settings.displaySurface === "monitor" ||
+            settings.displaySurface === "window" ||
+            settings.displaySurface === "browser"
+          );
+        });
+      })?.stream;
 
-      // 교수자 스트림이 있으면 사용, 없으면 첫 번째 스트림 사용
-      const streamToUse = professorStream || remoteParticipants[0]?.stream;
+      // 화면 공유 스트림이 없으면 교수자의 첫 번째 스트림 사용
+      if (!screenShareStream && professorParticipants.length > 0) {
+        screenShareStream = professorParticipants[0]?.stream;
+      }
+
+      // 교수자 스트림이 없으면 첫 번째 스트림 사용
+      const streamToUse = screenShareStream || remoteParticipants[0]?.stream;
       
       if (streamToUse && videoRef.current) {
         console.log("[LiveWatching] Setting video srcObject", streamToUse);
@@ -200,6 +229,31 @@ const LiveWatching: React.FC = () => {
     ]);
     setQuestionText("");
   };
+
+  const handleSendChatMessage = useCallback(async () => {
+    if (!chatMessage.trim() || !lectureInfo) {
+      return;
+    }
+
+    try {
+      await sendChatMessage({
+        lecture_id: lectureInfo.lectureId,
+        class_id: lectureInfo.classId,
+        live_id: lectureInfo.liveId ?? null,
+        text: chatMessage.trim(),
+      });
+      setChatMessage("");
+    } catch (error) {
+      console.error("메시지 전송 실패:", error);
+      setToast({
+        message:
+          error instanceof Error
+            ? error.message
+            : "메시지 전송에 실패했습니다.",
+        type: "error",
+      });
+    }
+  }, [chatMessage, lectureInfo]);
 
   const attachStudentStream = useCallback((stream: MediaStream) => {
     if (studentVideoRef.current) {
@@ -291,6 +345,82 @@ const LiveWatching: React.FC = () => {
     setIsStudentMicOn(newState);
   }, [isStudentMicOn]);
 
+  // 채팅 메시지 조회 및 Socket.io 연결
+  useEffect(() => {
+    if (!lectureInfo) return;
+
+    // 기존 메시지 조회
+    const loadMessages = async () => {
+      try {
+        const response = await getChatMessages({
+          lecture_id: lectureInfo.lectureId,
+          class_id: lectureInfo.classId,
+          live_id: lectureInfo.liveId ?? null,
+          limit: 50,
+        });
+        setChatMessages(response.messages);
+        // 스크롤을 맨 아래로
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop =
+              chatContainerRef.current.scrollHeight;
+          }
+        }, 100);
+      } catch (error) {
+        console.error("메시지 조회 실패:", error);
+      }
+    };
+
+    loadMessages();
+
+    // Socket.io 연결
+    const baseUrl = getBaseUrl();
+    const token = localStorage.getItem("lecq.token");
+    const socket = io(baseUrl, {
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+      auth: token ? { token } : undefined,
+    });
+    chatSocketRef.current = socket;
+
+    // 라이브 룸 입장
+    socket.on("connect", () => {
+      socket.emit("live:join", {
+        lecture_id: lectureInfo.lectureId,
+        class_id: lectureInfo.classId,
+        live_id: lectureInfo.liveId ?? null,
+        role: "student",
+        user_id: user?.id,
+      });
+    });
+
+    // 실시간 메시지 수신
+    const handleChatMessage = (message: ChatMessage) => {
+      setChatMessages((prev) => {
+        // 중복 방지
+        if (prev.some((m) => m._id === message._id)) {
+          return prev;
+        }
+        return [...prev, message];
+      });
+      // 스크롤을 맨 아래로
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop =
+            chatContainerRef.current.scrollHeight;
+        }
+      }, 100);
+    };
+
+    socket.on("chat:message", handleChatMessage);
+
+    return () => {
+      socket.off("chat:message", handleChatMessage);
+      socket.disconnect();
+      chatSocketRef.current = null;
+    };
+  }, [lectureInfo, user?.id]);
+
   useEffect(() => {
     return () => {
       stopStudentCamera();
@@ -330,6 +460,7 @@ const LiveWatching: React.FC = () => {
               <StudentScreenArea
                 isLive={isLive}
                 videoRef={videoRef}
+                remoteParticipants={remoteParticipants}
                 statusText={
                   isLoading
                     ? "로딩 중..."
@@ -380,7 +511,7 @@ const LiveWatching: React.FC = () => {
             </div>
 
             {/* 탭 콘텐츠 */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto" ref={chatContainerRef}>
               {activeTab === "questions" ? (
                 <div className="p-4 space-y-4">
                   {questions.length === 0 ? (
@@ -402,30 +533,110 @@ const LiveWatching: React.FC = () => {
                   )}
                 </div>
               ) : (
-                <div className="p-4">
-                  <div className="text-center text-gray-500 text-sm">실시간 채팅 기능</div>
+                <div className="p-4 space-y-3">
+                  {chatMessages.length === 0 ? (
+                    <div className="text-center text-gray-500 text-sm py-8">
+                      채팅 메시지가 없습니다.
+                    </div>
+                  ) : (
+                    chatMessages.map((msg) => {
+                      const isProfessor = msg.sender.role === "professor";
+                      const isOwnMessage = msg.sender.id === user?.id;
+                      const time = new Date(msg.timestamp || msg.created_at);
+                      const timeStr = `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}`;
+
+                      return (
+                        <div
+                          key={msg._id}
+                          className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-lg p-2 ${
+                              isOwnMessage
+                                ? "bg-blue-600 text-white"
+                                : isProfessor
+                                ? "bg-green-100 text-gray-900"
+                                : "bg-gray-100 text-gray-900"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span
+                                className={`text-xs font-medium ${
+                                  isOwnMessage
+                                    ? "text-blue-100"
+                                    : isProfessor
+                                    ? "text-green-700"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {isOwnMessage
+                                  ? "나"
+                                  : isProfessor
+                                  ? "교수자"
+                                  : msg.sender.name}
+                              </span>
+                              <span
+                                className={`text-[10px] ${
+                                  isOwnMessage
+                                    ? "text-blue-200"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                {timeStr}
+                              </span>
+                            </div>
+                            <p className="text-sm break-words">{msg.text}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               )}
             </div>
 
-            {/* 하단 입력 영역 (간단 입력/전송) */}
+            {/* 하단 입력 영역 */}
             <div className="border-t border-gray-200 p-4">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={questionText}
-                  onChange={(e) => setQuestionText(e.target.value)}
-                  placeholder="질문을 입력하세요"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  onKeyDown={(e) => e.key === "Enter" && handleSubmitQuestion()}
-                />
-                <button
-                  onClick={handleSubmitQuestion}
-                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
+              {activeTab === "chat" ? (
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    placeholder="채팅 입력 (Enter)"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendChatMessage();
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={handleSendChatMessage}
+                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={questionText}
+                    onChange={(e) => setQuestionText(e.target.value)}
+                    placeholder="질문을 입력하세요"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    onKeyDown={(e) => e.key === "Enter" && handleSubmitQuestion()}
+                  />
+                  <button
+                    onClick={handleSubmitQuestion}
+                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

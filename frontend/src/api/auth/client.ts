@@ -97,10 +97,17 @@ export async function apiFetch<T>(
   const isFormData =
     typeof FormData !== "undefined" && body instanceof FormData;
 
+  // Authorization 헤더 자동 추가
+  const token = localStorage.getItem("lecq.token");
+  const authHeaders: HeadersInit = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+
   const resp = await fetch(url, {
     ...rest,
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...authHeaders,
       ...(headers || {}),
     },
     body,

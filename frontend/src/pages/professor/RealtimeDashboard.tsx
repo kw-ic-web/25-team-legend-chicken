@@ -7,6 +7,8 @@ import React, {
 } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Send } from "lucide-react";
+import { io, Socket } from "socket.io-client";
+import { getBaseUrl } from "../../api/auth/client";
 import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
 import ParticipantStrip from "../../components/live/professor/ParticipantStrip";
 import ScreenShareArea from "../../components/live/professor/ScreenShareArea";
@@ -17,6 +19,11 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
 import { endLive } from "../../api/professor";
+import {
+  sendChatMessage,
+  getChatMessages,
+  type ChatMessage,
+} from "../../api/chat";
 
 interface Question {
   id: number;
@@ -50,7 +57,10 @@ const RealtimeDashboard: React.FC = () => {
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
   const [chatMessage, setChatMessage] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isSharing, setIsSharing] = useState(false);
+  const chatSocketRef = useRef<Socket | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const [isPersonnelOpen, setIsPersonnelOpen] = useState(false);
   const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
   const [toast, setToast] = useState<{
@@ -239,11 +249,19 @@ const RealtimeDashboard: React.FC = () => {
   }, []);
 
   const startScreenShare = useCallback(async () => {
+    // 이미 공유 중이면 중복 호출 방지
+    if (isSharing || shareStreamRef.current) {
+      return;
+    }
+
     // 화면공유 시작 플래그 설정 (visibilitychange 무시)
+    if (isStartingShareRef.current) {
+      return; // 이미 시작 중이면 중복 호출 방지
+    }
     isStartingShareRef.current = true;
     setTimeout(() => {
       isStartingShareRef.current = false;
-    }, 3000); // 3초 후 플래그 해제
+    }, 5000); // 5초 후 플래그 해제
 
     try {
       const mediaDevices = navigator.mediaDevices as MediaDevices & {
@@ -260,9 +278,16 @@ const RealtimeDashboard: React.FC = () => {
             }
           ).getDisplayMedia;
 
+      // 전체 화면 공유를 기본으로 설정 (preferCurrentTab: false)
       const displayStream = await getDisplay({
-        video: { frameRate: 30 },
+        video: {
+          frameRate: 30,
+          // @ts-ignore - 브라우저별 옵션
+          displaySurface: "monitor", // 전체 화면 선호
+        },
         audio: true,
+        // @ts-ignore - Chrome/Edge 전용 옵션
+        preferCurrentTab: false, // 전체 화면 공유 선호
       });
       shareStreamRef.current = displayStream;
       setScreenStream(displayStream);
@@ -296,8 +321,13 @@ const RealtimeDashboard: React.FC = () => {
       } else {
         showError("화면 공유를 시작할 수 없어요.");
       }
+    } finally {
+      // 에러 발생 시에도 플래그 해제
+      setTimeout(() => {
+        isStartingShareRef.current = false;
+      }, 1000);
     }
-  }, [showError, stopScreenShare]);
+  }, [showError, stopScreenShare, isSharing]);
 
   const toggleMic = useCallback(() => {
     if (streamRef.current) {
@@ -452,12 +482,26 @@ const RealtimeDashboard: React.FC = () => {
     }
   }, [showError]);
 
-  const handleSendMessage = () => {
-    if (chatMessage.trim()) {
-      console.log("메시지 전송:", chatMessage);
-      setChatMessage("");
+  const handleSendMessage = useCallback(async () => {
+    if (!chatMessage.trim() || !resolvedLectureId || resolvedClassId === undefined) {
+      return;
     }
-  };
+
+    try {
+      await sendChatMessage({
+        lecture_id: resolvedLectureId,
+        class_id: resolvedClassId,
+        live_id: resolvedLiveId ?? null,
+        text: chatMessage.trim(),
+      });
+      setChatMessage("");
+    } catch (error) {
+      console.error("메시지 전송 실패:", error);
+      showError(
+        error instanceof Error ? error.message : "메시지 전송에 실패했습니다."
+      );
+    }
+  }, [chatMessage, resolvedLectureId, resolvedClassId, resolvedLiveId, showError]);
 
   const closePersonnel = () => setIsPersonnelOpen(false);
 
@@ -477,15 +521,106 @@ const RealtimeDashboard: React.FC = () => {
     );
   };
 
-  // 컴포넌트 마운트 시 웹캠 자동 시작
+  // 채팅 메시지 조회 및 Socket.io 연결
   useEffect(() => {
-    startCamera();
+    if (!resolvedLectureId || resolvedClassId === undefined) return;
+
+    // 기존 메시지 조회
+    const loadMessages = async () => {
+      try {
+        const response = await getChatMessages({
+          lecture_id: resolvedLectureId!,
+          class_id: resolvedClassId!,
+          live_id: resolvedLiveId ?? null,
+          limit: 50,
+        });
+        setChatMessages(response.messages);
+        // 스크롤을 맨 아래로
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop =
+              chatContainerRef.current.scrollHeight;
+          }
+        }, 100);
+      } catch (error) {
+        console.error("메시지 조회 실패:", error);
+      }
+    };
+
+    loadMessages();
+
+    // Socket.io 연결
+    const baseUrl = getBaseUrl();
+    const token = localStorage.getItem("lecq.token");
+    const socket = io(baseUrl, {
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+      auth: token ? { token } : undefined,
+    });
+    chatSocketRef.current = socket;
+
+    // 라이브 룸 입장
+    socket.on("connect", () => {
+      socket.emit("live:join", {
+        lecture_id: resolvedLectureId,
+        class_id: resolvedClassId,
+        live_id: resolvedLiveId ?? null,
+        role: "professor",
+        user_id: user?.id,
+      });
+    });
+
+    // 실시간 메시지 수신
+    const handleChatMessage = (message: ChatMessage) => {
+      setChatMessages((prev) => {
+        // 중복 방지
+        if (prev.some((m) => m._id === message._id)) {
+          return prev;
+        }
+        return [...prev, message];
+      });
+      // 스크롤을 맨 아래로
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop =
+            chatContainerRef.current.scrollHeight;
+        }
+      }, 100);
+    };
+
+    socket.on("chat:message", handleChatMessage);
 
     return () => {
+      socket.off("chat:message", handleChatMessage);
+      socket.disconnect();
+      chatSocketRef.current = null;
+    };
+  }, [resolvedLectureId, resolvedClassId, resolvedLiveId, user?.id]);
+
+  // 컴포넌트 마운트 시 웹캠 자동 시작 및 화면 공유 자동 시작
+  useEffect(() => {
+    let mounted = true;
+
+    const initialize = async () => {
+      await startCamera();
+      // 약간의 지연 후 화면 공유 시작 (카메라 시작 후)
+      if (mounted) {
+        setTimeout(() => {
+          if (mounted && !isSharing) {
+            startScreenShare();
+          }
+        }, 500);
+      }
+    };
+
+    initialize();
+
+    return () => {
+      mounted = false;
       stopCamera();
       stopScreenShare();
     };
-  }, [startCamera, stopCamera, stopScreenShare]);
+  }, []); // 한 번만 실행
 
   useEffect(() => {
     if (webrtcError) {
@@ -609,7 +744,11 @@ const RealtimeDashboard: React.FC = () => {
               remoteParticipants={remoteParticipants}
             >
               <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
-                <ParticipantStrip isCameraOn={isCameraOn} videoRef={videoRef} />
+                <ParticipantStrip
+                  isCameraOn={isCameraOn}
+                  videoRef={videoRef}
+                  remoteParticipants={remoteParticipants}
+                />
               </div>
               <LiveControls
                 isMicOn={isMicOn}
@@ -655,7 +794,7 @@ const RealtimeDashboard: React.FC = () => {
             </div>
 
             {/* 탭 콘텐츠 */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto" ref={chatContainerRef}>
               {activeTab === "questions" ? (
                 <div className="p-4 space-y-4">
                   {questions
@@ -699,10 +838,64 @@ const RealtimeDashboard: React.FC = () => {
                     ))}
                 </div>
               ) : (
-                <div className="p-4">
-                  <div className="text-center text-gray-500 text-sm">
-                    실시간 채팅 기능
-                  </div>
+                <div className="p-4 space-y-3">
+                  {chatMessages.length === 0 ? (
+                    <div className="text-center text-gray-500 text-sm py-8">
+                      채팅 메시지가 없습니다.
+                    </div>
+                  ) : (
+                    chatMessages.map((msg) => {
+                      const isProfessor = msg.sender.role === "professor";
+                      const isOwnMessage = msg.sender.id === user?.id;
+                      const time = new Date(msg.timestamp || msg.created_at);
+                      const timeStr = `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}`;
+
+                      return (
+                        <div
+                          key={msg._id}
+                          className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-lg p-2 ${
+                              isOwnMessage
+                                ? "bg-blue-600 text-white"
+                                : isProfessor
+                                ? "bg-green-100 text-gray-900"
+                                : "bg-gray-100 text-gray-900"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span
+                                className={`text-xs font-medium ${
+                                  isOwnMessage
+                                    ? "text-blue-100"
+                                    : isProfessor
+                                    ? "text-green-700"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {isOwnMessage
+                                  ? "나"
+                                  : isProfessor
+                                  ? "교수자"
+                                  : msg.sender.name}
+                              </span>
+                              <span
+                                className={`text-[10px] ${
+                                  isOwnMessage
+                                    ? "text-blue-200"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                {timeStr}
+                              </span>
+                            </div>
+                            <p className="text-sm break-words">{msg.text}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               )}
             </div>
@@ -716,7 +909,12 @@ const RealtimeDashboard: React.FC = () => {
                   onChange={(e) => setChatMessage(e.target.value)}
                   placeholder="채팅 입력 (Enter)"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
                 />
                 <button
                   onClick={handleSendMessage}
