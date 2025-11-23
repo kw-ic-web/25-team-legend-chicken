@@ -17,6 +17,11 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
+  // 학생 참여자 필터링 (role이 student인 것만)
+  const studentParticipants = remoteParticipants.filter(
+    (p) => p.role === "student"
+  );
+
   const updateScrollState = useCallback(() => {
     const container = scrollRef.current;
     if (!container) return;
@@ -36,7 +41,7 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
       container.removeEventListener("scroll", updateScrollState);
       window.removeEventListener("resize", handleResize);
     };
-  }, [updateScrollState]);
+  }, [updateScrollState, studentParticipants.length]);
 
   const scrollByDelta = (delta: number) => {
     const container = scrollRef.current;
@@ -96,11 +101,6 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
       </div>
     );
   };
-
-  // 학생 참여자 필터링 (role이 student인 것만)
-  const studentParticipants = remoteParticipants.filter(
-    (p) => p.role === "student"
-  );
 
   const tiles = [
     {
