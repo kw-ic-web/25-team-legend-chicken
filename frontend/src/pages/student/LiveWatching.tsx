@@ -40,6 +40,7 @@ const LiveWatching: React.FC = () => {
     liveId: number | null;
     lectureName: string;
     classTitle: string;
+    isLiveActive: boolean;
   } | null>(null);
   const [toast, setToast] = useState<{
     message: string;
@@ -84,6 +85,7 @@ const LiveWatching: React.FC = () => {
           liveId: info.live_id,
           lectureName: info.lecture_name,
           classTitle: info.class_title,
+          isLiveActive: info.is_live_active,
         });
 
         if (!info.is_live_active) {
@@ -91,6 +93,9 @@ const LiveWatching: React.FC = () => {
             message: "현재 진행 중인 라이브 방송이 없습니다.",
             type: "error",
           });
+        } else if (!info.live_id) {
+          // 라이브가 활성화되어 있지만 liveId가 없는 경우 (채팅/질문만 가능)
+          console.warn("[LiveWatching] 라이브가 활성화되어 있지만 liveId가 없습니다. 채팅/질문 기능만 사용 가능합니다.");
         }
       } catch (error) {
         console.error("라이브 참여 정보 조회 실패:", error);
@@ -108,6 +113,8 @@ const LiveWatching: React.FC = () => {
   }, [lectureId, classId]);
 
   // WebRTC 연결 설정
+  // 라이브가 활성화되어 있고 lectureId, classId가 있으면 연결 시도
+  // liveId가 없어도 채팅/질문 기능은 사용 가능
   const {
     remoteParticipants,
     status: webrtcStatus,
@@ -119,7 +126,7 @@ const LiveWatching: React.FC = () => {
     role: "student",
     userId: user?.id,
     localStreams: studentLocalStream ? [studentLocalStream] : [],
-    enabled: !!lectureInfo && !!lectureInfo.liveId,
+    enabled: !!lectureInfo && !!lectureInfo.isLiveActive && !!lectureInfo.lectureId && !!lectureInfo.classId,
     autoInitiate: false, // 학생은 offer를 보내지 않음
   });
 
@@ -458,25 +465,7 @@ const LiveWatching: React.FC = () => {
         professorVideoRef.current.srcObject = null;
       }
     }
-  }, [remoteParticipants, professorScreenStream, professorCameraStream]);
-
-  // 교수자 카메라 스트림을 professorCameraRef에 연결
-  useEffect(() => {
-    console.log("[LiveWatching] Setting professor camera", {
-      hasStream: !!professorCameraStream?.stream,
-    });
-    
-    if (professorCameraRef.current) {
-      if (professorCameraStream?.stream) {
-        professorCameraRef.current.srcObject = professorCameraStream.stream;
-        professorCameraRef.current.play().catch(console.error);
-        console.log("[LiveWatching] Professor camera stream set");
-      } else {
-        professorCameraRef.current.srcObject = null;
-        console.log("[LiveWatching] Professor camera stream cleared");
-      }
-    }
-  }, [professorCameraStream]);
+  }, [remoteParticipants]);
 
   // WebRTC 오류 처리
   useEffect(() => {
@@ -666,7 +655,8 @@ const LiveWatching: React.FC = () => {
 
   // 채팅 메시지 조회 및 Socket.io 연결
   useEffect(() => {
-    if (!lectureInfo || !lectureInfo.liveId) return;
+    // 라이브가 활성화되어 있으면 liveId가 없어도 채팅 사용 가능
+    if (!lectureInfo || !lectureInfo.isLiveActive) return;
 
     // 기존 소켓 연결 정리
     if (chatSocketRef.current) {
@@ -833,7 +823,7 @@ const LiveWatching: React.FC = () => {
 
             {/* 상단 참여자(웹캠) 스트립 */}
             <StudentParticipantStrip
-              videoRef={professorVideoRef}
+              professorCameraRef={professorVideoRef}
               studentVideoRef={studentVideoRef}
               isStudentCameraOn={isStudentCameraOn}
               remoteParticipants={remoteParticipants}

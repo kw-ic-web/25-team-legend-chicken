@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { VideoOff } from "lucide-react";
 import type { RefObject, MutableRefObject } from "react";
 import type { RemoteParticipant } from "../../../hooks/useLiveWebRTC";
+import { useAuth } from "../../../contexts/AuthContext";
 
 type AnyVideoRef =
   | RefObject<HTMLVideoElement | null>
@@ -27,17 +28,19 @@ const StudentParticipantStrip: React.FC<Props> = ({
   isStudentCameraOn,
   remoteParticipants = [],
 }) => {
+  const { user } = useAuth();
   const [hasProfessorVideo, setHasProfessorVideo] = useState(false);
+  const currentUserName = user?.name || "나";
 
   // 교수자 비디오 스트림 상태 확인
   useEffect(() => {
-    if (!videoRef) {
+    if (!professorCameraRef) {
       setHasProfessorVideo(false);
       return;
     }
 
     const checkVideo = () => {
-      const videoElement = (videoRef as RefObject<HTMLVideoElement>).current;
+      const videoElement = (professorCameraRef as RefObject<HTMLVideoElement>).current;
       if (videoElement) {
         if (videoElement.srcObject) {
           setHasProfessorVideo(true);
@@ -53,7 +56,7 @@ const StudentParticipantStrip: React.FC<Props> = ({
     const interval = setInterval(checkVideo, 500);
 
     return () => clearInterval(interval);
-  }, [videoRef]);
+  }, [professorCameraRef]);
 
   // 학생 참여자 필터링 (role이 student인 것만)
   const studentParticipants = remoteParticipants.filter(
@@ -134,7 +137,7 @@ const StudentParticipantStrip: React.FC<Props> = ({
       <div className="flex items-center space-x-3 overflow-x-auto no-scrollbar">
         {/* 교수자 카메라 */}
         <div className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden">
-          {videoRef && (
+          {professorCameraRef && (
             <video
               ref={professorCameraRef as React.RefObject<HTMLVideoElement>}
               autoPlay
