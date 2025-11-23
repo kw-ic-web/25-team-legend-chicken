@@ -35,7 +35,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const logout = () => {
     setUser(null);
+    // 모든 인증 관련 데이터 정리
     localStorage.removeItem("lecq.auth");
+    localStorage.removeItem("lecq.token");
+    localStorage.removeItem("lecq.refreshToken");
+    localStorage.removeItem("lecq.tokenExpiresAt");
   };
 
   const value = useMemo(() => ({ user, login, logout }), [user]);

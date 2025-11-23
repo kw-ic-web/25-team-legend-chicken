@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { VideoOff } from "lucide-react";
 import type { RefObject, MutableRefObject } from "react";
+import type { RemoteParticipant } from "../../../hooks/useLiveWebRTC";
 
 type AnyVideoRef =
   | RefObject<HTMLVideoElement | null>
@@ -8,7 +9,7 @@ type AnyVideoRef =
 
 interface Props {
   teacherName?: string;
-  videoRef?: AnyVideoRef;
+  professorCameraRef?: AnyVideoRef;
   studentVideoRef?: AnyVideoRef;
   isStudentCameraOn?: boolean;
   remoteParticipants?: Array<{
@@ -21,7 +22,7 @@ interface Props {
 
 const StudentParticipantStrip: React.FC<Props> = ({
   teacherName = "교수자",
-  videoRef,
+  professorCameraRef,
   studentVideoRef,
   isStudentCameraOn,
   remoteParticipants = [],
@@ -131,10 +132,11 @@ const StudentParticipantStrip: React.FC<Props> = ({
   return (
     <div className="px-6 py-4 border-b border-gray-200">
       <div className="flex items-center space-x-3 overflow-x-auto no-scrollbar">
+        {/* 교수자 카메라 */}
         <div className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden">
           {videoRef && (
             <video
-              ref={videoRef as React.RefObject<HTMLVideoElement>}
+              ref={professorCameraRef as React.RefObject<HTMLVideoElement>}
               autoPlay
               playsInline
               muted
@@ -151,6 +153,7 @@ const StudentParticipantStrip: React.FC<Props> = ({
           </div>
         </div>
 
+        {/* 내 카메라 */}
         <div className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden border border-blue-200">
           <video
             ref={studentVideoRef as React.RefObject<HTMLVideoElement>}
@@ -167,7 +170,7 @@ const StudentParticipantStrip: React.FC<Props> = ({
             </div>
           )}
           <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded">
-            나
+            {currentUserName}
           </div>
         </div>
 
@@ -180,4 +183,3 @@ const StudentParticipantStrip: React.FC<Props> = ({
 };
 
 export default StudentParticipantStrip;
-

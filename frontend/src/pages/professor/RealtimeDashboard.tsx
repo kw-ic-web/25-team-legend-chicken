@@ -238,7 +238,12 @@ const RealtimeDashboard: React.FC = () => {
   // 화면 공유 중지/시작
   const stopScreenShare = useCallback(() => {
     if (shareStreamRef.current) {
-      shareStreamRef.current.getTracks().forEach((t) => t.stop());
+      // 모든 트랙 정지
+      shareStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+        // 이벤트 리스너 제거
+        track.onended = null;
+      });
       shareStreamRef.current = null;
     }
     if (shareVideoRef.current) {
@@ -308,9 +313,15 @@ const RealtimeDashboard: React.FC = () => {
       setIsSharing(true);
 
       // 사용자가 공유를 중지했을 때 이벤트 처리
-      const [track] = displayStream.getVideoTracks();
-      track.addEventListener("ended", () => {
-        stopScreenShare();
+      const videoTracks = displayStream.getVideoTracks();
+      const audioTracks = displayStream.getAudioTracks();
+      
+      // 모든 트랙에 ended 이벤트 리스너 추가
+      [...videoTracks, ...audioTracks].forEach((track) => {
+        track.addEventListener("ended", () => {
+          console.log("[RealtimeDashboard] Screen share track ended");
+          stopScreenShare();
+        });
       });
     } catch (e: unknown) {
       console.error("화면 공유 실패:", e);
@@ -619,6 +630,7 @@ const RealtimeDashboard: React.FC = () => {
       mounted = false;
       stopCamera();
       stopScreenShare();
+      stopCamera();
     };
   }, []); // 한 번만 실행
 
@@ -635,25 +647,37 @@ const RealtimeDashboard: React.FC = () => {
       if (isStartingShareRef.current) return;
 
       if (document.hidden) {
-        // 화면공유 중이 아니면 정리
-        if (!isSharing) {
+        // 탭이 숨겨지면 화면공유 정리 (브라우저가 종료되어도 정리되도록)
+        if (isSharing) {
+          console.log("[RealtimeDashboard] Tab hidden, stopping screen share");
           stopScreenShare();
-          stopCamera();
         }
+        // 카메라는 유지 (사용자가 다시 돌아올 수 있음)
       }
     };
 
     const onBeforeUnload = () => {
+      // 페이지를 떠날 때 모든 스트림 정리
+      console.log("[RealtimeDashboard] Before unload, cleaning up all streams");
+      stopScreenShare();
+      stopCamera();
+    };
+
+    const onPageHide = () => {
+      // 페이지가 숨겨질 때 (뒤로 가기, 새로고침 등)
+      console.log("[RealtimeDashboard] Page hide, cleaning up all streams");
       stopScreenShare();
       stopCamera();
     };
 
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
     };
   }, [stopCamera, stopScreenShare, isSharing]);
 
