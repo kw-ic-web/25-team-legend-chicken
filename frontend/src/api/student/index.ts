@@ -176,3 +176,42 @@ export async function getParticipateInfo(
 
 export type { LectureClass };
 
+// 라이브 상태 조회 (교수 API와 동일한 엔드포인트 사용)
+export type LiveStatusClass = {
+  class_id: number;
+  class_title: string;
+  isLiveActive: boolean;
+  currentLiveId?: number | null;
+  lives: Array<{
+    liveId: number;
+    status: string;
+    startedAt: string;
+    endedAt: string | null;
+  }>;
+};
+
+export type LiveStatusResponse = {
+  lecture_id: string;
+  lecture_name: string;
+  classes: LiveStatusClass[];
+};
+
+export async function getLiveStatus(
+  lectureId: string
+): Promise<LiveStatusResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<LiveStatusResponse>(
+    `/api/professor/lectures/${lectureId}/live-status`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
