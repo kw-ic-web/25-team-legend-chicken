@@ -21,6 +21,7 @@ const LiveWatching: React.FC = () => {
   const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const studentVideoRef = useRef<HTMLVideoElement>(null);
+  const professorCameraRef = useRef<HTMLVideoElement>(null);
   const studentStreamRef = useRef<MediaStream | null>(null);
   const [isLive, setIsLive] = useState(false);
   const [isStudentMicOn, setIsStudentMicOn] = useState(false);
@@ -110,28 +111,52 @@ const LiveWatching: React.FC = () => {
     autoInitiate: false, // 학생은 offer를 보내지 않음
   });
 
-  // 원격 스트림을 videoRef에 연결
+  // 교수자의 화면 공유와 카메라 스트림 구분 (socketId로 구분)
+  const professorScreenStream = useMemo(() => {
+    return remoteParticipants.find((p) => {
+      return p.role === "professor" && p.socketId.includes("-screen");
+    });
+  }, [remoteParticipants]);
+
+  const professorCameraStream = useMemo(() => {
+    return remoteParticipants.find((p) => {
+      return p.role === "professor" && p.socketId.includes("-camera");
+    });
+  }, [remoteParticipants]);
+
+  // 원격 스트림을 videoRef에 연결 (화면 공유 우선)
   useEffect(() => {
-    console.log("[LiveWatching] remoteParticipants:", remoteParticipants);
-    console.log("[LiveWatching] remoteParticipants.length:", remoteParticipants.length);
+    console.log("[LiveWatching] Setting main video stream", {
+      hasScreen: !!professorScreenStream,
+      hasCamera: !!professorCameraStream,
+      totalParticipants: remoteParticipants.length,
+      screenStreamId: professorScreenStream?.socketId,
+      cameraStreamId: professorCameraStream?.socketId,
+    });
     
-    if (remoteParticipants.length > 0 && videoRef.current) {
-      // 교수자의 스트림 찾기 (화면 공유 또는 카메라)
-      const professorStream = remoteParticipants.find(
-        (p) => p.role === "professor"
-      )?.stream;
-
-      console.log("[LiveWatching] professorStream found:", !!professorStream);
-      console.log("[LiveWatching] All participants:", remoteParticipants.map(p => ({ role: p.role, hasStream: !!p.stream, socketId: p.socketId })));
-
-      // 교수자 스트림이 있으면 사용, 없으면 첫 번째 스트림 사용
-      const streamToUse = professorStream || remoteParticipants[0]?.stream;
+    if (videoRef.current) {
+      // 화면 공유가 있으면 우선 표시, 없으면 교수자 카메라, 그 다음 다른 스트림
+      let streamToUse: MediaStream | null = null;
       
-      if (streamToUse && videoRef.current) {
-        console.log("[LiveWatching] Setting video srcObject", streamToUse);
+      if (professorScreenStream?.stream) {
+        streamToUse = professorScreenStream.stream;
+        console.log("[LiveWatching] Using professor screen share stream");
+      } else if (professorCameraStream?.stream) {
+        streamToUse = professorCameraStream.stream;
+        console.log("[LiveWatching] Using professor camera stream (no screen share)");
+      } else if (remoteParticipants.length > 0 && remoteParticipants[0]?.stream) {
+        streamToUse = remoteParticipants[0].stream;
+        console.log("[LiveWatching] Using first available stream");
+      }
+      
+      if (streamToUse) {
+        console.log("[LiveWatching] Setting video srcObject", {
+          streamId: streamToUse.id,
+          videoTracks: streamToUse.getVideoTracks().length,
+          audioTracks: streamToUse.getAudioTracks().length,
+        });
         videoRef.current.srcObject = streamToUse;
         
-        // 비디오 재생 시도 (사용자 상호작용 필요 시 처리)
         const playVideo = async () => {
           try {
             if (videoRef.current) {
@@ -139,39 +164,54 @@ const LiveWatching: React.FC = () => {
               console.log("[LiveWatching] Video playing successfully");
             }
           } catch (playError) {
-            console.warn("[LiveWatching] Auto-play prevented, user interaction required:", playError);
-            // 사용자 상호작용이 필요한 경우, 비디오는 로드되지만 재생되지 않음
-            // 사용자가 클릭하면 재생됨
+            console.warn("[LiveWatching] Auto-play prevented:", playError);
             if (videoRef.current) {
-              videoRef.current.muted = true; // 음소거하면 자동 재생 가능할 수 있음
+              videoRef.current.muted = true;
               try {
                 await videoRef.current.play();
                 console.log("[LiveWatching] Video playing with muted");
               } catch (mutedError) {
-                console.warn("[LiveWatching] Even muted play failed:", mutedError);
+                console.warn("[LiveWatching] Muted play failed:", mutedError);
               }
             }
           }
         };
         
         videoRef.current.onloadedmetadata = () => {
-          console.log("[LiveWatching] Video metadata loaded, attempting to play...");
+          console.log("[LiveWatching] Video metadata loaded");
           playVideo();
         };
         
-        // 이미 로드되어 있으면 바로 재생 시도
         if (videoRef.current.readyState >= 2) {
           playVideo();
         }
         
         setIsLive(true);
+      } else {
+        console.log("[LiveWatching] No stream to use, clearing video");
+        videoRef.current.srcObject = null;
+        setIsLive(false);
       }
-    } else if (videoRef.current && remoteParticipants.length === 0) {
-      console.log("[LiveWatching] No remote participants, clearing video");
-      videoRef.current.srcObject = null;
-      setIsLive(false);
     }
-  }, [remoteParticipants]);
+  }, [remoteParticipants, professorScreenStream, professorCameraStream]);
+
+  // 교수자 카메라 스트림을 professorCameraRef에 연결
+  useEffect(() => {
+    console.log("[LiveWatching] Setting professor camera", {
+      hasStream: !!professorCameraStream?.stream,
+    });
+    
+    if (professorCameraRef.current) {
+      if (professorCameraStream?.stream) {
+        professorCameraRef.current.srcObject = professorCameraStream.stream;
+        professorCameraRef.current.play().catch(console.error);
+        console.log("[LiveWatching] Professor camera stream set");
+      } else {
+        professorCameraRef.current.srcObject = null;
+        console.log("[LiveWatching] Professor camera stream cleared");
+      }
+    }
+  }, [professorCameraStream]);
 
   // WebRTC 오류 처리
   useEffect(() => {
@@ -202,18 +242,27 @@ const LiveWatching: React.FC = () => {
   };
 
   const attachStudentStream = useCallback((stream: MediaStream) => {
+    console.log("[LiveWatching] attachStudentStream called", stream);
     if (studentVideoRef.current) {
       studentVideoRef.current.srcObject = stream;
       studentVideoRef.current.onloadedmetadata = () => {
         studentVideoRef.current?.play().catch(console.error);
       };
+      // 이미 로드되어 있으면 바로 재생 시도
+      if (studentVideoRef.current.readyState >= 2) {
+        studentVideoRef.current.play().catch(console.error);
+      }
     }
     setStudentLocalStream(stream);
   }, []);
 
   const stopStudentCamera = useCallback(() => {
     if (studentStreamRef.current) {
-      studentStreamRef.current.getTracks().forEach((track) => track.stop());
+      // 모든 트랙 정지
+      studentStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+        track.onended = null;
+      });
       studentStreamRef.current = null;
     }
     if (studentVideoRef.current) {
@@ -226,29 +275,63 @@ const LiveWatching: React.FC = () => {
 
   const toggleStudentCamera = useCallback(async () => {
     if (isStudentCameraOn) {
-      stopStudentCamera();
+      // 카메라 끄기: 트랙만 비활성화 (스트림은 유지하여 WebRTC 연결 유지)
+      if (studentStreamRef.current) {
+        const videoTracks = studentStreamRef.current.getVideoTracks();
+        videoTracks.forEach((track) => {
+          track.enabled = false;
+        });
+        setIsStudentCameraOn(false);
+        if (studentVideoRef.current) {
+          studentVideoRef.current.style.opacity = "0";
+        }
+      }
       return;
     }
 
+    // 카메라 켜기
     try {
-      if (studentStreamRef.current) {
-        studentStreamRef.current.getTracks().forEach((track) => track.stop());
-        studentStreamRef.current = null;
+      if (!studentStreamRef.current) {
+        // 스트림이 없으면 새로 생성
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        studentStreamRef.current = stream;
+        attachStudentStream(stream);
+        setIsStudentCameraOn(true);
+        setIsStudentMicOn(stream.getAudioTracks().some((track) => track.enabled));
+      } else {
+        // 스트림이 있으면 비디오 트랙만 활성화
+        const videoTracks = studentStreamRef.current.getVideoTracks();
+        if (videoTracks.length === 0) {
+          // 비디오 트랙이 없으면 추가
+          const videoStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+          });
+          videoStream.getVideoTracks().forEach((track) => {
+            studentStreamRef.current!.addTrack(track);
+          });
+        } else {
+          // 비디오 트랙이 있으면 활성화
+          videoTracks.forEach((track) => {
+            track.enabled = true;
+          });
+        }
+        setIsStudentCameraOn(true);
+        if (studentVideoRef.current) {
+          studentVideoRef.current.style.opacity = "1";
+        }
+        attachStudentStream(studentStreamRef.current);
       }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      studentStreamRef.current = stream;
-      attachStudentStream(stream);
-      setIsStudentCameraOn(true);
-      setIsStudentMicOn(stream.getAudioTracks().some((track) => track.enabled));
     } catch (error) {
       console.error("학생 카메라 시작 실패:", error);
-      alert("카메라를 시작할 수 없습니다. 권한을 확인해주세요.");
+      setToast({
+        message: "카메라를 시작할 수 없습니다. 권한을 확인해주세요.",
+        type: "error",
+      });
     }
-  }, [attachStudentStream, isStudentCameraOn, stopStudentCamera]);
+  }, [attachStudentStream, isStudentCameraOn]);
 
   const toggleStudentMic = useCallback(async () => {
     const stream = studentStreamRef.current;
@@ -291,8 +374,24 @@ const LiveWatching: React.FC = () => {
     setIsStudentMicOn(newState);
   }, [isStudentMicOn]);
 
+  // 컴포넌트 언마운트 및 페이지 이탈 시 스트림 정리
   useEffect(() => {
+    const onBeforeUnload = () => {
+      console.log("[LiveWatching] Before unload, cleaning up streams");
+      stopStudentCamera();
+    };
+
+    const onPageHide = () => {
+      console.log("[LiveWatching] Page hide, cleaning up streams");
+      stopStudentCamera();
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
+
     return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
       stopStudentCamera();
     };
   }, [stopStudentCamera]);
@@ -321,8 +420,17 @@ const LiveWatching: React.FC = () => {
 
             {/* 상단 참여자(웹캠) 스트립 */}
             <StudentParticipantStrip
+              professorCameraRef={professorCameraRef}
               studentVideoRef={studentVideoRef}
               isStudentCameraOn={isStudentCameraOn}
+              remoteParticipants={remoteParticipants}
+              currentUserId={user?.id}
+              currentUserName={user?.name || "나"}
+              teacherName={
+                remoteParticipants.find((p) => p.role === "professor")?.userId
+                  ? "교수자"
+                  : "교수자"
+              }
             />
 
             {/* 강의 콘텐츠(화면 공유 영역) - 컨트롤 제거 */}
