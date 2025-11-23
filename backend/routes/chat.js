@@ -36,7 +36,7 @@ function rateLimitOnePerSecond(req, res, next) {
 }
 
 // ───────── 메시지 전송 ─────────
-// POST /api/chat/messages
+// POST /api/chat
 // body: { lecture_id, class_id, live_id?, text, meta? }
 router.post("/", authenticateToken, rateLimitOnePerSecond, async (req, res) => {
   try {
@@ -92,7 +92,7 @@ router.post("/", authenticateToken, rateLimitOnePerSecond, async (req, res) => {
 });
 
 // ───────── 메시지 조회(폴링) ─────────
-// GET /api/chat/messages?lecture_id=...&class_id=...&live_id=...?&limit=50&before=ISO&since=ISO
+// GET /api/chat?lecture_id=...&class_id=...&live_id=...?&limit=50&before=ISO&since=ISO
 router.get("/", authenticateToken, async (req, res) => {
   try {
     const { lecture_id, class_id, live_id, limit = 50, before, since } = req.query || {};
@@ -152,7 +152,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
 });
 
 // ───────── 메시지 좋아요(업보트) 토글 ─────────
-// POST /api/chat/messages/:id/upvote
+// POST /api/chat/:id/upvote
 router.post("/:id/upvote", authenticateToken, async (req, res) => {
   try {
     const msg = await ChatMessage.findById(req.params.id);

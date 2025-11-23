@@ -56,11 +56,6 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
             maxHeight: "100%",
           }}
         >
-          <div
-            className={`absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-semibold z-20 shadow-sm ${statusBadge.className}`}
-          >
-            {statusBadge.label}
-          </div>
           <video
             ref={videoRef as React.RefObject<HTMLVideoElement>}
             autoPlay
@@ -72,11 +67,6 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
             <span className="absolute inset-0 flex items-center justify-center text-gray-500">
               화면 공유 영역
             </span>
-          )}
-          {isSharing && (
-            <div className="absolute top-3 right-3 px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-semibold shadow-sm z-10">
-              공유 중
-            </div>
           )}
           {!!previewParticipants.length && (
             <div className="absolute bottom-4 right-4 flex items-center space-x-2 z-20">

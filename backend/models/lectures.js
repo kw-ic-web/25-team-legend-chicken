@@ -6,12 +6,20 @@ const ReferenceSchema = new mongoose.Schema({
   publisher: { type: String },
 });
 
+const MaterialSchema = new mongoose.Schema({
+  url: { type: String, required: true },
+  originalName: { type: String, default: "" },
+}, { _id: false });
+
 const ClassSchema = new mongoose.Schema({
   id: { type: Number, required: true }, // 주차 번호
   title: { type: String, required: true },
   description: { type: String },
   date: { type: Date },
-  materials: [{ type: String }],
+  materials: {
+    type: [mongoose.Schema.Types.Mixed], // String 또는 MaterialSchema 객체 모두 허용
+    default: [],
+  },
 
   // 현재 진행 중인 라이브 여부
   isLiveActive: { type: Boolean, default: false },
