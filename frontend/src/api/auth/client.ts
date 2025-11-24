@@ -34,7 +34,7 @@ function isTokenValid(): boolean {
 }
 
 // 토큰 갱신 시도 (순환 참조 방지를 위해 직접 fetch 사용)
-async function tryRefreshToken(): Promise<boolean> {
+export async function tryRefreshToken(): Promise<boolean> {
   // 이미 갱신 중이면 기존 Promise 반환
   if (refreshPromise) {
     return refreshPromise;

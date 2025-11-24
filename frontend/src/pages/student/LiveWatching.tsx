@@ -29,7 +29,6 @@ const LiveWatching: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const professorVideoRef = useRef<HTMLVideoElement>(null);
   const studentVideoRef = useRef<HTMLVideoElement>(null);
-  const professorCameraRef = useRef<HTMLVideoElement>(null);
   const studentStreamRef = useRef<MediaStream | null>(null);
   const [isLive, setIsLive] = useState(false);
   const [isStudentMicOn, setIsStudentMicOn] = useState(false);

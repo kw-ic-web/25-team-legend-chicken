@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { VideoOff } from "lucide-react";
 import type { RefObject, MutableRefObject } from "react";
-import type { RemoteParticipant } from "../../../hooks/useLiveWebRTC";
 import { useAuth } from "../../../contexts/AuthContext";
 
 type AnyVideoRef =

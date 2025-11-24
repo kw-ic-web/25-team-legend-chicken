@@ -99,7 +99,14 @@ export function useLiveWebRTC({
     const participants: RemoteParticipant[] = [];
     Array.from(remoteStreamRef.current.entries()).forEach(([id, streams]) => {
       const meta = metadataRef.current.get(id);
-      console.log("[WebRTC] updateRemoteParticipants: socketId:", id, "metadata:", meta, "streams count:", streams.length);
+      console.log(
+        "[WebRTC] updateRemoteParticipants: socketId:",
+        id,
+        "metadata:",
+        meta,
+        "streams count:",
+        streams.length
+      );
       // 각 스트림을 별도의 participant로 추가
       streams.forEach((stream) => {
         participants.push({
@@ -110,7 +117,10 @@ export function useLiveWebRTC({
         });
       });
     });
-    console.log("[WebRTC] updateRemoteParticipants: 총 participants 수:", participants.length);
+    console.log(
+      "[WebRTC] updateRemoteParticipants: 총 participants 수:",
+      participants.length
+    );
     setRemoteParticipants(participants);
   }, []);
 
@@ -131,8 +141,8 @@ export function useLiveWebRTC({
       }
       // 모든 스트림 정리
       const streams = remoteStreamRef.current.get(remoteSocketId) || [];
-      streams.forEach(stream => {
-        stream.getTracks().forEach(track => track.stop());
+      streams.forEach((stream) => {
+        stream.getTracks().forEach((track) => track.stop());
       });
       remoteStreamRef.current.delete(remoteSocketId);
       metadataRef.current.delete(remoteSocketId);
@@ -193,8 +203,11 @@ export function useLiveWebRTC({
         console.warn("[WebRTC] sendOffer: peer is closed");
         return;
       }
-      
-      if (currentState === "have-local-offer" || currentState === "have-remote-offer") {
+
+      if (
+        currentState === "have-local-offer" ||
+        currentState === "have-remote-offer"
+      ) {
         return;
       }
 
@@ -231,7 +244,14 @@ export function useLiveWebRTC({
         makingOfferRef.current.set(remoteSocketId, false);
       }
     },
-    [lectureId, normalizedClassId, normalizedLiveId, role, userId, shouldInitiate]
+    [
+      lectureId,
+      normalizedClassId,
+      normalizedLiveId,
+      role,
+      userId,
+      shouldInitiate,
+    ]
   );
 
   const ensurePeerConnection = useCallback(
@@ -251,42 +271,74 @@ export function useLiveWebRTC({
           trackKind: event.track.kind,
           trackLabel: event.track.label,
         });
-        
+
         const [stream] = event.streams;
         if (!stream) {
-          console.warn("[WebRTC] ontrack: no stream in event, using track only");
+          console.warn(
+            "[WebRTC] ontrack: no stream in event, using track only"
+          );
           // stream이 없으면 track만 처리
           const track = event.track;
           if (track) {
             // 기존 stream에 track 추가
-            const existingStream = remoteStreamRef.current.get(remoteSocketId);
-            if (existingStream) {
-              existingStream.addTrack(track);
-              console.log("[WebRTC] ontrack: added track to existing stream", remoteSocketId);
+            const existingStreams =
+              remoteStreamRef.current.get(remoteSocketId) || [];
+            const primaryStream = existingStreams[0];
+            if (primaryStream) {
+              primaryStream.addTrack(track);
+              console.log(
+                "[WebRTC] ontrack: added track to existing stream",
+                remoteSocketId
+              );
               updateRemoteParticipants();
             } else {
               // 새 stream 생성
               const newStream = new MediaStream([track]);
-              remoteStreamRef.current.set(remoteSocketId, newStream);
-              console.log("[WebRTC] ontrack: created new stream from track", remoteSocketId);
+              remoteStreamRef.current.set(remoteSocketId, [newStream]);
+              console.log(
+                "[WebRTC] ontrack: created new stream from track",
+                remoteSocketId
+              );
               updateRemoteParticipants();
             }
           }
           return;
         }
-        console.log("[WebRTC] ontrack: stream found, tracks:", stream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState, label: t.label })));
-        console.log("[WebRTC] ontrack: current metadata for", remoteSocketId, ":", metadataRef.current.get(remoteSocketId));
-        
+        console.log(
+          "[WebRTC] ontrack: stream found, tracks:",
+          stream.getTracks().map((t) => ({
+            kind: t.kind,
+            enabled: t.enabled,
+            readyState: t.readyState,
+            label: t.label,
+          }))
+        );
+        console.log(
+          "[WebRTC] ontrack: current metadata for",
+          remoteSocketId,
+          ":",
+          metadataRef.current.get(remoteSocketId)
+        );
+
         // 여러 스트림 저장 (카메라와 화면 공유를 모두 저장)
-        const existingStreams = remoteStreamRef.current.get(remoteSocketId) || [];
+        const existingStreams =
+          remoteStreamRef.current.get(remoteSocketId) || [];
         // 중복 스트림 체크 (stream ID로)
         const streamId = stream.id;
-        if (!existingStreams.some(s => s.id === streamId)) {
-          console.log("[WebRTC] ontrack: 새 스트림 추가:", streamId, "기존 스트림 수:", existingStreams.length);
+        if (!existingStreams.some((s) => s.id === streamId)) {
+          console.log(
+            "[WebRTC] ontrack: 새 스트림 추가:",
+            streamId,
+            "기존 스트림 수:",
+            existingStreams.length
+          );
           existingStreams.push(stream);
           remoteStreamRef.current.set(remoteSocketId, existingStreams);
           updateRemoteParticipants();
-          console.log("[WebRTC] ontrack: 스트림 추가 후 metadata:", metadataRef.current.get(remoteSocketId));
+          console.log(
+            "[WebRTC] ontrack: 스트림 추가 후 metadata:",
+            metadataRef.current.get(remoteSocketId)
+          );
         } else {
           console.log("[WebRTC] ontrack: 중복 스트림 무시:", streamId);
         }
@@ -316,7 +368,7 @@ export function useLiveWebRTC({
           detachPeer(remoteSocketId);
         }
       };
-      
+
       peer.oniceconnectionstatechange = () => {
         console.log("[WebRTC] ICE connection state changed", {
           remoteSocketId,
@@ -349,7 +401,7 @@ export function useLiveWebRTC({
       if (!payload.socket_id) return;
 
       console.log("[WebRTC] handleRemoteJoin", payload);
-      
+
       metadataRef.current.set(payload.socket_id, {
         role: payload.role,
         userId: payload.user_id,
@@ -358,10 +410,15 @@ export function useLiveWebRTC({
 
       ensurePeerConnection(payload.socket_id);
       if (shouldInitiate) {
-        console.log("[WebRTC] handleRemoteJoin: sending offer to", payload.socket_id);
+        console.log(
+          "[WebRTC] handleRemoteJoin: sending offer to",
+          payload.socket_id
+        );
         void sendOffer(payload.socket_id);
       } else {
-        console.log("[WebRTC] handleRemoteJoin: waiting for offer (student mode)");
+        console.log(
+          "[WebRTC] handleRemoteJoin: waiting for offer (student mode)"
+        );
       }
     },
     [ensurePeerConnection, sendOffer, shouldInitiate, updateRemoteParticipants]
@@ -373,11 +430,11 @@ export function useLiveWebRTC({
         console.warn("[WebRTC] handleOffer: missing from or sdp");
         return;
       }
-      
+
       console.log("[WebRTC] handleOffer: received offer from", from, meta);
-      
+
       const peer = ensurePeerConnection(from);
-      
+
       // meta에서 role과 user_id 추출하여 metadata 저장
       if (meta) {
         const roleFromMeta = meta.role as UserRole | undefined;
@@ -394,11 +451,14 @@ export function useLiveWebRTC({
           });
         }
       }
-      
+
       try {
         const currentState = peer.signalingState;
-        console.log("[WebRTC] handleOffer: current signaling state", currentState);
-        
+        console.log(
+          "[WebRTC] handleOffer: current signaling state",
+          currentState
+        );
+
         if (currentState === "closed") {
           console.warn("[WebRTC] handleOffer: peer is closed");
           return;
@@ -408,17 +468,19 @@ export function useLiveWebRTC({
           return;
         }
         if (currentState === "stable" && peer.remoteDescription) {
-          console.warn("[WebRTC] handleOffer: already stable with remote description");
+          console.warn(
+            "[WebRTC] handleOffer: already stable with remote description"
+          );
           return;
         }
-        
+
         console.log("[WebRTC] handleOffer: setting remote description");
         await peer.setRemoteDescription(new RTCSessionDescription(sdp));
         console.log("[WebRTC] handleOffer: creating answer");
         const answer = await peer.createAnswer();
         console.log("[WebRTC] handleOffer: setting local description");
         await peer.setLocalDescription(answer);
-        
+
         console.log("[WebRTC] handleOffer: sending answer to", from);
         socketRef.current?.emit("webrtc:answer", {
           to: from,
@@ -449,7 +511,14 @@ export function useLiveWebRTC({
         setStatus("error");
       }
     },
-    [ensurePeerConnection, lectureId, normalizedClassId, normalizedLiveId, role, updateRemoteParticipants]
+    [
+      ensurePeerConnection,
+      lectureId,
+      normalizedClassId,
+      normalizedLiveId,
+      role,
+      updateRemoteParticipants,
+    ]
   );
 
   const handleAnswer = useCallback(
@@ -457,11 +526,11 @@ export function useLiveWebRTC({
       if (!from || !sdp) return;
       const peer = peersRef.current.get(from);
       if (!peer) return;
-      
+
       try {
         const currentState = peer.signalingState;
         if (currentState === "closed") return;
-        
+
         if (currentState !== "have-local-offer") {
           if (currentState === "stable") return;
           await new Promise((resolve) => setTimeout(resolve, 100));
@@ -498,27 +567,32 @@ export function useLiveWebRTC({
       if (!from || !candidate) return;
       const peer = ensurePeerConnection(from);
       try {
-        if (peer.connectionState === "closed" || peer.connectionState === "failed") {
+        if (
+          peer.connectionState === "closed" ||
+          peer.connectionState === "failed"
+        ) {
           return;
         }
-        
+
         if (!peer.remoteDescription) {
           const checkInterval = setInterval(() => {
             if (peer.remoteDescription) {
               clearInterval(checkInterval);
-              peer.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+              peer
+                .addIceCandidate(new RTCIceCandidate(candidate))
+                .catch(console.error);
             }
           }, 100);
           setTimeout(() => clearInterval(checkInterval), 5000);
           return;
         }
-        
+
         await peer.addIceCandidate(new RTCIceCandidate(candidate));
       } catch (iceError) {
         if (
           iceError instanceof Error &&
-          (iceError.message.includes("already exists") || 
-           iceError.message.includes("InvalidStateError"))
+          (iceError.message.includes("already exists") ||
+            iceError.message.includes("InvalidStateError"))
         ) {
           return;
         }
@@ -591,7 +665,7 @@ export function useLiveWebRTC({
     socket.on("connect", handleConnect);
     socket.on("connect_error", handleConnectError);
     socket.on("live:user-joined", handleRemoteJoin);
-    
+
     const handleUserLeft = ({ socket_id }: LiveUserPayload) => {
       if (socket_id) {
         detachPeer(socket_id);
@@ -610,13 +684,14 @@ export function useLiveWebRTC({
       socket.off("webrtc:offer", handleOffer);
       socket.off("webrtc:answer", handleAnswer);
       socket.off("webrtc:ice-candidate", handleIceCandidate);
-      
+
       // 모든 peer 연결 종료 및 스트림 정리
-      peersRef.current.forEach((peer, remoteId) => {
+      peersRef.current.forEach((_peer, remoteId) => {
         detachPeer(remoteId);
       });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       peersRef.current.clear();
-      
+
       socketRef.current = null;
       setSocketId(null);
       socket.disconnect();
@@ -639,13 +714,15 @@ export function useLiveWebRTC({
   useEffect(() => {
     return () => {
       // 모든 원격 스트림 정리
-      remoteStreamRef.current.forEach((stream) => {
-        stream.getTracks().forEach((track) => track.stop());
+      remoteStreamRef.current.forEach((streams) => {
+        streams.forEach((stream) =>
+          stream.getTracks().forEach((track) => track.stop())
+        );
       });
       remoteStreamRef.current.clear();
-      
+
       // 모든 peer 연결 종료
-      peersRef.current.forEach((peer, remoteId) => {
+      peersRef.current.forEach((_peer, remoteId) => {
         detachPeer(remoteId);
       });
       peersRef.current.clear();
