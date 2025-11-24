@@ -5,12 +5,14 @@ interface EndBroadcastConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  isProcessing?: boolean;
 }
 
 const EndBroadcastConfirmModal: React.FC<EndBroadcastConfirmModalProps> = ({
   isOpen,
   onClose,
   onConfirm,
+  isProcessing = false,
 }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="방송 종료" size="sm">
@@ -19,15 +21,21 @@ const EndBroadcastConfirmModal: React.FC<EndBroadcastConfirmModalProps> = ({
         <div className="flex justify-end space-x-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+            disabled={isProcessing}
+            className={`px-4 py-2 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 ${
+              isProcessing ? "opacity-60 cursor-not-allowed" : ""
+            }`}
           >
             취소
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+            disabled={isProcessing}
+            className={`px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 ${
+              isProcessing ? "opacity-60 cursor-not-allowed" : ""
+            }`}
           >
-            종료
+            {isProcessing ? "종료 중..." : "종료"}
           </button>
         </div>
       </div>

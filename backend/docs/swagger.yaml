@@ -262,9 +262,18 @@ paths:
                         type: string
                       user_type:
                         type: string
-                  token:
+                  access_token:
                     type: string
-                    description: JWT 토큰
+                    description: Access Token (1시간 만료)
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  refresh_token:
+                    type: string
+                    description: Refresh Token (7일 만료)
+                    example: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6...
+                  expires_in:
+                    type: number
+                    description: Access Token 만료 시간 (초 단위)
+                    example: 3600
         '401':
           description: 인증 실패
           content:
@@ -278,6 +287,87 @@ paths:
                   message:
                     type: string
                     example: 존재하지 않는 이메일입니다.
+
+  /api/refresh:
+    post:
+      tags: [Auth]
+      summary: Access Token 갱신
+      description: Refresh Token을 사용하여 새로운 Access Token을 발급받습니다. Access Token이 만료되었을 때 사용합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+                  description: 로그인 시 받은 Refresh Token
+                  example: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6...
+      responses:
+        '200':
+          description: 토큰 갱신 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 토큰이 갱신되었습니다.
+                  access_token:
+                    type: string
+                    description: 새로운 Access Token (1시간 만료)
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  expires_in:
+                    type: number
+                    description: Access Token 만료 시간 (초 단위)
+                    example: 3600
+        '400':
+          description: 잘못된 요청 (refresh_token 누락)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: refresh_token이 필요합니다.
+        '401':
+          description: 유효하지 않거나 만료된 refresh token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: refresh token이 만료되었습니다.
+        '404':
+          description: 사용자를 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: 사용자를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
 
   /api/verify:
     get:
@@ -322,8 +412,20 @@ paths:
     post:
       tags: [Auth]
       summary: 로그아웃
+      description: Access Token을 블랙리스트에 추가하고 Refresh Token을 삭제합니다. refresh_token을 제공하면 해당 토큰만 삭제하고, 제공하지 않으면 해당 사용자의 모든 Refresh Token을 삭제합니다.
       security:
         - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  description: 삭제할 Refresh Token (선택, 없으면 모든 Refresh Token 삭제)
+                  example: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6...
       responses:
         '200':
           description: 로그아웃 성공
@@ -453,7 +555,7 @@ paths:
   /api/professor/lectures/create:
     post:
       tags: [Professor]
-      summary: 강의 개설
+      summary: 강좌 개설
       security:
         - bearerAuth: []
       requestBody:
@@ -523,7 +625,7 @@ paths:
   /api/professor/lectures/search:
     get:
       tags: [Professor]
-      summary: 강의 조회
+      summary: 강좌 조회
       security:
         - bearerAuth: []
       responses:
@@ -688,7 +790,7 @@ paths:
           description: 강좌를 찾을 수 없음
 
     put:
-      tags: [Professor]
+      tags: [Professor, Working]
       summary: 클래스 수정
       security:
         - bearerAuth: []
@@ -746,6 +848,66 @@ paths:
         '404':
           description: 강좌를 찾을 수 없음
 
+    post:
+      tags: [Professor]
+      summary: 클래스 추가
+      description: 새로운 클래스를 추가합니다. 다음 class 번호가 자동으로 할당됩니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: 새로운 클래스
+                description:
+                  type: string
+                  example: 클래스 설명
+                date:
+                  type: string
+                  format: date-time
+                  example: 2025-01-20T10:00:00Z
+                materials:
+                  type: array
+                  items:
+                    type: string
+                  example: []
+      responses:
+        '201':
+          description: 클래스 추가 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 클래스가 성공적으로 추가되었습니다.
+                  lecture_id:
+                    type: string
+                    example: LEC-A2787F9D
+                  class:
+                    $ref: '#/components/schemas/Class'
+        '400':
+          description: 잘못된 요청
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '404':
+          description: 강좌를 찾을 수 없음
+        '500':
+          description: 서버 오류
+
   /api/professor/lectures/{lectureId}/classes/{classId}:
     get:
       tags: [Professor]
@@ -785,6 +947,48 @@ paths:
           description: 권한 없음
         '404':
           description: 강좌 또는 클래스를 찾을 수 없음
+
+    delete:
+      tags: [Professor, Working]
+      summary: 클래스 삭제
+      description: 특정 클래스를 삭제합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 클래스 삭제 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 클래스가 성공적으로 삭제되었습니다.
+                  lecture_id:
+                    type: string
+                    example: LEC-A2787F9D
+                  deleted_class:
+                    $ref: '#/components/schemas/Class'
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+        '500':
+          description: 서버 오류
 
   /api/professor/lectures/{lectureId}/classes/{classId}/pdf:
     get:
@@ -1174,6 +1378,11 @@ paths:
                           type: string
                         lecture_description:
                           type: string
+                        thumbnail:
+                          type: string
+                          nullable: true
+                          description: 강의 썸네일 이미지 경로
+                          example: /uploads/images/thumbnail-1234567890-123456789.jpg
         '403':
           description: 권한 없음 (학생만 가능)
 
@@ -1209,6 +1418,287 @@ paths:
           description: 권한 없음 (학생만 가능)
         '404':
           description: 강좌를 찾을 수 없음
+
+  /api/student/participate:
+    get:
+      tags: [Student]
+      summary: 학생 라이브 참여 정보 조회
+      description: 학생이 특정 강좌의 특정 클래스에 참여하기 위한 라이브 방송 정보를 조회합니다. 현재 활성 라이브 상태, 라이브 ID, 시작 시간, 입장 경로 등을 반환합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 강좌 ID
+          example: LEC-32AEBA14
+        - name: classId
+          in: query
+          required: true
+          schema:
+            type: number
+          description: 클래스 ID
+          example: 1
+      responses:
+        '200':
+          description: 라이브 참여 정보 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lecture_id:
+                    type: string
+                    example: LEC-32AEBA14
+                  lecture_name:
+                    type: string
+                    example: 웹서비스설계및실습
+                  class_id:
+                    type: number
+                    example: 1
+                  class_title:
+                    type: string
+                    example: Orientation, 웹기초
+                  is_live_active:
+                    type: boolean
+                    description: 현재 라이브 방송이 활성화되어 있는지 여부
+                    example: true
+                  live_id:
+                    type: number
+                    nullable: true
+                    description: 현재 활성 라이브 ID (라이브가 없으면 null)
+                    example: 1
+                  started_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: 라이브 시작 시간 (라이브가 없으면 null)
+                    example: 2025-11-18T09:14:18.468Z
+                  live_path:
+                    type: string
+                    nullable: true
+                    description: 라이브 입장 경로 (라이브가 활성화되어 있을 때만 제공)
+                    example: /student/participate?lectureId=LEC-32AEBA14&classId=1
+        '400':
+          description: 잘못된 요청 (lectureId 또는 classId 누락, classId가 숫자가 아님)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: lectureId와 classId가 필요합니다.
+        '403':
+          description: 권한 없음 (학생만 가능 또는 해당 강좌에 등록되지 않음)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 해당 강좌에 등록되어 있지 않습니다.
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 강좌를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 서버 오류가 발생했습니다.
+
+  /api/student/my-questions:
+    get:
+      tags: [Student]
+      summary: 학생 본인 질문 목록 조회
+      description: 학생이 본인이 작성한 질문 목록을 조회합니다. author.id를 기준으로 필터링되며, 선택적으로 lectureId와 classId로 추가 필터링이 가능합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 강좌 ID로 필터링 (선택)
+          example: LEC-32AEBA14
+        - name: classId
+          in: query
+          required: false
+          schema:
+            type: number
+          description: 클래스 ID로 필터링 (선택)
+          example: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+            default: 50
+            maximum: 200
+          description: 조회할 질문 개수 (최대 200개)
+          example: 50
+      responses:
+        '200':
+          description: 질문 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  student_id:
+                    type: string
+                    example: 6910d351fb90e6f31ca52cad
+                  student_name:
+                    type: string
+                    example: 웹설실_학생3
+                  total_count:
+                    type: number
+                    example: 15
+                  questions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          example: 6914001daba488eae7586b8f
+                        lecture_id:
+                          type: string
+                          example: LEC-32AEBA14
+                        lecture_name:
+                          type: string
+                          nullable: true
+                          example: 웹서비스설계및실습
+                        class_id:
+                          type: number
+                          example: 1
+                        page:
+                          type: number
+                          example: 3
+                        section:
+                          type: string
+                          nullable: true
+                          example: A
+                        position:
+                          type: object
+                          properties:
+                            x:
+                              type: number
+                              example: 0.12
+                            y:
+                              type: number
+                              example: 0.34
+                        timestamp:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.966Z
+                        type:
+                          type: string
+                          enum: [question, answer, note]
+                          example: question
+                        author:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: 6910d351fb90e6f31ca52cad
+                            name:
+                              type: string
+                              example: 웹설실_학생3
+                        text:
+                          type: string
+                          example: 이 부분이 이해가 안 됩니다.
+                        answer:
+                          type: string
+                          nullable: true
+                          description: GPT 자동 답변
+                          example: REST API는 HTTP 프로토콜을 사용하여 리소스를 조작하는 방식입니다.
+                        upvote_count:
+                          type: number
+                          example: 5
+                        metadata:
+                          type: object
+                          properties:
+                            source:
+                              type: string
+                              example: pdf_viewer
+                            device:
+                              type: string
+                              example: web
+                            language:
+                              type: string
+                              example: ko
+                            likes:
+                              type: number
+                              example: 5
+                        live_id:
+                          type: number
+                          nullable: true
+                          example: 1
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.974Z
+                        updated_at:
+                          type: string
+                          format: date-time
+                          example: 2025-11-12T03:33:49.974Z
+        '400':
+          description: 잘못된 요청 (classId가 숫자가 아님)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: classId는 숫자여야 합니다.
+        '403':
+          description: 권한 없음 (학생만 가능 또는 해당 강좌에 등록되지 않음)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 해당 강좌에 등록되어 있지 않습니다.
+        '404':
+          description: 강좌를 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 강좌를 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 서버 오류가 발생했습니다.
 
   # ==================== 질문 API ====================
   /api/questions/lectures/{lectureId}/classes/{classId}:
@@ -1775,6 +2265,127 @@ paths:
           description: 강좌를 찾을 수 없습니다.
         '500':
           description: 서버 오류
+
+  /api/questions/{id}/answer:
+    post:
+      tags: [Questions, Working]
+      summary: 질문 답변 추가/수정
+      description: 교수자가 질문에 대한 답변을 추가하거나 수정합니다. GPT가 생성한 답변을 보완하거나 수정할 수 있습니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 질문 ID
+          example: 6914001daba488eae7586b8f
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer:
+                  type: string
+                  description: 답변 내용
+                  example: 이 부분은 교안의 3페이지에 자세히 설명되어 있습니다. 핵심 개념은...
+      responses:
+        '200':
+          description: 답변 저장 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 답변이 저장되었습니다.
+                  question:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        example: 6914001daba488eae7586b8f
+                      lecture_id:
+                        type: string
+                        example: LEC-32AEBA14
+                      class_id:
+                        type: number
+                        example: 2
+                      page:
+                        type: number
+                        example: 3
+                      position:
+                        type: object
+                        properties:
+                          x:
+                            type: number
+                            example: 0.12
+                          y:
+                            type: number
+                            example: 0.34
+                      text:
+                        type: string
+                        example: 이 부분이 이해가 안 됩니다.
+                      answer:
+                        type: string
+                        description: 교수자가 추가/수정한 답변
+                        example: 이 부분은 교안의 3페이지에 자세히 설명되어 있습니다. 핵심 개념은...
+                      author:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          role:
+                            type: string
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: 2025-11-12T03:33:49.974Z
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: 2025-11-12T04:15:30.123Z
+        '400':
+          description: 잘못된 요청 (답변 내용이 없음)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 답변 내용이 필요합니다.
+        '401':
+          description: 인증 토큰이 필요합니다.
+        '403':
+          description: 해당 강좌에 접근할 수 없습니다.
+        '404':
+          description: 질문을 찾을 수 없습니다.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 질문을 찾을 수 없습니다.
+        '500':
+          description: 서버 오류
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 서버 오류가 발생했습니다.
 
   /api/professor/lectures/{lectureId}/statistics:
     get:

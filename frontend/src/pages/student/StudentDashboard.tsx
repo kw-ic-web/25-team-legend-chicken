@@ -1,76 +1,122 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import LectureCard from "../../components/common/LectureCard";
 import Pagination from "../../components/common/Pagination";
+import { getMyLectures, getLiveStatus } from "../../api/student";
+import { getBaseUrl } from "../../api/auth/client";
+import Toast from "../../components/common/Toast";
 
 const StudentDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [lectures, setLectures] = useState<
+    Array<{
+      id: string;
+      title: string;
+      instructor: string;
+      participants: number;
+      status: "broadcasting" | "scheduled" | "completed";
+      newQuestions: number;
+      subject: string;
+      image?: string;
+    }>
+  >([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [liveStatusMap, setLiveStatusMap] = useState<Map<string, boolean>>(new Map());
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
 
-  // 강의 카드 데이터
-  const lectures = [
-    {
-      id: 1,
-      title: "프로그래밍 시작하기: 파이썬 입문",
-      instructor: "김철수",
-      participants: 30,
-      status: "broadcasting" as const,
-      newQuestions: 2,
-      subject: "Python",
-      level: "Level. 1",
-    },
-    {
-      id: 2,
-      title: "웹 개발 기초",
-      instructor: "김철수",
-      participants: 20,
-      status: "scheduled" as const,
-      newQuestions: 0,
-      subject: "Web",
-      level: "Level. 2",
-    },
-    {
-      id: 3,
-      title: "데이터베이스 설계",
-      instructor: "김철수",
-      participants: 12,
-      status: "completed" as const,
-      newQuestions: 0,
-      subject: "Database",
-      level: "Level. 3",
-    },
-    {
-      id: 4,
-      title: "머신러닝 입문",
-      instructor: "김철수",
-      participants: 25,
-      status: "broadcasting" as const,
-      newQuestions: 1,
-      subject: "ML",
-      level: "Level. 4",
-    },
-    {
-      id: 5,
-      title: "알고리즘과 자료구조",
-      instructor: "김철수",
-      participants: 18,
-      status: "scheduled" as const,
-      newQuestions: 0,
-      subject: "Algorithm",
-      level: "Level. 3",
-    },
-    {
-      id: 6,
-      title: "소프트웨어 공학",
-      instructor: "김철수",
-      participants: 22,
-      status: "completed" as const,
-      newQuestions: 0,
-      subject: "SE",
-      level: "Level. 2",
-    },
-  ];
+  useEffect(() => {
+    const fetchLectures = async () => {
+      try {
+        setIsLoading(true);
+        const response = await getMyLectures();
+        const mappedLectures = response.lectures.map((lec) => {
+          const thumbnail = lec.thumbnail
+            ? lec.thumbnail.startsWith("http")
+              ? lec.thumbnail
+              : `${getBaseUrl()}${lec.thumbnail}`
+            : undefined;
+          return {
+            id: lec.lecture_id,
+            title: lec.name,
+            instructor: lec.professor_name,
+            participants: 0, // API에서 제공하지 않음
+            status: "scheduled" as const, // 기본값 (라이브 상태 확인 후 업데이트됨)
+            newQuestions: 0,
+            subject: "Python", // 기본값
+            image: thumbnail,
+          };
+        });
+        setLectures(mappedLectures);
+      } catch (error) {
+        console.error("강의 목록 조회 실패:", error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "강의 목록을 불러오는 중 오류가 발생했습니다.";
+        setToast({ message, type: "error" });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchLectures();
+
+    // 강의 참여 이벤트 리스너
+    const handleLectureJoined = () => {
+      fetchLectures();
+    };
+    window.addEventListener("lecture:joined", handleLectureJoined);
+    return () => {
+      window.removeEventListener("lecture:joined", handleLectureJoined);
+    };
+  }, []);
+
+  // 검색어나 탭 변경 시 첫 페이지로
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeTab]);
+
+  // 라이브 상태 확인
+  useEffect(() => {
+    const checkLiveStatuses = async () => {
+      if (lectures.length === 0) return;
+
+      const statusMap = new Map<string, boolean>();
+
+      // 각 강좌의 라이브 상태 확인
+      const promises = lectures.map(async (lecture) => {
+        try {
+          const liveStatus = await getLiveStatus(lecture.id);
+          // classes 배열에서 isLiveActive가 true인 클래스가 있는지 확인
+          const hasActiveLive = liveStatus.classes.some(
+            (cls) => cls.isLiveActive === true
+          );
+          statusMap.set(lecture.id, hasActiveLive);
+        } catch (error) {
+          console.error(`강좌 ${lecture.id} 라이브 상태 확인 오류:`, error);
+          statusMap.set(lecture.id, false);
+        }
+      });
+
+      await Promise.all(promises);
+      setLiveStatusMap(statusMap);
+    };
+
+    // 초기 확인
+    checkLiveStatuses();
+
+    // 주기적으로 확인 (10초마다)
+    const interval = setInterval(checkLiveStatuses, 10000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [lectures]);
 
   return (
     <div className="flex-1 flex flex-col">
@@ -132,31 +178,98 @@ const StudentDashboard: React.FC = () => {
 
       {/* 강의 카드 그리드 */}
       <div className="flex-1 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {lectures.map((lecture) => (
-            <LectureCard
-              key={lecture.id}
-              id={lecture.id}
-              title={lecture.title}
-              instructor={lecture.instructor}
-              participants={lecture.participants}
-              status={lecture.status}
-              newQuestions={lecture.newQuestions}
-              subject={lecture.subject}
-              level={lecture.level}
-            />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">강의 목록을 불러오는 중...</div>
+          </div>
+        ) : lectures.length === 0 ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">수강 중인 강의가 없습니다.</div>
+          </div>
+        ) : (() => {
+          // 필터링된 강좌 목록
+          const filteredLectures = lectures
+            .map((lecture) => {
+              // 라이브 상태 확인 (live-status API 결과 사용)
+              const isLiveActive = liveStatusMap.get(lecture.id);
+              const status: "broadcasting" | "scheduled" | "completed" = 
+                isLiveActive === true ? "broadcasting" : lecture.status;
+              
+              return {
+                ...lecture,
+                status,
+              };
+            })
+            .filter((lecture) => {
+              // 검색어 필터
+              if (searchTerm.trim()) {
+                const searchLower = searchTerm.toLowerCase();
+                return (
+                  lecture.title.toLowerCase().includes(searchLower) ||
+                  lecture.instructor.toLowerCase().includes(searchLower) ||
+                  lecture.subject.toLowerCase().includes(searchLower)
+                );
+              }
+              return true;
+            })
+            .filter((lecture) => {
+              // 탭 필터
+              if (activeTab === "all") return true;
+              if (activeTab === "ongoing") return lecture.status !== "completed"; // 종료되지 않은 모든 강좌
+              if (activeTab === "completed") return lecture.status === "completed";
+              return true;
+            });
 
-        {/* 페이지네이션 */}
-        <Pagination
-          currentPage={currentPage}
-          totalPages={12}
-          onPageChange={setCurrentPage}
-          showFirstLast={true}
-          maxVisiblePages={5}
-        />
+          // 페이지네이션
+          const itemsPerPage = 9;
+          const totalPages = Math.ceil(filteredLectures.length / itemsPerPage);
+          const startIndex = (currentPage - 1) * itemsPerPage;
+          const paginatedLectures = filteredLectures.slice(
+            startIndex,
+            startIndex + itemsPerPage
+          );
+
+          return (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedLectures.map((lecture) => (
+                  <LectureCard
+                    key={lecture.id}
+                    id={lecture.id}
+                    title={lecture.title}
+                    instructor={lecture.instructor}
+                    participants={lecture.participants}
+                    status={lecture.status}
+                    newQuestions={lecture.newQuestions}
+                    subject={lecture.subject}
+                    userType="student"
+                    image={lecture.image}
+                  />
+                ))}
+              </div>
+
+              {/* 페이지네이션 */}
+              {totalPages > 1 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  showFirstLast={true}
+                  maxVisiblePages={5}
+                />
+              )}
+            </>
+          );
+        })()}
       </div>
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };

@@ -1,11 +1,29 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Send } from "lucide-react";
+import { io, Socket } from "socket.io-client";
+import { getBaseUrl } from "../../api/auth/client";
 import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
 import ParticipantStrip from "../../components/live/professor/ParticipantStrip";
 import ScreenShareArea from "../../components/live/professor/ScreenShareArea";
 import LiveControls from "../../components/live/professor/LiveControls";
 import EndBroadcastConfirmModal from "../../components/modal/live/EndBroadcastConfirmModal";
 import Toast from "../../components/common/Toast";
+import { useAuth } from "../../contexts/AuthContext";
+import { useToast } from "../../contexts/ToastContext";
+import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
+import { endLive, getClassPdfs } from "../../api/professor";
+import {
+  sendChatMessage,
+  getChatMessages,
+  type ChatMessage,
+} from "../../api/chat";
 
 interface Question {
   id: number;
@@ -15,19 +33,58 @@ interface Question {
   status: "pending" | "answered" | "dismissed";
 }
 
+type PdfItem = {
+  name: string;
+  url: string;
+};
+
+type LiveNavigationState = {
+  lectureId?: string;
+  classId?: number;
+  classTitle?: string;
+  liveId?: number;
+  cameraRequired?: boolean;
+  materials?: Array<{ name: string; size: number }>;
+};
+
 const RealtimeDashboard: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const params = useParams<{
+    lectureId?: string;
+    classId?: string;
+    liveId?: string;
+  }>();
+  const liveState = (location.state as LiveNavigationState) || null;
+  const { user } = useAuth();
+  const { showToast: showGlobalToast } = useToast();
   const [isMicOn, setIsMicOn] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
   const [chatMessage, setChatMessage] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isSharing, setIsSharing] = useState(false);
+  const chatSocketRef = useRef<Socket | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const [isPersonnelOpen, setIsPersonnelOpen] = useState(false);
   const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
-  const showError = (message: string) => setToast({ message, type: "error" });
+  const [isEndingLive, setIsEndingLive] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [isPdfLoading, setIsPdfLoading] = useState(false);
+  const [pdfItems, setPdfItems] = useState<PdfItem[]>([]);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfMeta, setPdfMeta] = useState<{
+    lectureName?: string;
+    classTitle?: string;
+  } | null>(null);
+  const [selectedPdf, setSelectedPdf] = useState<PdfItem | null>(null);
+  const showError = useCallback((message: string) => {
+    setToast({ message, type: "error" });
+  }, []);
   const [students] = useState(
     Array.from({ length: 8 }).map((_, i) => ({
       id: i + 1,
@@ -35,6 +92,24 @@ const RealtimeDashboard: React.FC = () => {
       email: `student${i + 1}@example.com`,
     }))
   );
+
+  const parseNumeric = (value?: number | string | null) => {
+    if (value === null || value === undefined || value === "") return undefined;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : undefined;
+  };
+
+  const resolveAssetUrl = useCallback((url?: string | null) => {
+    if (!url) return "";
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return url;
+    }
+    return `${getBaseUrl()}${url}`;
+  }, []);
+
+  const resolvedLectureId = liveState?.lectureId || params.lectureId;
+  const resolvedClassId = parseNumeric(liveState?.classId ?? params.classId);
+  const resolvedLiveId = parseNumeric(liveState?.liveId ?? params.liveId);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const shareVideoRef = useRef<HTMLVideoElement>(null);
@@ -44,6 +119,26 @@ const RealtimeDashboard: React.FC = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const isStartingShareRef = useRef(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+
+  const localStreams = useMemo(
+    () => [cameraStream, screenStream],
+    [cameraStream, screenStream]
+  );
+
+  const {
+    remoteParticipants,
+    status: webrtcStatus,
+    error: webrtcError,
+  } = useLiveWebRTC({
+    lectureId: resolvedLectureId,
+    classId: resolvedClassId,
+    liveId: resolvedLiveId ?? null,
+    role: "professor",
+    userId: user?.id,
+    localStreams,
+  });
 
   const [questions, setQuestions] = useState<Question[]>([
     {
@@ -61,27 +156,6 @@ const RealtimeDashboard: React.FC = () => {
       timestamp: "08:15",
       status: "pending",
     },
-    {
-      id: 3,
-      studentName: "익명의 오소리",
-      question: "이 부분이 이해가 잘 안가서 그러는데 파이썬이 뭐죠?",
-      timestamp: "08:15",
-      status: "pending",
-    },
-    {
-      id: 4,
-      studentName: "익명의 오소리",
-      question: "이 부분이 이해가 잘 안가서 그러는데 파이썬이 뭐죠?",
-      timestamp: "08:15",
-      status: "pending",
-    },
-    {
-      id: 5,
-      studentName: "익명의 오소리",
-      question: "이 부분이 이해가 잘 안가서 그러는데 파이썬이 뭐죠?",
-      timestamp: "08:15",
-      status: "pending",
-    },
   ]);
 
   // 웹캠 시작
@@ -92,6 +166,7 @@ const RealtimeDashboard: React.FC = () => {
         audio: true,
       });
       streamRef.current = stream;
+      setCameraStream(stream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -122,7 +197,7 @@ const RealtimeDashboard: React.FC = () => {
         showError("웹캠을 시작할 수 없어요. 장치와 권한을 확인해 주세요.");
       }
     }
-  }, []);
+  }, [showError]);
 
   // 웹캠 중지
   const stopCamera = useCallback(() => {
@@ -135,6 +210,7 @@ const RealtimeDashboard: React.FC = () => {
     }
     setIsCameraOn(false);
     setIsMicOn(false);
+    setCameraStream(null);
     stopAudioLevelMonitoring();
   }, []);
 
@@ -184,21 +260,113 @@ const RealtimeDashboard: React.FC = () => {
   // 화면 공유 중지/시작
   const stopScreenShare = useCallback(() => {
     if (shareStreamRef.current) {
-      shareStreamRef.current.getTracks().forEach((t) => t.stop());
+      // 모든 트랙 정지
+      shareStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+        // 이벤트 리스너 제거
+        track.onended = null;
+      });
       shareStreamRef.current = null;
     }
     if (shareVideoRef.current) {
       shareVideoRef.current.srcObject = null;
     }
     setIsSharing(false);
+    setScreenStream(null);
+  }, []);
+
+  const fetchPdfList = useCallback(async () => {
+    if (!resolvedLectureId || resolvedClassId === undefined) {
+      setPdfError("클래스 정보를 찾을 수 없습니다.");
+      setPdfItems([]);
+      return;
+    }
+    setIsPdfLoading(true);
+    setPdfError(null);
+    try {
+      const response = await getClassPdfs(resolvedLectureId, resolvedClassId);
+      const normalized = (response.pdfs || []).map((pdfItem, index) => {
+        const rawUrl =
+          typeof pdfItem === "string"
+            ? pdfItem
+            : typeof pdfItem === "object" && pdfItem !== null
+              ? pdfItem.url
+              : "";
+        const displayName =
+          typeof pdfItem === "string"
+            ? pdfItem.split("/").pop() || `자료 ${index + 1}`
+            : pdfItem?.originalName || `자료 ${index + 1}`;
+        return {
+          name: displayName,
+          url: resolveAssetUrl(rawUrl),
+        };
+      });
+      setPdfItems(normalized);
+      setPdfMeta({
+        lectureName: response.lecture_name,
+        classTitle: response.class_title,
+      });
+      if (normalized.length === 0) {
+        setPdfError("등록된 PDF 자료가 없습니다.");
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "PDF 목록을 불러오는 중 오류가 발생했습니다.";
+      setPdfError(message);
+      showError(message);
+    } finally {
+      setIsPdfLoading(false);
+    }
+  }, [resolveAssetUrl, resolvedClassId, resolvedLectureId, showError]);
+
+  const handleOpenPdfModal = useCallback(() => {
+    if (!resolvedLectureId || resolvedClassId === undefined) {
+      showError("클래스 정보를 찾을 수 없습니다.");
+      return;
+    }
+    setIsPdfModalOpen(true);
+    void fetchPdfList();
+  }, [fetchPdfList, resolvedClassId, resolvedLectureId, showError]);
+
+  const handleRefreshPdfList = useCallback(() => {
+    void fetchPdfList();
+  }, [fetchPdfList]);
+
+  const handleSelectPdf = useCallback(
+    (pdf: PdfItem) => {
+      setSelectedPdf(pdf);
+      setIsPdfModalOpen(false);
+      if (isSharing) {
+        stopScreenShare();
+      }
+    },
+    [isSharing, stopScreenShare]
+  );
+
+  const handleStopPdfShare = useCallback(() => {
+    setSelectedPdf(null);
+  }, []);
+
+  const handleClosePdfModal = useCallback(() => {
+    setIsPdfModalOpen(false);
   }, []);
 
   const startScreenShare = useCallback(async () => {
+    // 이미 공유 중이면 중복 호출 방지
+    if (isSharing || shareStreamRef.current) {
+      return;
+    }
+
     // 화면공유 시작 플래그 설정 (visibilitychange 무시)
+    if (isStartingShareRef.current) {
+      return; // 이미 시작 중이면 중복 호출 방지
+    }
     isStartingShareRef.current = true;
     setTimeout(() => {
       isStartingShareRef.current = false;
-    }, 3000); // 3초 후 플래그 해제
+    }, 5000); // 5초 후 플래그 해제
 
     try {
       const mediaDevices = navigator.mediaDevices as MediaDevices & {
@@ -215,11 +383,20 @@ const RealtimeDashboard: React.FC = () => {
             }
           ).getDisplayMedia;
 
-      const displayStream = await getDisplay({
-        video: { frameRate: 30 },
+      // 전체 화면 공유를 기본으로 설정 (preferCurrentTab: false)
+      const displayConstraints: MediaStreamConstraints & {
+        preferCurrentTab?: boolean;
+      } = {
+        video: {
+          frameRate: 30,
+          displaySurface: "monitor", // 전체 화면 선호
+        },
         audio: true,
-      });
+        preferCurrentTab: false, // Chrome/Edge 전용 옵션
+      };
+      const displayStream = await getDisplay(displayConstraints);
       shareStreamRef.current = displayStream;
+      setScreenStream(displayStream);
       if (shareVideoRef.current) {
         shareVideoRef.current.srcObject =
           displayStream as unknown as MediaStream;
@@ -237,9 +414,15 @@ const RealtimeDashboard: React.FC = () => {
       setIsSharing(true);
 
       // 사용자가 공유를 중지했을 때 이벤트 처리
-      const [track] = displayStream.getVideoTracks();
-      track.addEventListener("ended", () => {
-        stopScreenShare();
+      const videoTracks = displayStream.getVideoTracks();
+      const audioTracks = displayStream.getAudioTracks();
+
+      // 모든 트랙에 ended 이벤트 리스너 추가
+      [...videoTracks, ...audioTracks].forEach((track) => {
+        track.addEventListener("ended", () => {
+          console.log("[RealtimeDashboard] Screen share track ended");
+          stopScreenShare();
+        });
       });
     } catch (e: unknown) {
       console.error("화면 공유 실패:", e);
@@ -250,10 +433,15 @@ const RealtimeDashboard: React.FC = () => {
       } else {
         showError("화면 공유를 시작할 수 없어요.");
       }
+    } finally {
+      // 에러 발생 시에도 플래그 해제
+      setTimeout(() => {
+        isStartingShareRef.current = false;
+      }, 1000);
     }
-  }, [stopScreenShare]);
+  }, [showError, stopScreenShare, isSharing]);
 
-  const toggleMic = () => {
+  const toggleMic = useCallback(() => {
     if (streamRef.current) {
       const audioTracks = streamRef.current.getAudioTracks();
       if (audioTracks.length > 0) {
@@ -308,9 +496,9 @@ const RealtimeDashboard: React.FC = () => {
           }
         });
     }
-  };
+  }, [showError]);
 
-  const toggleCamera = () => {
+  const toggleCamera = useCallback(() => {
     if (streamRef.current) {
       const videoTracks = streamRef.current.getVideoTracks();
       if (videoTracks.length > 0) {
@@ -404,14 +592,38 @@ const RealtimeDashboard: React.FC = () => {
           }
         });
     }
-  };
+  }, [showError]);
 
-  const handleSendMessage = () => {
-    if (chatMessage.trim()) {
-      console.log("메시지 전송:", chatMessage);
-      setChatMessage("");
+  const handleSendMessage = useCallback(async () => {
+    if (
+      !chatMessage.trim() ||
+      !resolvedLectureId ||
+      resolvedClassId === undefined
+    ) {
+      return;
     }
-  };
+
+    try {
+      await sendChatMessage({
+        lecture_id: resolvedLectureId,
+        class_id: resolvedClassId,
+        live_id: resolvedLiveId ?? null,
+        text: chatMessage.trim(),
+      });
+      setChatMessage("");
+    } catch (error) {
+      console.error("메시지 전송 실패:", error);
+      showError(
+        error instanceof Error ? error.message : "메시지 전송에 실패했습니다."
+      );
+    }
+  }, [
+    chatMessage,
+    resolvedLectureId,
+    resolvedClassId,
+    resolvedLiveId,
+    showError,
+  ]);
 
   const closePersonnel = () => setIsPersonnelOpen(false);
 
@@ -431,15 +643,113 @@ const RealtimeDashboard: React.FC = () => {
     );
   };
 
-  // 컴포넌트 마운트 시 웹캠 자동 시작
+  // 채팅 메시지 조회 및 Socket.io 연결
   useEffect(() => {
-    startCamera();
+    if (!resolvedLectureId || resolvedClassId === undefined) return;
+
+    // 기존 메시지 조회
+    const loadMessages = async () => {
+      try {
+        const response = await getChatMessages({
+          lecture_id: resolvedLectureId!,
+          class_id: resolvedClassId!,
+          live_id: resolvedLiveId ?? null,
+          limit: 50,
+        });
+        setChatMessages(response.messages);
+        // 스크롤을 맨 아래로
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop =
+              chatContainerRef.current.scrollHeight;
+          }
+        }, 100);
+      } catch (error) {
+        console.error("메시지 조회 실패:", error);
+      }
+    };
+
+    loadMessages();
+
+    // Socket.io 연결
+    const baseUrl = getBaseUrl();
+    const token = localStorage.getItem("lecq.token");
+    const socket = io(baseUrl, {
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+      auth: token ? { token } : undefined,
+    });
+    chatSocketRef.current = socket;
+
+    // 라이브 룸 입장
+    socket.on("connect", () => {
+      socket.emit("live:join", {
+        lecture_id: resolvedLectureId,
+        class_id: resolvedClassId,
+        live_id: resolvedLiveId ?? null,
+        role: "professor",
+        user_id: user?.id,
+      });
+    });
+
+    // 실시간 메시지 수신
+    const handleChatMessage = (message: ChatMessage) => {
+      setChatMessages((prev) => {
+        // 중복 방지
+        if (prev.some((m) => m._id === message._id)) {
+          return prev;
+        }
+        return [...prev, message];
+      });
+      // 스크롤을 맨 아래로
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop =
+            chatContainerRef.current.scrollHeight;
+        }
+      }, 100);
+    };
+
+    socket.on("chat:message", handleChatMessage);
 
     return () => {
+      socket.off("chat:message", handleChatMessage);
+      socket.disconnect();
+      chatSocketRef.current = null;
+    };
+  }, [resolvedLectureId, resolvedClassId, resolvedLiveId, user?.id]);
+
+  // 컴포넌트 마운트 시 웹캠 자동 시작 및 화면 공유 자동 시작
+  useEffect(() => {
+    let mounted = true;
+
+    const initialize = async () => {
+      await startCamera();
+      // 약간의 지연 후 화면 공유 시작 (카메라 시작 후)
+      if (mounted) {
+        setTimeout(() => {
+          if (mounted && !isSharing) {
+            startScreenShare();
+          }
+        }, 500);
+      }
+    };
+
+    initialize();
+
+    return () => {
+      mounted = false;
       stopCamera();
       stopScreenShare();
+      stopCamera();
     };
-  }, [startCamera, stopCamera, stopScreenShare]);
+  }, []); // 한 번만 실행
+
+  useEffect(() => {
+    if (webrtcError) {
+      showError(`WebRTC 오류: ${webrtcError}`);
+    }
+  }, [webrtcError, showError]);
 
   // 탭 숨김/이탈 시 리소스 정리
   useEffect(() => {
@@ -448,58 +758,153 @@ const RealtimeDashboard: React.FC = () => {
       if (isStartingShareRef.current) return;
 
       if (document.hidden) {
-        // 화면공유 중이 아니면 정리
-        if (!isSharing) {
+        // 탭이 숨겨지면 화면공유 정리 (브라우저가 종료되어도 정리되도록)
+        if (isSharing) {
+          console.log("[RealtimeDashboard] Tab hidden, stopping screen share");
           stopScreenShare();
-          stopCamera();
         }
+        // 카메라는 유지 (사용자가 다시 돌아올 수 있음)
       }
     };
 
     const onBeforeUnload = () => {
+      // 페이지를 떠날 때 모든 스트림 정리
+      console.log("[RealtimeDashboard] Before unload, cleaning up all streams");
+      stopScreenShare();
+      stopCamera();
+    };
+
+    const onPageHide = () => {
+      // 페이지가 숨겨질 때 (뒤로 가기, 새로고침 등)
+      console.log("[RealtimeDashboard] Page hide, cleaning up all streams");
       stopScreenShare();
       stopCamera();
     };
 
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
     };
   }, [stopCamera, stopScreenShare, isSharing]);
 
+  const handleConfirmEndLive = useCallback(async () => {
+    if (!resolvedLectureId || resolvedClassId === undefined) {
+      showError("라이브 정보를 찾을 수 없습니다.");
+      return;
+    }
+    if (isEndingLive) return;
+    setIsEndingLive(true);
+    try {
+      const response = await endLive(resolvedLectureId, resolvedClassId);
+      const successMessage = response.message || "라이브가 종료되었습니다.";
+      setToast({
+        message: successMessage,
+        type: "success",
+      });
+      showGlobalToast(successMessage, "success");
+      stopScreenShare();
+      stopCamera();
+      setIsEndConfirmOpen(false);
+      navigate(`/professor/courses/${resolvedLectureId}`, { replace: true });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "라이브 종료 중 오류가 발생했습니다.";
+      showError(message);
+    } finally {
+      setIsEndingLive(false);
+    }
+  }, [
+    endLive,
+    isEndingLive,
+    navigate,
+    resolvedClassId,
+    resolvedLectureId,
+    showError,
+    showGlobalToast,
+    stopCamera,
+    stopScreenShare,
+  ]);
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex h-[calc(100vh-80px)]">
+    <div className="flex h-full bg-gray-50">
+      <div className="flex flex-1 overflow-hidden">
         {/* 메인 콘텐츠 영역 */}
-        <div className="flex-1 bg-white m-4 rounded-lg shadow-sm">
-          <div className="h-full flex flex-col">
+        <div className="flex-1 bg-white m-2 rounded-lg shadow-sm overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden">
             {/* 강의 제목 */}
-            <div className="p-6 border-b border-gray-200">
-              <h1 className="text-2xl font-bold text-green-600">
-                Chapter 1-1. 파이썬 & 프로그래밍 소개
-              </h1>
+            <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-white via-white to-green-50">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h1 className="text-xl font-bold text-green-600 truncate">
+                  {liveState?.classTitle || "실시간 강의"}
+                </h1>
+                <div className="text-xs text-gray-500 flex items-center gap-3 flex-wrap">
+                  {(liveState?.lectureId || params.lectureId) && (
+                    <span className="flex items-center gap-1">
+                      <span className="font-semibold text-gray-700">강좌</span>
+                      {liveState?.lectureId || params.lectureId}
+                    </span>
+                  )}
+                  {(liveState?.classId || params.classId) && (
+                    <span className="flex items-center gap-1">
+                      <span className="font-semibold text-gray-700">
+                        클래스
+                      </span>
+                      {liveState?.classId || params.classId}
+                    </span>
+                  )}
+                  {(liveState?.liveId || params.liveId) && (
+                    <span className="flex items-center gap-1">
+                      <span className="font-semibold text-gray-700">
+                        라이브
+                      </span>
+                      {liveState?.liveId || params.liveId}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* 상단 참여자(웹캠) 스트립 */}
-            <ParticipantStrip isCameraOn={isCameraOn} videoRef={videoRef} />
-
             {/* 강의 콘텐츠(화면 공유 영역) */}
-            <ScreenShareArea isSharing={isSharing} videoRef={shareVideoRef}>
-              <LiveControls
-                isMicOn={isMicOn}
-                isCameraOn={isCameraOn}
-                isSharing={isSharing}
-                onToggleMic={toggleMic}
-                onToggleCamera={toggleCamera}
-                onToggleShare={() =>
-                  isSharing ? stopScreenShare() : startScreenShare()
-                }
-                onOpenPersonnel={() => setIsPersonnelOpen(true)}
-                onEnd={() => setIsEndConfirmOpen(true)}
-              />
+            <ScreenShareArea
+              isSharing={isSharing}
+              hasPdfOverlay={!!selectedPdf}
+              videoRef={shareVideoRef}
+              connectionStatus={webrtcStatus}
+              remoteParticipants={remoteParticipants}
+            >
+              <>
+                {selectedPdf && (
+                  <PdfOverlay pdf={selectedPdf} onStop={handleStopPdfShare} />
+                )}
+                <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
+                  <ParticipantStrip
+                    isCameraOn={isCameraOn}
+                    videoRef={videoRef}
+                    remoteParticipants={remoteParticipants}
+                  />
+                </div>
+                <LiveControls
+                  isMicOn={isMicOn}
+                  isCameraOn={isCameraOn}
+                  isSharing={isSharing}
+                  isPdfSharing={!!selectedPdf}
+                  onToggleMic={toggleMic}
+                  onToggleCamera={toggleCamera}
+                  onToggleShare={() =>
+                    isSharing ? stopScreenShare() : startScreenShare()
+                  }
+                  onSharePdf={handleOpenPdfModal}
+                  onOpenPersonnel={() => setIsPersonnelOpen(true)}
+                  onEnd={() => setIsEndConfirmOpen(true)}
+                />
+              </>
             </ScreenShareArea>
           </div>
         </div>
@@ -532,7 +937,7 @@ const RealtimeDashboard: React.FC = () => {
             </div>
 
             {/* 탭 콘텐츠 */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto" ref={chatContainerRef}>
               {activeTab === "questions" ? (
                 <div className="p-4 space-y-4">
                   {questions
@@ -576,10 +981,64 @@ const RealtimeDashboard: React.FC = () => {
                     ))}
                 </div>
               ) : (
-                <div className="p-4">
-                  <div className="text-center text-gray-500 text-sm">
-                    실시간 채팅 기능
-                  </div>
+                <div className="p-4 space-y-3">
+                  {chatMessages.length === 0 ? (
+                    <div className="text-center text-gray-500 text-sm py-8">
+                      채팅 메시지가 없습니다.
+                    </div>
+                  ) : (
+                    chatMessages.map((msg) => {
+                      const isProfessor = msg.sender.role === "professor";
+                      const isOwnMessage = msg.sender.id === user?.id;
+                      const time = new Date(msg.timestamp || msg.created_at);
+                      const timeStr = `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}`;
+
+                      return (
+                        <div
+                          key={msg._id}
+                          className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[80%] rounded-lg p-2 ${
+                              isOwnMessage
+                                ? "bg-blue-600 text-white"
+                                : isProfessor
+                                  ? "bg-green-100 text-gray-900"
+                                  : "bg-gray-100 text-gray-900"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span
+                                className={`text-xs font-medium ${
+                                  isOwnMessage
+                                    ? "text-blue-100"
+                                    : isProfessor
+                                      ? "text-green-700"
+                                      : "text-gray-600"
+                                }`}
+                              >
+                                {isOwnMessage
+                                  ? "나"
+                                  : isProfessor
+                                    ? "교수자"
+                                    : msg.sender.name}
+                              </span>
+                              <span
+                                className={`text-[10px] ${
+                                  isOwnMessage
+                                    ? "text-blue-200"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                {timeStr}
+                              </span>
+                            </div>
+                            <p className="text-sm break-words">{msg.text}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               )}
             </div>
@@ -591,9 +1050,14 @@ const RealtimeDashboard: React.FC = () => {
                   type="text"
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
-                  placeholder="김철수로 채팅하기"
+                  placeholder="채팅 입력 (Enter)"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
                 />
                 <button
                   onClick={handleSendMessage}
@@ -605,29 +1069,171 @@ const RealtimeDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-        {/* 강의 인원 모달 */}
-        <LecturePersonnelModal
-          isOpen={isPersonnelOpen}
-          onClose={closePersonnel}
-          students={students} lectureId={""}        />
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        )}
-        <EndBroadcastConfirmModal
-          isOpen={isEndConfirmOpen}
-          onClose={() => setIsEndConfirmOpen(false)}
-          onConfirm={() => {
-            setIsEndConfirmOpen(false);
-            stopScreenShare();
-            stopCamera();
-            console.log("방송 종료됨");
-          }}
-        />
       </div>
+
+      <LecturePersonnelModal
+        isOpen={isPersonnelOpen}
+        onClose={closePersonnel}
+        students={students}
+        lectureId={liveState?.lectureId || params.lectureId || ""}
+      />
+      <PdfShareModal
+        isOpen={isPdfModalOpen}
+        onClose={handleClosePdfModal}
+        isLoading={isPdfLoading}
+        pdfs={pdfItems}
+        error={pdfError}
+        meta={pdfMeta}
+        onRefresh={handleRefreshPdfList}
+        onSelect={handleSelectPdf}
+      />
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      <EndBroadcastConfirmModal
+        isOpen={isEndConfirmOpen}
+        isProcessing={isEndingLive}
+        onClose={() => {
+          if (isEndingLive) return;
+          setIsEndConfirmOpen(false);
+        }}
+        onConfirm={handleConfirmEndLive}
+      />
+    </div>
+  );
+};
+
+type PdfShareModalProps = {
+  isOpen: boolean;
+  isLoading: boolean;
+  pdfs: PdfItem[];
+  error?: string | null;
+  meta?: {
+    lectureName?: string;
+    classTitle?: string;
+  } | null;
+  onClose: () => void;
+  onRefresh: () => void;
+  onSelect: (pdf: PdfItem) => void;
+};
+
+const PdfShareModal: React.FC<PdfShareModalProps> = ({
+  isOpen,
+  isLoading,
+  pdfs,
+  error,
+  meta,
+  onClose,
+  onRefresh,
+  onSelect,
+}) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="text-base font-semibold text-gray-900">
+              PDF 자료 공유
+            </p>
+            {meta && (
+              <p className="text-xs text-gray-500 mt-0.5">
+                {meta.lectureName || "강좌"} · {meta.classTitle || "클래스"}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRefresh}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              새로고침
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+        <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
+          {isLoading ? (
+            <div className="py-10 text-center text-sm text-gray-500">
+              PDF 목록을 불러오는 중입니다...
+            </div>
+          ) : error ? (
+            <div className="py-10 text-center text-sm text-red-500">
+              {error}
+            </div>
+          ) : pdfs.length === 0 ? (
+            <div className="py-10 text-center text-sm text-gray-500">
+              등록된 PDF 자료가 없습니다.
+            </div>
+          ) : (
+            pdfs.map((pdf) => (
+              <div
+                key={pdf.url}
+                className="flex items-start justify-between gap-3 rounded-xl border border-gray-100 p-3 hover:border-blue-200 transition-colors"
+              >
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">
+                    {pdf.name}
+                  </p>
+                  <p className="text-xs text-gray-500 break-all">{pdf.url}</p>
+                </div>
+                <button
+                  onClick={() => onSelect(pdf)}
+                  className="px-3 py-2 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
+                >
+                  공유하기
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PdfOverlay: React.FC<{ pdf: PdfItem; onStop: () => void }> = ({
+  pdf,
+  onStop,
+}) => {
+  return (
+    <div className="absolute inset-6 rounded-2xl bg-white shadow-[0_25px_60px_rgba(15,23,42,0.45)] border border-gray-200 flex flex-col overflow-hidden z-20">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">공유 중인 PDF</p>
+          <p className="text-xs text-gray-500 truncate max-w-xs">{pdf.name}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={pdf.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+          >
+            새 창에서 열기
+          </a>
+          <button
+            onClick={onStop}
+            className="px-3 py-1.5 text-xs font-semibold text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors"
+          >
+            공유 종료
+          </button>
+        </div>
+      </div>
+      <iframe
+        src={`${pdf.url}#view=FitH`}
+        title="공유 중인 PDF"
+        className="flex-1 w-full h-full"
+      />
     </div>
   );
 };

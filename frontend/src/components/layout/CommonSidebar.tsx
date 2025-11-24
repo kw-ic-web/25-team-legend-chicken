@@ -2,14 +2,18 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Users, Clock, BookOpen, Play } from "lucide-react";
 
+interface UserInfo {
+  id?: string;
+  name: string;
+  title: string;
+  affiliation: string;
+  currentLectures?: number;
+  profileImage?: string;
+}
+
 interface CommonSidebarProps {
   userType: "student" | "professor";
-  userInfo: {
-    name: string;
-    title: string;
-    affiliation: string;
-    currentLectures?: number;
-  };
+  userInfo: UserInfo;
   showBroadcastControls?: boolean;
   upcomingLectures?: Array<{
     title: string;
@@ -18,7 +22,9 @@ interface CommonSidebarProps {
   }>;
   myLectures?: Array<{
     title: string;
-    participants: number;
+    participants?: number;
+    subtitle?: string;
+    meta?: string;
   }>;
   additionalContent?: React.ReactNode;
   onStartBroadcast?: () => void;
@@ -40,13 +46,26 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
     for (const mine of myLectures) seen.add(mine.title);
     return seen.size;
   }, [upcomingLectures, myLectures]);
+  const profilePath =
+    userType === "professor"
+      ? `/professor/profile${userInfo.id ? `/${userInfo.id}` : ""}`
+      : `/student/profile${userInfo.id ? `/${userInfo.id}` : ""}`;
+
   return (
     <div className="fixed top-20 left-0 w-80 bg-white shadow-lg h-[calc(100vh-5rem)] overflow-y-auto flex flex-col z-10">
       {/* 사용자 프로필 섹션 */}
       <div className="pt-10 p-6 border-b border-gray-200">
         <div className="flex items-center space-x-4 mb-4">
-          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-            <Users className="w-8 h-8 text-gray-600" />
+          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+            {userInfo.profileImage ? (
+              <img
+                src={userInfo.profileImage}
+                alt={userInfo.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Users className="w-8 h-8 text-gray-600" />
+            )}
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">{userInfo.name}</h2>
@@ -59,15 +78,13 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
             )}
           </div>
         </div>
-        {/* 내 정보 버튼 (교수 전용) */}
-        {userType === "professor" && (
-          <Link
-            to="/professor/profile"
-            className="w-full bg-[#1F3A93] hover:bg-[#1b327f] text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200 block text-center"
-          >
-            내 정보
-          </Link>
-        )}
+        {/* 내 정보 버튼 */}
+        <Link
+          to={profilePath}
+          className="w-full bg-[#1F3A93] hover:bg-[#1b327f] text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200 block text-center"
+        >
+          내 정보
+        </Link>
       </div>
 
       {/* 내 강의 + 곧 다가올 강의 병합 섹션 (교수만) */}
@@ -132,7 +149,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
                         <div className="flex items-center space-x-1">
                           <Users className="w-4 h-4 text-gray-400" />
                           <span className="text-xs text-gray-500">
-                            {item.participants}+
+                            {item.participants}
                           </span>
                         </div>
                       )}
@@ -211,16 +228,43 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
         </div>
       )}
 
+      {/* 학생 내 강의 섹션 */}
+      {userType === "student" && myLectures.length > 0 && (
+        <div className="p-6 border-b border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">내 강의</h3>
+          <div className="space-y-3">
+            {myLectures.map((lecture, idx) => (
+              <div key={`${lecture.title}-${idx}`}>
+                <div className="flex items-start space-x-3">
+                  <BookOpen className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {lecture.title}
+                    </p>
+                    {lecture.subtitle && (
+                      <p className="text-xs text-gray-600 truncate">
+                        {lecture.subtitle}
+                      </p>
+                    )}
+                    {typeof lecture.participants === "number" && (
+                      <div className="flex flex-wrap items-center text-xs text-gray-500 mt-1 gap-2">
+                        <span className="flex items-center space-x-1">
+                          <Users className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{lecture.participants}</span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 학생용 액션 버튼들 */}
       {userType === "student" && (
         <div className="p-6 space-y-3">
-          <Link
-            to="/student/participate"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-          >
-            <BookOpen className="w-5 h-5" />
-            <span>강의 참여하기</span>
-          </Link>
           <Link
             to="/student/questions"
             className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"

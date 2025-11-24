@@ -137,13 +137,110 @@ export async function getClassDetail(
   );
 }
 
+export type AddClassRequest = {
+  title: string;
+  description: string;
+  date: string;
+  materials?: string[];
+};
+
+export type AddClassResponse = {
+  message: string;
+  lecture_id: string;
+  class: LectureClass;
+};
+
+export async function addLectureClass(
+  lectureId: string,
+  payload: AddClassRequest
+): Promise<AddClassResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<AddClassResponse>(
+    `/api/professor/lectures/${lectureId}/classes`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      json: payload,
+    }
+  );
+}
+
+export type UpdateClassesPayload = {
+  classes: Array<{
+    id: number;
+    title: string;
+    description: string;
+    date: string;
+    materials: string[];
+  }>;
+};
+
+export type UpdateClassesResponse = {
+  message: string;
+  lecture_id: string;
+  classes: LectureClass[];
+};
+
+export async function updateLectureClasses(
+  lectureId: string,
+  payload: UpdateClassesPayload
+): Promise<UpdateClassesResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<UpdateClassesResponse>(
+    `/api/professor/lectures/${lectureId}/classes`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      json: payload,
+    }
+  );
+}
+
+export type DeleteClassResponse = {
+  message: string;
+  lecture_id: string;
+  deleted_class: LectureClass;
+};
+
+export async function deleteLectureClass(
+  lectureId: string,
+  classId: number
+): Promise<DeleteClassResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<DeleteClassResponse>(
+    `/api/professor/lectures/${lectureId}/classes/${classId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
 export type GetClassPdfsResponse = {
   lecture_id: string;
   lecture_name: string;
   class_id: number;
   class_title: string;
   pdf_count: number;
-  pdfs: string[];
+  pdfs: Array<string | { url: string; originalName: string }>;
 };
 
 export async function getClassPdfs(
@@ -155,15 +252,33 @@ export async function getClassPdfs(
     throw new Error("인증 토큰이 필요합니다.");
   }
 
-  return apiFetch<GetClassPdfsResponse>(
-    `/api/professor/lectures/${lectureId}/classes/${classId}/pdf`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+  try {
+    return await apiFetch<GetClassPdfsResponse>(
+      `/api/professor/lectures/${lectureId}/classes/${classId}/pdf`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+  } catch (error) {
+    // 404 에러는 PDF가 없는 경우이므로 조용히 처리
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("404") || errorMessage.includes("찾을 수 없습니다")) {
+      // 빈 응답 반환
+      return {
+        lecture_id: lectureId,
+        lecture_name: "",
+        class_id: classId,
+        class_title: "",
+        pdf_count: 0,
+        pdfs: [],
+      };
     }
-  );
+    // 다른 에러는 그대로 throw
+    throw error;
+  }
 }
 
 export type Student = {
@@ -260,5 +375,326 @@ export async function createLecture(
       Authorization: `Bearer ${token}`,
     },
     body: formData,
+  });
+}
+
+export type LiveStatusClass = {
+  class_id: number;
+  class_title: string;
+  isLiveActive: boolean;
+  currentLiveId?: number | null;
+  lives: Array<{
+    liveId: number;
+    status: string;
+    startedAt: string;
+    endedAt: string | null;
+  }>;
+};
+
+export type LiveStatusResponse = {
+  lecture_id: string;
+  lecture_name: string;
+  classes: LiveStatusClass[];
+};
+
+export type ClassQuestionPosition = {
+  x: number;
+  y: number;
+};
+
+export type ClassQuestionAuthor = {
+  id?: string;
+  name?: string;
+};
+
+export type ClassQuestion = {
+  _id: string;
+  lecture_id: string;
+  class_id: number;
+  live_id?: number | null;
+  page?: number;
+  section?: string;
+  position?: ClassQuestionPosition;
+  timestamp: string;
+  type?: string;
+  author?: ClassQuestionAuthor;
+  text: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type GetClassQuestionsResponse = {
+  lecture_id: string;
+  class_id: number;
+  count: number;
+  questions: ClassQuestion[];
+};
+
+export type MyInfoUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  user_type: string;
+  profile_image?: string;
+};
+
+export type MyInfoResponse = {
+  success: boolean;
+  user: MyInfoUser;
+};
+
+export async function getLiveStatus(
+  lectureId: string
+): Promise<LiveStatusResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<LiveStatusResponse>(
+    `/api/professor/lectures/${lectureId}/live-status`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export type LiveActionResponse = {
+  message: string;
+  lecture_id: string;
+  class_id: number;
+  live_id: number;
+  started_at: string;
+  ended_at?: string | null;
+  live_path?: string;
+};
+
+export async function startLive(
+  lectureId: string,
+  classId: number
+): Promise<LiveActionResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<LiveActionResponse>(
+    `/api/professor/lectures/${lectureId}/classes/${classId}/live/start`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export async function endLive(
+  lectureId: string,
+  classId: number
+): Promise<LiveActionResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<LiveActionResponse>(
+    `/api/professor/lectures/${lectureId}/classes/${classId}/live/end`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export async function getClassQuestions(
+  lectureId: string,
+  classId: number,
+  options?: { page?: number; limit?: number }
+): Promise<GetClassQuestionsResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const params = new URLSearchParams();
+  if (options?.page !== undefined) {
+    params.set("page", String(options.page));
+  }
+  if (options?.limit !== undefined) {
+    params.set("limit", String(options.limit));
+  }
+  const query = params.toString();
+
+  return apiFetch<GetClassQuestionsResponse>(
+    `/api/questions/lectures/${lectureId}/classes/${classId}${
+      query ? `?${query}` : ""
+    }`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export async function getMyInfo(): Promise<MyInfoResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<MyInfoResponse>("/api/myinfo", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export type WhiteboardPage = {
+  page_number: number;
+  image_path: string;
+  pdf_path: string;
+  text: string;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type GetWhiteboardPagesResponse = {
+  lecture_id: string;
+  class_id: number;
+  count: number;
+  pages: WhiteboardPage[];
+};
+
+export async function getWhiteboardPages(
+  lectureId: string,
+  classId: number,
+  status?: "draft" | "finalized"
+): Promise<GetWhiteboardPagesResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const params = new URLSearchParams();
+  if (status) {
+    params.set("status", status);
+  }
+  const query = params.toString();
+  const url = `/api/lectures/${lectureId}/classes/${classId}/whiteboard/pages${
+    query ? `?${query}` : ""
+  }`;
+
+  console.log("[DEBUG] getWhiteboardPages 호출:", {
+    url,
+    lectureId,
+    classId,
+    status,
+  });
+
+  try {
+    const response = await apiFetch<GetWhiteboardPagesResponse>(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    console.log("[DEBUG] getWhiteboardPages 응답:", response);
+    return response;
+  } catch (error) {
+    console.error("[DEBUG] getWhiteboardPages 에러:", error);
+    throw error;
+  }
+}
+
+export type UploadPdfResponse = {
+  success: boolean;
+  message: string;
+  lecture_id: string;
+  class_id: number;
+  total_pages?: number;
+  pages?: Array<{
+    page_number: number;
+    image_path: string;
+    pdf_path: string;
+    text: string;
+    status: string;
+  }>;
+  materials_count?: number;
+  original_pdf_url: string;
+  pdf_url?: string; // 호환성을 위해 유지
+};
+
+export async function uploadClassPdf(
+  lectureId: string,
+  classId: number,
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<UploadPdfResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const formData = new FormData();
+  formData.append("pdf", file);
+
+  const { getBaseUrl } = await import("../auth/client");
+  const baseUrl = getBaseUrl();
+  
+  // XMLHttpRequest를 사용하여 진행 상황 추적
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    // 진행 상황 이벤트 리스너
+    if (onProgress) {
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const progress = Math.round((e.loaded / e.total) * 100);
+          onProgress(progress);
+        }
+      });
+    }
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const response = JSON.parse(xhr.responseText);
+          resolve(response);
+        } catch (error) {
+          reject(new Error("응답 파싱 실패"));
+        }
+      } else {
+        try {
+          const error = JSON.parse(xhr.responseText);
+          reject(new Error(error.message || "PDF 업로드에 실패했습니다."));
+        } catch {
+          reject(new Error(`PDF 업로드 실패 (${xhr.status})`));
+        }
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      reject(new Error("네트워크 오류가 발생했습니다."));
+    });
+
+    xhr.addEventListener("abort", () => {
+      reject(new Error("업로드가 취소되었습니다."));
+    });
+
+    xhr.open("POST", `${baseUrl}/api/lectures/${lectureId}/classes/${classId}/whiteboard/upload-pdf`);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.send(formData);
   });
 }

@@ -27,6 +27,7 @@ const QuestionSchema = new mongoose.Schema({
   type: { type: String, enum: ["question", "answer", "note"], default: "question" },
   author: { type: AuthorSchema, required: true },
   text: { type: String, required: true },
+  answer: { type: String, default: null }, // GPT 자동 답변
   metadata: { type: MetadataSchema, default: () => ({}) },
   upvote_count: { type: Number, default: 0 },
   upvoted_by: [{ type: String }],
