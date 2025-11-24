@@ -7,6 +7,7 @@ import {
 interface ScreenShareAreaProps {
   children?: React.ReactNode;
   isSharing: boolean;
+  hasPdfOverlay?: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   connectionStatus?: WebRTCStatus;
   remoteParticipants?: RemoteParticipant[];
@@ -15,6 +16,7 @@ interface ScreenShareAreaProps {
 const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
   children,
   isSharing,
+  hasPdfOverlay = false,
   videoRef,
   connectionStatus = "idle",
   remoteParticipants = [],
@@ -37,10 +39,7 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
           className: "bg-red-100 text-red-700 border border-red-200",
         };
       default:
-        return {
-          label: "대기 중",
-          className: "bg-gray-100 text-gray-600 border border-gray-200",
-        };
+        return null;
     }
   }, [connectionStatus]);
 
@@ -56,14 +55,23 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
             maxHeight: "100%",
           }}
         >
+          {statusBadge && (
+            <div
+              className={`absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-semibold shadow ${statusBadge.className}`}
+            >
+              {statusBadge.label}
+            </div>
+          )}
           <video
             ref={videoRef as React.RefObject<HTMLVideoElement>}
             autoPlay
             muted
             playsInline
-            className={`w-full h-full object-contain bg-black ${isSharing ? "visible" : "hidden"}`}
+            className={`w-full h-full object-contain bg-black ${
+              isSharing && !hasPdfOverlay ? "visible" : "hidden"
+            }`}
           />
-          {!isSharing && (
+          {!isSharing && !hasPdfOverlay && (
             <span className="absolute inset-0 flex items-center justify-center text-gray-500">
               화면 공유 영역
             </span>

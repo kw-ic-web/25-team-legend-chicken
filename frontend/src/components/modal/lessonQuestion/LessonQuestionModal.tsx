@@ -3,8 +3,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  ChevronDown,
-  ChevronUp,
   FileText,
   ThumbsUp,
   MessageSquare,
@@ -20,7 +18,6 @@ import {
   upvoteQuestion,
   type Question as ApiQuestion,
 } from "../../../api/questions";
-import { useAuth } from "../../../contexts/AuthContext";
 import { useToast } from "../../../contexts/ToastContext";
 import { getMyInfo } from "../../../api/auth";
 import { getBaseUrl } from "../../../api/auth/client";
@@ -44,7 +41,6 @@ interface LessonQuestionModalProps {
   classId?: number;
   pages?: WhiteboardPage[];
   questions?: ApiQuestion[];
-  onAddAnswer?: (questionId: number, answer: string) => void;
 }
 
 const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
@@ -58,13 +54,11 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
   classId,
   pages,
   questions: initialQuestions,
-  onAddAnswer,
 }) => {
-  const { user } = useAuth();
   const { showToast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const totalPages = pages && pages.length > 0 ? pages.length : 1;
-  const [questions, setQuestions] = useState<ApiQuestion[]>([]);
+  const [questions, setQuestions] = useState<ApiQuestion[]>(initialQuestions ?? []);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [isCreatingQuestion, setIsCreatingQuestion] = useState(false);
   const [showQuestionForm, setShowQuestionForm] = useState(false);
@@ -77,14 +71,24 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
 
+  // Prop으로 받은 질문 목록 동기화
+  useEffect(() => {
+    if (initialQuestions) {
+      setQuestions(initialQuestions);
+    }
+  }, [initialQuestions]);
+
   // 사용자 정보 가져오기
   useEffect(() => {
     const fetchUserInfo = async () => {
       try {
         const response = await getMyInfo();
+        const userId =
+          (response.user as typeof response.user & { _id?: string })._id ||
+          response.user.id;
         setUserInfo({
           name: response.user.name,
-          id: response.user._id || response.user.id,
+          id: userId,
           role: response.user.user_type || "student",
         });
       } catch (error) {
@@ -350,15 +354,6 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
     if (hours > 0) return `${hours}시간 전`;
     if (minutes > 0) return `${minutes}분 전`;
     return "방금 전";
-  };
-
-  const getInitials = (name: string) => {
-    if (!name) return "?";
-    const names = name.split(" ");
-    if (names.length > 1) {
-      return (names[0][0] + names[1][0]).toUpperCase();
-    }
-    return name[0]?.toUpperCase() || "?";
   };
 
   return (

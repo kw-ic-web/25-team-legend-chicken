@@ -46,6 +46,23 @@ import Toast from "../../components/common/Toast";
 import { getBaseUrl } from "../../api/auth/client";
 import Modal from "../../components/common/Modal";
 
+type MaterialEntry = string | { url?: string; originalName?: string };
+
+const normalizeMaterialEntry = (
+  entry: MaterialEntry | undefined | null
+): { url: string; originalName?: string } => {
+  if (!entry) {
+    return { url: "", originalName: undefined };
+  }
+  if (typeof entry === "string") {
+    return { url: entry, originalName: undefined };
+  }
+  return {
+    url: entry.url ?? "",
+    originalName: entry.originalName,
+  };
+};
+
 const ProfessorClass: React.FC = () => {
   const { id } = useParams();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -120,7 +137,9 @@ const ProfessorClass: React.FC = () => {
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
-  const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(new Map());
+  const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(
+    new Map()
+  );
   const [isDragOver, setIsDragOver] = useState(false);
   const [isClassSubmitting, setIsClassSubmitting] = useState(false);
   const navigate = useNavigate();
@@ -139,22 +158,22 @@ const ProfessorClass: React.FC = () => {
   }, []);
 
   const fetchClassesData = useCallback(async () => {
-      if (!id) return;
+    if (!id) return;
 
-      setIsLoading(true);
-      try {
-        const [classesResponse, membersResponse] = await Promise.all([
-          getClasses(id),
+    setIsLoading(true);
+    try {
+      const [classesResponse, membersResponse] = await Promise.all([
+        getClasses(id),
         getMembers(id).catch(() => null),
-        ]);
+      ]);
 
-        setCourse({
-          id: classesResponse.lecture_id,
-          title: classesResponse.lecture_name,
+      setCourse({
+        id: classesResponse.lecture_id,
+        title: classesResponse.lecture_name,
         instructor: "",
-          description: "",
-          participants: membersResponse?.student_count || 0,
-        });
+        description: "",
+        participants: membersResponse?.student_count || 0,
+      });
 
       const normalizedClasses =
         classesResponse.classes?.map((cls, index) => ({
@@ -166,75 +185,88 @@ const ProfessorClass: React.FC = () => {
         })) ?? [];
       setClassList(normalizedClasses);
 
-        if (membersResponse) {
-          setStudents(
-            membersResponse.students.map((student) => ({
-              id: student.id,
-              name: student.name,
-              email: student.email,
-            }))
-          );
-        }
+      if (membersResponse) {
+        setStudents(
+          membersResponse.students.map((student) => ({
+            id: student.id,
+            name: student.name,
+            email: student.email,
+          }))
+        );
+      }
 
-        const transformedWeeks =
+      const transformedWeeks =
         normalizedClasses.length > 0
           ? normalizedClasses.map((cls, idx) => {
               const classId = Number(cls.id);
-                const items = cls.materials
-                  ? cls.materials.map((material) => {
-                      // materials가 객체인지 문자열인지 확인
-                      const materialUrl = typeof material === 'string' 
-                        ? material 
-                        : material.url || material;
-                      const originalName = typeof material === 'object' && material.originalName
-                        ? material.originalName
-                        : null;
-                      const resolvedUrl = resolveUrl(materialUrl);
-                      const urlParts = resolvedUrl.split("/");
-                      // 원본 파일명이 있으면 사용, 없으면 URL에서 추출
-                      const fileName = originalName || urlParts[urlParts.length - 1] || "파일";
-                      return {
-                        name: fileName,
-                        size: "파일",
-                        url: resolvedUrl,
-                      };
-                    })
-                  : [];
+              const items =
+                (cls.materials as MaterialEntry[] | undefined)
+                  ?.map((material) => {
+                    const normalized = normalizeMaterialEntry(material);
+                    if (!normalized.url) return null;
+                    const resolvedUrl = resolveUrl(normalized.url);
+                    const urlParts = resolvedUrl.split("/");
+                    const fileName =
+                      normalized.originalName ||
+                      urlParts[urlParts.length - 1] ||
+                      "파일";
+                    return {
+                      name: fileName,
+                      size: "파일",
+                      url: resolvedUrl,
+                    };
+                  })
+                  .filter(
+                    (
+                      item
+                    ): item is { name: string; size: string; url: string } =>
+                      item !== null
+                  ) || [];
 
-                return {
-                  week: classId,
+              return {
+                week: classId,
                 title: cls.title || `${idx + 1}주차`,
-                  items: items.length > 0 ? items : [],
-                };
-              })
-            : [];
+                items: items.length > 0 ? items : [],
+              };
+            })
+          : [];
 
-        setWeeks(transformedWeeks);
-        setLoadedClassIds([]);
-        setIsPdfLoadingFor(null);
+      setWeeks(transformedWeeks);
+      setLoadedClassIds([]);
+      setIsPdfLoadingFor(null);
 
       // 모든 클래스의 PDF 목록 자동 로드
       if (normalizedClasses.length > 0 && classesResponse.lecture_id) {
         normalizedClasses.forEach((cls) => {
           const classId = Number(cls.id);
-          const classTitle = cls.title || `${normalizedClasses.indexOf(cls) + 1}주차`;
-          
+          const classTitle =
+            cls.title || `${normalizedClasses.indexOf(cls) + 1}주차`;
+
           // PDF 목록 로드 (비동기로 실행)
           (async () => {
             try {
               setIsPdfLoadingFor(classId);
-              const resp = await getClassPdfs(classesResponse.lecture_id, classId);
-              const newItems = (resp.pdfs || []).map((pdfItem) => {
-                // pdfs가 객체 배열인지 문자열 배열인지 확인
-                const pdfUrl = typeof pdfItem === 'string' ? pdfItem : pdfItem.url || pdfItem;
-                const originalName = typeof pdfItem === 'object' && pdfItem.originalName
-                  ? pdfItem.originalName
-                  : null;
-                const url = resolveUrl(pdfUrl);
-                const name = originalName || url.split("/").pop() || "자료";
-                return { name, size: "파일", url };
-              });
-              
+              const resp = await getClassPdfs(
+                classesResponse.lecture_id,
+                classId
+              );
+              const newItems =
+                (resp.pdfs as MaterialEntry[] | undefined)
+                  ?.map((pdfItem) => {
+                    const normalized = normalizeMaterialEntry(pdfItem);
+                    if (!normalized.url) return null;
+                    const url = resolveUrl(normalized.url);
+                    const name =
+                      normalized.originalName || url.split("/").pop() || "자료";
+                    return { name, size: "파일", url };
+                  })
+                  .filter(
+                    (
+                      item
+                    ): item is { name: string; size: string; url: string } =>
+                      item !== null
+                  ) || [];
+
               setWeeks((prev) =>
                 prev.map((w) =>
                   Number(w.week) === Number(classId)
@@ -251,8 +283,12 @@ const ProfessorClass: React.FC = () => {
               );
             } catch (error) {
               // 404 에러는 PDF가 없는 경우이므로 조용히 처리
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              if (errorMessage.includes("404") || errorMessage.includes("찾을 수 없습니다")) {
+              const errorMessage =
+                error instanceof Error ? error.message : String(error);
+              if (
+                errorMessage.includes("404") ||
+                errorMessage.includes("찾을 수 없습니다")
+              ) {
                 // PDF가 없는 경우 빈 배열로 설정
                 setWeeks((prev) =>
                   prev.map((w) =>
@@ -271,24 +307,26 @@ const ProfessorClass: React.FC = () => {
                 console.error(`클래스 ${classId} PDF 로드 실패:`, error);
               }
             } finally {
-              setIsPdfLoadingFor((current) => (current === classId ? null : current));
+              setIsPdfLoadingFor((current) =>
+                current === classId ? null : current
+              );
             }
           })();
         });
       }
-      } catch (error) {
-        console.error("데이터 조회 오류:", error);
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "데이터를 불러오는 중 오류가 발생했습니다.";
-        setToast({ message: errorMessage, type: "error" });
-        setWeeks([]);
-        setLoadedClassIds([]);
-        setIsPdfLoadingFor(null);
-      } finally {
-        setIsLoading(false);
-      }
+    } catch (error) {
+      console.error("데이터 조회 오류:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "데이터를 불러오는 중 오류가 발생했습니다.";
+      setToast({ message: errorMessage, type: "error" });
+      setWeeks([]);
+      setLoadedClassIds([]);
+      setIsPdfLoadingFor(null);
+    } finally {
+      setIsLoading(false);
+    }
   }, [id, resolveUrl]);
 
   useEffect(() => {
@@ -372,12 +410,6 @@ const ProfessorClass: React.FC = () => {
     setDeletingClass(cls);
   };
 
-  const parseMaterialsInput = () =>
-    classForm.materialsInput
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
   const toISOString = (value: string) => {
     if (!value) return "";
     const date = new Date(value);
@@ -414,7 +446,9 @@ const ProfessorClass: React.FC = () => {
               newClassId,
               file,
               (progress) => {
-                setUploadProgress((prev) => new Map(prev).set(fileKey, progress));
+                setUploadProgress((prev) =>
+                  new Map(prev).set(fileKey, progress)
+                );
               }
             );
             // whiteboard/upload-pdf API는 original_pdf_url을 반환
@@ -459,7 +493,7 @@ const ProfessorClass: React.FC = () => {
       if (uploadedMaterialUrls.length > 0) {
         // 최신 클래스 목록을 가져옴
         await fetchClassesData();
-        
+
         // 업데이트된 classList를 사용하여 materials 업데이트
         const updatedClasses = classList.map((cls) => {
           if (Number(cls.id) === Number(newClassId)) {
@@ -470,9 +504,11 @@ const ProfessorClass: React.FC = () => {
           }
           return cls;
         });
-        
+
         // 새로 추가된 클래스가 classList에 없을 수 있으므로 확인
-        const newClassInList = updatedClasses.find((c) => Number(c.id) === Number(newClassId));
+        const newClassInList = updatedClasses.find(
+          (c) => Number(c.id) === Number(newClassId)
+        );
         if (!newClassInList) {
           updatedClasses.push({
             ...addResponse.class,
@@ -519,7 +555,9 @@ const ProfessorClass: React.FC = () => {
               Number(editingClass.id),
               file,
               (progress) => {
-                setUploadProgress((prev) => new Map(prev).set(fileKey, progress));
+                setUploadProgress((prev) =>
+                  new Map(prev).set(fileKey, progress)
+                );
               }
             );
             // whiteboard/upload-pdf API는 original_pdf_url을 반환
@@ -789,28 +827,20 @@ const ProfessorClass: React.FC = () => {
         course.id,
         classId
       );
-      const materials = detail.class?.materials ?? [];
-      
+      const materials = detail.class?.materials as MaterialEntry[] | undefined;
+
       // materials에서 첫 번째 자료 찾기
-      let firstMaterial: { url: string; originalName: string } | null = null;
-      if (materials.length > 0) {
-        const firstMat = materials[0];
-        if (typeof firstMat === 'string') {
-          firstMaterial = {
-            url: firstMat,
-            originalName: firstMat.split("/").pop() || "자료"
-          };
-        } else if (firstMat && typeof firstMat === 'object') {
-          firstMaterial = {
-            url: firstMat.url || firstMat,
-            originalName: firstMat.originalName || firstMat.url?.split("/").pop() || "자료"
-          };
-        }
-      }
-      
+      const firstMaterial = materials?.[0]
+        ? normalizeMaterialEntry(materials[0])
+        : null;
+
       // material prop이 있으면 우선 사용
       const materialUrl = material?.url || firstMaterial?.url;
-      const firstMaterialName = material?.name || firstMaterial?.originalName || "자료";
+      const firstMaterialName =
+        material?.name ||
+        firstMaterial?.originalName ||
+        (firstMaterial?.url ? firstMaterial.url.split("/").pop() : undefined) ||
+        "자료";
       const firstMaterialSize = material?.size || "파일";
 
       // whiteboard pages 가져오기 시도
@@ -820,7 +850,11 @@ const ProfessorClass: React.FC = () => {
           lectureId: course.id,
           classId: classId,
         });
-        const pagesResponse = await getWhiteboardPages(course.id, classId, "finalized");
+        const pagesResponse = await getWhiteboardPages(
+          course.id,
+          classId,
+          "finalized"
+        );
         console.log("[DEBUG] Whiteboard pages 응답:", {
           count: pagesResponse.count,
           pagesLength: pagesResponse.pages?.length,
@@ -831,7 +865,9 @@ const ProfessorClass: React.FC = () => {
       } catch (error) {
         // whiteboard pages가 없으면 무시 (fallback으로 전체 PDF 사용)
         console.error("[DEBUG] Whiteboard pages 조회 실패:", error);
-        console.log("[DEBUG] Whiteboard pages를 찾을 수 없습니다. 전체 PDF를 사용합니다.");
+        console.log(
+          "[DEBUG] Whiteboard pages를 찾을 수 없습니다. 전체 PDF를 사용합니다."
+        );
         pages = undefined;
       }
 
@@ -865,16 +901,20 @@ const ProfessorClass: React.FC = () => {
       setIsPdfLoadingFor(classId);
       try {
         const resp = await getClassPdfs(course.id, classId);
-        const newItems = (resp.pdfs || []).map((pdfItem) => {
-          // pdfs가 객체 배열인지 문자열 배열인지 확인
-          const pdfUrl = typeof pdfItem === 'string' ? pdfItem : pdfItem.url || pdfItem;
-          const originalName = typeof pdfItem === 'object' && pdfItem.originalName
-            ? pdfItem.originalName
-            : null;
-          const url = resolveUrl(pdfUrl);
-          const name = originalName || url.split("/").pop() || "자료";
-          return { name, size: "파일", url };
-        });
+        const newItems =
+          (resp.pdfs as MaterialEntry[] | undefined)
+            ?.map((pdfItem) => {
+              const normalized = normalizeMaterialEntry(pdfItem);
+              if (!normalized.url) return null;
+              const url = resolveUrl(normalized.url);
+              const name =
+                normalized.originalName || url.split("/").pop() || "자료";
+              return { name, size: "파일", url };
+            })
+            .filter(
+              (item): item is { name: string; size: string; url: string } =>
+                item !== null
+            ) || [];
         setWeeks((prev) =>
           prev.map((w) =>
             Number(w.week) === Number(classId)
@@ -891,8 +931,12 @@ const ProfessorClass: React.FC = () => {
         );
       } catch (error) {
         // 404 에러는 PDF가 없는 경우이므로 조용히 처리
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        if (errorMessage.includes("404") || errorMessage.includes("찾을 수 없습니다")) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        if (
+          errorMessage.includes("404") ||
+          errorMessage.includes("찾을 수 없습니다")
+        ) {
           // PDF가 없는 경우 빈 배열로 설정
           setWeeks((prev) =>
             prev.map((w) =>
@@ -908,12 +952,12 @@ const ProfessorClass: React.FC = () => {
             prev.includes(classId) ? prev : [...prev, classId]
           );
         } else {
-        console.error("PDF 목록 조회 실패:", error);
-        const message =
-          error instanceof Error
-            ? error.message
-            : "PDF 목록을 불러오는 중 오류가 발생했습니다.";
-        setToast({ message, type: "error" });
+          console.error("PDF 목록 조회 실패:", error);
+          const message =
+            error instanceof Error
+              ? error.message
+              : "PDF 목록을 불러오는 중 오류가 발생했습니다.";
+          setToast({ message, type: "error" });
         }
       } finally {
         setIsPdfLoadingFor((current) => (current === classId ? null : current));
@@ -989,11 +1033,6 @@ const ProfessorClass: React.FC = () => {
     } finally {
       setLiveActionLoading(null);
     }
-  };
-
-  const handleAddAnswer = (questionId: number, answer: string) => {
-    // 실제 답변 추가 로직 (여기에 API 호출 등)
-    console.log("답변 추가됨:", { questionId, answer });
   };
 
   const handlePersonnelModalOpen = () => {
@@ -1542,7 +1581,8 @@ const ProfessorClass: React.FC = () => {
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm text-gray-700 truncate flex-1">
-                            {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                            {file.name} ({(file.size / 1024 / 1024).toFixed(2)}{" "}
+                            MB)
                           </span>
                           <button
                             type="button"
@@ -1692,7 +1732,8 @@ const ProfessorClass: React.FC = () => {
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-sm text-gray-700 truncate flex-1">
-                            {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                            {file.name} ({(file.size / 1024 / 1024).toFixed(2)}{" "}
+                            MB)
                           </span>
                           <button
                             type="button"
@@ -1723,21 +1764,23 @@ const ProfessorClass: React.FC = () => {
                 </div>
               )}
               {/* 기존 자료 표시 */}
-              {editingClass && editingClass.materials && editingClass.materials.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-gray-500 mb-1">기존 자료:</p>
-                  <div className="space-y-1">
-                    {editingClass.materials.map((material, index) => (
-                      <div
-                        key={index}
-                        className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded"
-                      >
-                        {material.split("/").pop() || material}
-                      </div>
-                    ))}
+              {editingClass &&
+                editingClass.materials &&
+                editingClass.materials.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">기존 자료:</p>
+                    <div className="space-y-1">
+                      {editingClass.materials.map((material, index) => (
+                        <div
+                          key={index}
+                          className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded"
+                        >
+                          {material.split("/").pop() || material}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           </div>
           <div className="flex justify-end space-x-2">
