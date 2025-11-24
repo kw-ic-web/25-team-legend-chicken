@@ -90,6 +90,32 @@ function attachSocket(server, corsOrigin = "*") {
       joinLiveRoom(payload, "professor");
     });
 
+        // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// ✅ 실시간 채팅 (DB 저장 X, socket-only)
+// ─────────────────────────────────────────────
+socket.on("chat:send", ({ message }) => {
+  if (!message || String(message).trim().length === 0) return;
+
+  const { lecture_id, class_id, live_id, user_id, role } = socket.data || {};
+  if (!lecture_id || !class_id || !user_id) return;
+
+  const baseRoom = `lec:${lecture_id}:cls:${class_id}`;
+  const liveRoom =
+    live_id === null || typeof live_id === "undefined"
+      ? `${baseRoom}:live:none`
+      : `${baseRoom}:live:${live_id}`;
+
+  const payload = {
+    from: user_id,
+    role,
+    message: String(message).trim(),
+    timestamp: Date.now(),
+  };
+
+  io.to(liveRoom).emit("chat:message", payload);
+  console.log("[chat]", user_id, ":", message);
+});
 
     // ─────────────────────────────────────────────
     // WebRTC 시그널링 이벤트들

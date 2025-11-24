@@ -7,14 +7,18 @@ const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 const swaggerDocument = YAML.load("./docs/swagger.yaml");
 
-const authRouter = require("./routes/auth");
-const studentRouter = require("./routes/student");
-const professorRouter = require("./routes/professor");
-const lecturesRouter = require("./routes/lectures");
-const whiteboardRouter = require("./routes/whiteboard");
-const questionsRouter = require("./routes/questions");
-const chatRouter = require("./routes/chat");
-const reportsRouter = require("./routes/reports");
+// 라우터
+const authRouter = require("./routes/auth"); // 회원가입, 로그인 등 인증 관련 API
+const studentRouter = require("./routes/student"); // student 랜딩페이지 관련 API
+const professorRouter = require("./routes/professor"); // professor 랜딩페이지 관련 API
+const lecturesRouter = require("./routes/lectures"); // 강의 공통 API
+const whiteboardRouter = require("./routes/whiteboard"); // 화이트보드 스냅샷 API
+const questionsRouter = require("./routes/questions"); // 질문 관련 API
+const reportsRouter = require("./routes/reports"); // 리포트 관련 API
+
+// 채팅 API는 현재 사용하지 않음
+// const chatRouter = require("./routes/chat");
+
 const handwritingRouter = require("./routes/handwriting");
 
 const http = require("http");
@@ -38,7 +42,7 @@ app.use("/api/professor", professorRouter);
 app.use("/api", lecturesRouter);
 app.use("/api", whiteboardRouter);
 app.use("/api/questions", questionsRouter); 
-app.use("/api/chat", chatRouter); 
+//app.use("/api/chat", chatRouter); 
 app.use("/api/reports", reportsRouter);
 app.use("/api/handwriting", handwritingRouter);
 
