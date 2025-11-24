@@ -14,7 +14,7 @@ const professorRouter = require("./routes/professor"); // professor 랜딩페이
 const lecturesRouter = require("./routes/lectures"); // 강의 공통 API
 const whiteboardRouter = require("./routes/whiteboard"); // 화이트보드 스냅샷 API
 const questionsRouter = require("./routes/questions"); // 질문 관련 API
-const chatRouter = require("./routes/chat"); // 채팅 관련 API
+//const chatRouter = require("./routes/chat"); // 채팅 관련 API
 const reportsRouter = require("./routes/reports"); // 리포트 관련 API
 
 const http = require("http");
@@ -48,7 +48,7 @@ app.use("/api/professor", professorRouter);
 app.use("/api", lecturesRouter); // 강의 공통 라우트
 app.use("/api", whiteboardRouter);
 app.use("/api/questions", questionsRouter); 
-app.use("/api/chat", chatRouter); 
+//app.use("/api/chat", chatRouter); 
 app.use("/api/reports", reportsRouter);
 
 app.get("/", (req, res) => {
