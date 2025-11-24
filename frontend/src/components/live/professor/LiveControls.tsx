@@ -1,13 +1,23 @@
 import React from "react";
-import { Mic, MicOff, Monitor, UserPlus, Video, VideoOff } from "lucide-react";
+import {
+  FileText,
+  Mic,
+  MicOff,
+  Monitor,
+  UserPlus,
+  Video,
+  VideoOff,
+} from "lucide-react";
 
 interface LiveControlsProps {
   isMicOn: boolean;
   isCameraOn: boolean;
   isSharing: boolean;
+  isPdfSharing: boolean;
   onToggleMic: () => void;
   onToggleCamera: () => void;
   onToggleShare: () => void;
+  onSharePdf: () => void;
   onOpenPersonnel: () => void;
   onEnd: () => void;
 }
@@ -16,9 +26,11 @@ const LiveControls: React.FC<LiveControlsProps> = ({
   isMicOn,
   isCameraOn,
   isSharing,
+  isPdfSharing,
   onToggleMic,
   onToggleCamera,
   onToggleShare,
+  onSharePdf,
   onOpenPersonnel,
   onEnd,
 }) => {
@@ -67,6 +79,18 @@ const LiveControls: React.FC<LiveControlsProps> = ({
           title={isSharing ? "화면 공유 중지" : "화면 공유 시작"}
         >
           <Monitor className="w-5 h-5" />
+        </button>
+
+        <button
+          onClick={onSharePdf}
+          className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+            isPdfSharing
+              ? "bg-blue-500/10 text-blue-600"
+              : "bg-gray-100/50 text-gray-600 hover:bg-gray-200/50"
+          }`}
+          title="PDF 공유"
+        >
+          <FileText className="w-5 h-5" />
         </button>
 
         <button

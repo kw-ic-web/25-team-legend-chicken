@@ -18,7 +18,7 @@ import Toast from "../../components/common/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
-import { endLive } from "../../api/professor";
+import { endLive, getClassPdfs } from "../../api/professor";
 import {
   sendChatMessage,
   getChatMessages,
@@ -32,6 +32,11 @@ interface Question {
   timestamp: string;
   status: "pending" | "answered" | "dismissed";
 }
+
+type PdfItem = {
+  name: string;
+  url: string;
+};
 
 type LiveNavigationState = {
   lectureId?: string;
@@ -68,6 +73,15 @@ const RealtimeDashboard: React.FC = () => {
     type: "success" | "error";
   } | null>(null);
   const [isEndingLive, setIsEndingLive] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [isPdfLoading, setIsPdfLoading] = useState(false);
+  const [pdfItems, setPdfItems] = useState<PdfItem[]>([]);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfMeta, setPdfMeta] = useState<{
+    lectureName?: string;
+    classTitle?: string;
+  } | null>(null);
+  const [selectedPdf, setSelectedPdf] = useState<PdfItem | null>(null);
   const showError = useCallback((message: string) => {
     setToast({ message, type: "error" });
   }, []);
@@ -84,6 +98,14 @@ const RealtimeDashboard: React.FC = () => {
     const num = Number(value);
     return Number.isFinite(num) ? num : undefined;
   };
+
+  const resolveAssetUrl = useCallback((url?: string | null) => {
+    if (!url) return "";
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return url;
+    }
+    return `${getBaseUrl()}${url}`;
+  }, []);
 
   const resolvedLectureId = liveState?.lectureId || params.lectureId;
   const resolvedClassId = parseNumeric(liveState?.classId ?? params.classId);
@@ -253,6 +275,84 @@ const RealtimeDashboard: React.FC = () => {
     setScreenStream(null);
   }, []);
 
+  const fetchPdfList = useCallback(async () => {
+    if (!resolvedLectureId || resolvedClassId === undefined) {
+      setPdfError("클래스 정보를 찾을 수 없습니다.");
+      setPdfItems([]);
+      return;
+    }
+    setIsPdfLoading(true);
+    setPdfError(null);
+    try {
+      const response = await getClassPdfs(resolvedLectureId, resolvedClassId);
+      const normalized = (response.pdfs || []).map((pdfItem, index) => {
+        const rawUrl =
+          typeof pdfItem === "string"
+            ? pdfItem
+            : typeof pdfItem === "object" && pdfItem !== null
+              ? pdfItem.url
+              : "";
+        const displayName =
+          typeof pdfItem === "string"
+            ? pdfItem.split("/").pop() || `자료 ${index + 1}`
+            : pdfItem?.originalName || `자료 ${index + 1}`;
+        return {
+          name: displayName,
+          url: resolveAssetUrl(rawUrl),
+        };
+      });
+      setPdfItems(normalized);
+      setPdfMeta({
+        lectureName: response.lecture_name,
+        classTitle: response.class_title,
+      });
+      if (normalized.length === 0) {
+        setPdfError("등록된 PDF 자료가 없습니다.");
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "PDF 목록을 불러오는 중 오류가 발생했습니다.";
+      setPdfError(message);
+      showError(message);
+    } finally {
+      setIsPdfLoading(false);
+    }
+  }, [resolveAssetUrl, resolvedClassId, resolvedLectureId, showError]);
+
+  const handleOpenPdfModal = useCallback(() => {
+    if (!resolvedLectureId || resolvedClassId === undefined) {
+      showError("클래스 정보를 찾을 수 없습니다.");
+      return;
+    }
+    setIsPdfModalOpen(true);
+    void fetchPdfList();
+  }, [fetchPdfList, resolvedClassId, resolvedLectureId, showError]);
+
+  const handleRefreshPdfList = useCallback(() => {
+    void fetchPdfList();
+  }, [fetchPdfList]);
+
+  const handleSelectPdf = useCallback(
+    (pdf: PdfItem) => {
+      setSelectedPdf(pdf);
+      setIsPdfModalOpen(false);
+      if (isSharing) {
+        stopScreenShare();
+      }
+    },
+    [isSharing, stopScreenShare]
+  );
+
+  const handleStopPdfShare = useCallback(() => {
+    setSelectedPdf(null);
+  }, []);
+
+  const handleClosePdfModal = useCallback(() => {
+    setIsPdfModalOpen(false);
+  }, []);
+
   const startScreenShare = useCallback(async () => {
     // 이미 공유 중이면 중복 호출 방지
     if (isSharing || shareStreamRef.current) {
@@ -284,16 +384,17 @@ const RealtimeDashboard: React.FC = () => {
           ).getDisplayMedia;
 
       // 전체 화면 공유를 기본으로 설정 (preferCurrentTab: false)
-      const displayStream = await getDisplay({
+      const displayConstraints: MediaStreamConstraints & {
+        preferCurrentTab?: boolean;
+      } = {
         video: {
           frameRate: 30,
-          // @ts-ignore - 브라우저별 옵션
           displaySurface: "monitor", // 전체 화면 선호
         },
         audio: true,
-        // @ts-ignore - Chrome/Edge 전용 옵션
-        preferCurrentTab: false, // 전체 화면 공유 선호
-      });
+        preferCurrentTab: false, // Chrome/Edge 전용 옵션
+      };
+      const displayStream = await getDisplay(displayConstraints);
       shareStreamRef.current = displayStream;
       setScreenStream(displayStream);
       if (shareVideoRef.current) {
@@ -315,7 +416,7 @@ const RealtimeDashboard: React.FC = () => {
       // 사용자가 공유를 중지했을 때 이벤트 처리
       const videoTracks = displayStream.getVideoTracks();
       const audioTracks = displayStream.getAudioTracks();
-      
+
       // 모든 트랙에 ended 이벤트 리스너 추가
       [...videoTracks, ...audioTracks].forEach((track) => {
         track.addEventListener("ended", () => {
@@ -494,7 +595,11 @@ const RealtimeDashboard: React.FC = () => {
   }, [showError]);
 
   const handleSendMessage = useCallback(async () => {
-    if (!chatMessage.trim() || !resolvedLectureId || resolvedClassId === undefined) {
+    if (
+      !chatMessage.trim() ||
+      !resolvedLectureId ||
+      resolvedClassId === undefined
+    ) {
       return;
     }
 
@@ -512,7 +617,13 @@ const RealtimeDashboard: React.FC = () => {
         error instanceof Error ? error.message : "메시지 전송에 실패했습니다."
       );
     }
-  }, [chatMessage, resolvedLectureId, resolvedClassId, resolvedLiveId, showError]);
+  }, [
+    chatMessage,
+    resolvedLectureId,
+    resolvedClassId,
+    resolvedLiveId,
+    showError,
+  ]);
 
   const closePersonnel = () => setIsPersonnelOpen(false);
 
@@ -763,29 +874,37 @@ const RealtimeDashboard: React.FC = () => {
             {/* 강의 콘텐츠(화면 공유 영역) */}
             <ScreenShareArea
               isSharing={isSharing}
+              hasPdfOverlay={!!selectedPdf}
               videoRef={shareVideoRef}
               connectionStatus={webrtcStatus}
               remoteParticipants={remoteParticipants}
             >
-              <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
-                <ParticipantStrip
+              <>
+                {selectedPdf && (
+                  <PdfOverlay pdf={selectedPdf} onStop={handleStopPdfShare} />
+                )}
+                <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
+                  <ParticipantStrip
+                    isCameraOn={isCameraOn}
+                    videoRef={videoRef}
+                    remoteParticipants={remoteParticipants}
+                  />
+                </div>
+                <LiveControls
+                  isMicOn={isMicOn}
                   isCameraOn={isCameraOn}
-                  videoRef={videoRef}
-                  remoteParticipants={remoteParticipants}
+                  isSharing={isSharing}
+                  isPdfSharing={!!selectedPdf}
+                  onToggleMic={toggleMic}
+                  onToggleCamera={toggleCamera}
+                  onToggleShare={() =>
+                    isSharing ? stopScreenShare() : startScreenShare()
+                  }
+                  onSharePdf={handleOpenPdfModal}
+                  onOpenPersonnel={() => setIsPersonnelOpen(true)}
+                  onEnd={() => setIsEndConfirmOpen(true)}
                 />
-              </div>
-              <LiveControls
-                isMicOn={isMicOn}
-                isCameraOn={isCameraOn}
-                isSharing={isSharing}
-                onToggleMic={toggleMic}
-                onToggleCamera={toggleCamera}
-                onToggleShare={() =>
-                  isSharing ? stopScreenShare() : startScreenShare()
-                }
-                onOpenPersonnel={() => setIsPersonnelOpen(true)}
-                onEnd={() => setIsEndConfirmOpen(true)}
-              />
+              </>
             </ScreenShareArea>
           </div>
         </div>
@@ -884,8 +1003,8 @@ const RealtimeDashboard: React.FC = () => {
                               isOwnMessage
                                 ? "bg-blue-600 text-white"
                                 : isProfessor
-                                ? "bg-green-100 text-gray-900"
-                                : "bg-gray-100 text-gray-900"
+                                  ? "bg-green-100 text-gray-900"
+                                  : "bg-gray-100 text-gray-900"
                             }`}
                           >
                             <div className="flex items-center gap-2 mb-1">
@@ -894,15 +1013,15 @@ const RealtimeDashboard: React.FC = () => {
                                   isOwnMessage
                                     ? "text-blue-100"
                                     : isProfessor
-                                    ? "text-green-700"
-                                    : "text-gray-600"
+                                      ? "text-green-700"
+                                      : "text-gray-600"
                                 }`}
                               >
                                 {isOwnMessage
                                   ? "나"
                                   : isProfessor
-                                  ? "교수자"
-                                  : msg.sender.name}
+                                    ? "교수자"
+                                    : msg.sender.name}
                               </span>
                               <span
                                 className={`text-[10px] ${
@@ -958,6 +1077,16 @@ const RealtimeDashboard: React.FC = () => {
         students={students}
         lectureId={liveState?.lectureId || params.lectureId || ""}
       />
+      <PdfShareModal
+        isOpen={isPdfModalOpen}
+        onClose={handleClosePdfModal}
+        isLoading={isPdfLoading}
+        pdfs={pdfItems}
+        error={pdfError}
+        meta={pdfMeta}
+        onRefresh={handleRefreshPdfList}
+        onSelect={handleSelectPdf}
+      />
       {toast && (
         <Toast
           message={toast.message}
@@ -973,6 +1102,137 @@ const RealtimeDashboard: React.FC = () => {
           setIsEndConfirmOpen(false);
         }}
         onConfirm={handleConfirmEndLive}
+      />
+    </div>
+  );
+};
+
+type PdfShareModalProps = {
+  isOpen: boolean;
+  isLoading: boolean;
+  pdfs: PdfItem[];
+  error?: string | null;
+  meta?: {
+    lectureName?: string;
+    classTitle?: string;
+  } | null;
+  onClose: () => void;
+  onRefresh: () => void;
+  onSelect: (pdf: PdfItem) => void;
+};
+
+const PdfShareModal: React.FC<PdfShareModalProps> = ({
+  isOpen,
+  isLoading,
+  pdfs,
+  error,
+  meta,
+  onClose,
+  onRefresh,
+  onSelect,
+}) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="text-base font-semibold text-gray-900">
+              PDF 자료 공유
+            </p>
+            {meta && (
+              <p className="text-xs text-gray-500 mt-0.5">
+                {meta.lectureName || "강좌"} · {meta.classTitle || "클래스"}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRefresh}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              새로고침
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+        <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
+          {isLoading ? (
+            <div className="py-10 text-center text-sm text-gray-500">
+              PDF 목록을 불러오는 중입니다...
+            </div>
+          ) : error ? (
+            <div className="py-10 text-center text-sm text-red-500">
+              {error}
+            </div>
+          ) : pdfs.length === 0 ? (
+            <div className="py-10 text-center text-sm text-gray-500">
+              등록된 PDF 자료가 없습니다.
+            </div>
+          ) : (
+            pdfs.map((pdf) => (
+              <div
+                key={pdf.url}
+                className="flex items-start justify-between gap-3 rounded-xl border border-gray-100 p-3 hover:border-blue-200 transition-colors"
+              >
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">
+                    {pdf.name}
+                  </p>
+                  <p className="text-xs text-gray-500 break-all">{pdf.url}</p>
+                </div>
+                <button
+                  onClick={() => onSelect(pdf)}
+                  className="px-3 py-2 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
+                >
+                  공유하기
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PdfOverlay: React.FC<{ pdf: PdfItem; onStop: () => void }> = ({
+  pdf,
+  onStop,
+}) => {
+  return (
+    <div className="absolute inset-6 rounded-2xl bg-white shadow-[0_25px_60px_rgba(15,23,42,0.45)] border border-gray-200 flex flex-col overflow-hidden z-20">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">공유 중인 PDF</p>
+          <p className="text-xs text-gray-500 truncate max-w-xs">{pdf.name}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={pdf.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+          >
+            새 창에서 열기
+          </a>
+          <button
+            onClick={onStop}
+            className="px-3 py-1.5 text-xs font-semibold text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors"
+          >
+            공유 종료
+          </button>
+        </div>
+      </div>
+      <iframe
+        src={`${pdf.url}#view=FitH`}
+        title="공유 중인 PDF"
+        className="flex-1 w-full h-full"
       />
     </div>
   );
