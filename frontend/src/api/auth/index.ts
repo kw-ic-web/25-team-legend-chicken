@@ -40,13 +40,29 @@ export type LoginResponse = {
     name: string;
     user_type: string;
   };
-  token?: string;
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
 };
 
 export async function loginUser(payload: LoginRequest) {
   return apiFetch<LoginResponse>("/api/login", {
     method: "POST",
     json: payload,
+  });
+}
+
+export type RefreshTokenResponse = {
+  success: boolean;
+  message: string;
+  access_token?: string;
+  expires_in?: number;
+};
+
+export async function refreshAccessToken(refreshToken: string) {
+  return apiFetch<RefreshTokenResponse>("/api/refresh", {
+    method: "POST",
+    json: { refresh_token: refreshToken },
   });
 }
 

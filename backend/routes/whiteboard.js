@@ -15,6 +15,7 @@ const {
   convertPdfPageToImage,
 } = require("../utils/pdf");
 const Lecture = require("../models/lectures");
+const { toAbsoluteUrl } = require("../utils/urlUtils");
 
 const tokenize = (text = "") =>
   text
@@ -179,7 +180,6 @@ router.post(
   }
 );
 
-// 강좌 접근 권한 체크 (교수 본인 또는 수강 학생)
 async function canAccess(user, lecture_id) {
   const lec = await Lecture.findOne({ lecture_id });
   if (!lec) return { ok: false, code: 404, msg: "강좌를 찾을 수 없습니다." };
@@ -194,7 +194,6 @@ async function canAccess(user, lecture_id) {
   return { ok: true, lec, isProfessor, isStudent };
 }
 
-// 내부 공용 핸들러: PDF 업로드 → 페이지 단위로 분할 저장 + 클래스 materials에 등록
 async function handleUploadPdfSplit(req, res) {
   try {
     const { lectureId, classId } = req.params;
@@ -214,7 +213,6 @@ async function handleUploadPdfSplit(req, res) {
       });
     }
 
-    // 강좌 소유 확인
     const lecture = await Lecture.findOne({ lecture_id: lectureId, professor_id: user._id });
     if (!lecture) {
       return res.status(404).json({ success: false, message: "강좌를 찾을 수 없습니다." });
@@ -225,21 +223,27 @@ async function handleUploadPdfSplit(req, res) {
       return res.status(404).json({ success: false, message: "해당 클래스를 찾을 수 없습니다." });
     }
 
-    // 원본 PDF 경로 (프론트에는 원본만 노출)
     const originalPdfUrl = `/uploads/pdfs/${req.file.filename}`;
-
-    // 분할은 내부 처리만 하고, materials에는 원본만 추가
+    const originalFileName = req.file.originalname || req.file.filename;
     const splitted = await splitPdfIntoPages(req.file.path, { lectureId, classId });
     if (!Array.isArray(lecture.classes[idx].materials)) {
       lecture.classes[idx].materials = [];
     }
-    // 이미 동일 파일이 없을 때만 원본 추가
-    if (!lecture.classes[idx].materials.includes(originalPdfUrl)) {
-      lecture.classes[idx].materials.push(originalPdfUrl);
+    // materials에 객체 형태로 저장 (기존 문자열과 호환)
+    const materialObj = {
+      url: originalPdfUrl,
+      originalName: originalFileName
+    };
+    // 중복 체크 (URL 기준)
+    const exists = lecture.classes[idx].materials.some(m => {
+      const url = typeof m === 'string' ? m : m.url;
+      return url === originalPdfUrl;
+    });
+    if (!exists) {
+      lecture.classes[idx].materials.push(materialObj);
     }
     await lecture.save();
 
-    // OCR + WhiteboardPage 저장 (page_number는 기존 마지막 다음부터 연속 증가)
     const lastPage = await WhiteboardPage.findOne({
       lecture_id: lectureId,
       class_id: String(classId),
@@ -252,25 +256,42 @@ async function handleUploadPdfSplit(req, res) {
       const page = splitted[i];
       const absolutePdfPath = toAbsolutePath(page.pdfPath);
       let text = "";
+      let imagePath = page.pdfPath; // 기본값: PDF 경로 (이미지 변환 실패 시 사용)
+      
       try {
-        // 1) PDF → 이미지 변환
         const imageAbsolutePath = await convertPdfPageToImage(absolutePdfPath);
-        // 2) Vision OCR 재사용 (snapshot과 동일한 경로)
+        console.log("[DEBUG] PDF를 이미지로 변환:", {
+          pdfPath: absolutePdfPath,
+          imagePath: imageAbsolutePath,
+        });
+        
+        // 절대 경로를 상대 경로로 변환 (public 경로 기준)
+        // imageAbsolutePath는 절대 경로이므로, uploads 기준으로 변환
+        const path = require("path");
+        const relativeImagePath = path.relative(process.cwd(), imageAbsolutePath).replace(/\\/g, "/");
+        imagePath = relativeImagePath.startsWith("/") ? relativeImagePath : `/${relativeImagePath}`;
+        
         const { text: ocrText } = await extractTextFromImage(imageAbsolutePath);
         text = ocrText || "";
       } catch (e) {
-        console.error("PDF 페이지 OCR 실패, 빈 텍스트로 진행:", e?.message || e);
-        // 최악의 경우 텍스트 없이 저장
+        console.error("[DEBUG] PDF 페이지 OCR 실패, 빈 텍스트로 진행:", e?.message || e);
+        console.log("[DEBUG] 이미지 변환 실패, PDF 경로 사용:", page.pdfPath);
         text = "";
+        // 이미지 변환 실패 시 PDF 경로 사용
+        imagePath = page.pdfPath;
       }
+
+      console.log("[DEBUG] WhiteboardPage 생성:", {
+        page_number: basePageNumber + i + 1,
+        image_path: imagePath,
+        pdf_path: page.pdfPath,
+      });
 
       const created = await WhiteboardPage.create({
         lecture_id: lectureId,
         class_id: String(classId),
         page_number: basePageNumber + i + 1,
-        // 이미지가 없는 PDF 기반 저장이므로 우선 PDF 경로를 image_path에도 저장
-        // (필드 필수 제약을 충족하기 위한 임시 전략)
-        image_path: page.pdfPath,
+        image_path: imagePath,
         text: text,
         pdf_path: page.pdfPath,
         status: "finalized",
@@ -278,8 +299,8 @@ async function handleUploadPdfSplit(req, res) {
 
       createdPages.push({
         page_number: created.page_number,
-        image_path: created.image_path,
-        pdf_path: created.pdf_path,
+        image_path: toAbsoluteUrl(req, created.image_path),
+        pdf_path: toAbsoluteUrl(req, created.pdf_path),
         text: created.text,
         status: created.status,
       });
@@ -289,12 +310,16 @@ async function handleUploadPdfSplit(req, res) {
       success: true,
       message: "PDF가 업로드되었고, 내부적으로 페이지별 분할 저장되었습니다.",
       lecture_id: lecture.lecture_id,
+      lecture_name: lecture.name,
       class_id: Number(classId),
+      class_title: lecture.classes[idx].title,
       total_pages: splitted.length,
-      // snapshot 업로드 후 최종본이 저장된 것과 유사한 형태로 반환
       pages: createdPages,
       materials_count: lecture.classes[idx].materials.length,
-      original_pdf_url: originalPdfUrl,
+      original_pdf_url: toAbsoluteUrl(req, originalPdfUrl),
+      pdf_url: toAbsoluteUrl(req, originalPdfUrl), // 호환성을 위해 유지
+      original_filename: originalFileName,
+      filename: req.file.filename,
     });
   } catch (error) {
     console.error("PDF 분할 업로드 오류:", error);
@@ -305,7 +330,6 @@ async function handleUploadPdfSplit(req, res) {
   }
 }
 
-// 기본 경로
 router.post(
   "/lectures/:lectureId/classes/:classId/whiteboard/upload-pdf",
   authenticateToken,
@@ -313,7 +337,6 @@ router.post(
   handleUploadPdfSplit
 );
 
-// 교수 네임스페이스 별칭 경로
 router.post(
   "/professor/lectures/:lectureId/classes/:classId/whiteboard/upload-pdf",
   authenticateToken,
@@ -321,7 +344,6 @@ router.post(
   handleUploadPdfSplit
 );
 
-// 화이트보드 페이지 목록 조회 (기본 finalized만)
 router.get(
   "/lectures/:lectureId/classes/:classId/whiteboard/pages",
   authenticateToken,
@@ -340,16 +362,61 @@ router.get(
         filter.status = status;
       }
 
+      console.log("[DEBUG] Whiteboard pages 조회 시작:", {
+        lectureId,
+        classId,
+        filter,
+      });
+
       const pages = await WhiteboardPage.find(filter)
         .sort({ page_number: 1 })
         .select("page_number image_path pdf_path text status createdAt updatedAt")
         .lean();
 
+      console.log("[DEBUG] Whiteboard pages 조회 결과:", {
+        count: pages.length,
+        pages: pages.map(p => ({
+          page_number: p.page_number,
+          image_path: p.image_path,
+          pdf_path: p.pdf_path,
+          status: p.status,
+        })),
+      });
+
+      // 페이지의 image_path와 pdf_path를 절대 URL로 변환
+      const pagesWithAbsoluteUrls = pages.map(page => {
+        const absoluteImagePath = toAbsoluteUrl(req, page.image_path);
+        const absolutePdfPath = toAbsoluteUrl(req, page.pdf_path);
+        console.log("[DEBUG] URL 변환:", {
+          page_number: page.page_number,
+          original_image_path: page.image_path,
+          absolute_image_path: absoluteImagePath,
+          original_pdf_path: page.pdf_path,
+          absolute_pdf_path: absolutePdfPath,
+        });
+        return {
+          ...page,
+          image_path: absoluteImagePath,
+          pdf_path: absolutePdfPath,
+        };
+      });
+
+      console.log("[DEBUG] Whiteboard pages 응답:", {
+        lecture_id: lectureId,
+        class_id: Number(classId),
+        count: pagesWithAbsoluteUrls.length,
+        pages: pagesWithAbsoluteUrls.map(p => ({
+          page_number: p.page_number,
+          image_path: p.image_path,
+          pdf_path: p.pdf_path,
+        })),
+      });
+
       return res.json({
         lecture_id: lectureId,
         class_id: Number(classId),
-        count: pages.length,
-        pages,
+        count: pagesWithAbsoluteUrls.length,
+        pages: pagesWithAbsoluteUrls,
       });
     } catch (err) {
       console.error("화이트보드 페이지 목록 조회 오류:", err);
@@ -358,7 +425,6 @@ router.get(
   }
 );
 
-// 최신 finalized 페이지 조회
 router.get(
   "/lectures/:lectureId/classes/:classId/whiteboard/pages/latest",
   authenticateToken,

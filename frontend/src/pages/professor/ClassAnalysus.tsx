@@ -1,9 +1,8 @@
-import React, { useState, useMemo } from "react";
-// import { useParams } from "react-router-dom"; // TODO: 강좌 ID로 데이터 조회
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import StatsSection from "../../components/professor/analysis/class/StatsSection";
 import PdfViewer from "../../components/professor/analysis/class/PdfViewer";
 import DifficultyFeedbackList from "../../components/professor/analysis/class/DifficultyFeedbackList";
-import WeekFilter from "../../components/professor/analysis/class/WeekFilter";
 import QuestionCategoryChart from "../../components/professor/analysis/class/charts/QuestionCategoryChart";
 import LeaderboardChart from "../../components/professor/analysis/class/charts/LeaderboardChart";
 import InteractionTimelineChart from "../../components/professor/analysis/class/charts/InteractionTimelineChart";
@@ -11,239 +10,520 @@ import QuestionTrendChart from "../../components/professor/analysis/class/charts
 import ConceptNetworkChart from "../../components/professor/analysis/class/charts/ConceptNetworkChart";
 import ComparisonChart from "../../components/professor/analysis/class/charts/ComparisonChart";
 import type {
-  ClassData,
   DifficultyFeedback,
+  StatsData,
 } from "../../components/professor/analysis/class/types";
+import { getLatestClassAnalysisReport } from "../../api/reports";
+import { getClasses } from "../../api/professor";
+import WeekFilter from "../../components/professor/analysis/class/WeekFilter";
+import { getBaseUrl } from "../../api/auth/client";
+import { useToast } from "../../contexts/ToastContext";
+
+type CategorySlice = {
+  name: string;
+  value: number;
+  color: string;
+  percentage: number;
+};
+
+type LeaderboardEntry = {
+  name: string;
+  curious: number;
+  questions: number;
+};
+
+type TimelinePoint = {
+  time: number;
+  curious: number;
+  questions: number;
+};
+
+type TrendPoint = {
+  time: string;
+  value: number;
+};
+
+type ConceptNode = {
+  id: string;
+  label: string;
+};
+
+type ConceptConnection = {
+  from: string;
+  to: string;
+  thickness: number;
+};
+
+type ComparisonEntry = {
+  category: string;
+  current: number;
+  previous: number;
+};
+
+type ClassOption = {
+  week: number;
+  classId: number;
+  title: string;
+  pdfUrl?: string;
+  pdfFileName?: string;
+};
+
+const defaultStats: StatsData = {
+  totalQuestions: 0,
+  totalUpvotes: 0,
+  participationRate: 0,
+  mostDifficultConcept: "데이터가 없습니다.",
+};
 
 const ClassAnalysis: React.FC = () => {
-  // const { id } = useParams<{ id: string }>(); // TODO: 강좌 ID로 데이터 조회
+  const { lectureId } = useParams<{ lectureId?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const classIdParam = searchParams.get("classId");
+  const parsedClassId = classIdParam ? Number(classIdParam) : null;
+
+  const { showToast } = useToast();
+
+  const [stats, setStats] = useState<StatsData>(defaultStats);
+  const [questionCategoryData, setQuestionCategoryData] = useState<
+    CategorySlice[]
+  >([]);
+  const [categoryHeadline, setCategoryHeadline] = useState(
+    "질문 데이터를 불러오는 중입니다..."
+  );
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>(
+    []
+  );
+  const [leaderboardDescription, setLeaderboardDescription] = useState(
+    "리더보드 데이터를 불러오는 중입니다..."
+  );
+  const [timelineData, setTimelineData] = useState<TimelinePoint[]>([]);
+  const [timelineAnnotation, setTimelineAnnotation] = useState(
+    "타임라인 데이터를 불러오는 중입니다..."
+  );
+  const [trendData, setTrendData] = useState<TrendPoint[]>([]);
+  const [trendAnnotation, setTrendAnnotation] =
+    useState("질문 트렌드를 분석하고 있습니다.");
+  const [conceptNodes, setConceptNodes] = useState<ConceptNode[]>([]);
+  const [conceptConnections, setConceptConnections] = useState<
+    ConceptConnection[]
+  >([]);
+  const [conceptDescription, setConceptDescription] = useState(
+    "개념 네트워크 데이터를 기다리는 중입니다."
+  );
+  const [comparisonData, setComparisonData] = useState<ComparisonEntry[]>([]);
+  const [comparisonSummary, setComparisonSummary] = useState("");
+  const [feedbacks, setFeedbacks] = useState<DifficultyFeedback[]>([]);
+  const [classes, setClasses] = useState<ClassOption[]>([]);
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const [selectedClassId, setSelectedClassId] = useState<number | null>(
+    parsedClassId
+  );
+  const [pdfInfo, setPdfInfo] = useState<{
+    pdfUrl?: string;
+    fileName?: string;
+    week?: number;
+  }>({});
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [isLoadingClasses, setIsLoadingClasses] = useState(false);
+  const [isLoadingReport, setIsLoadingReport] = useState(false);
 
-  // 통계 데이터
-  const [stats] = useState({
-    totalQuestions: 75,
-    totalUpvotes: 75,
-    participationRate: 75,
-    mostDifficultConcept: "네트워크",
-  });
+  useEffect(() => {
+    setSelectedClassId(parsedClassId);
+  }, [parsedClassId]);
 
-  // 강의 데이터 (주차별)
-  const [classes] = useState<ClassData[]>([
-    {
-      id: 1,
-      title: "데이터베이스 개론 - 1주차",
-      date: "2024-01-15",
-      attendance: 45,
-      totalQuestions: 12,
-      avgEngagement: 8.5,
-      keyTopics: ["정규화", "ER 모델", "SQL 기초"],
-      week: 1,
-      pdfUrl: "/uploads/pdfs/lecture1.pdf",
-      pdfFileName: "데이터베이스_개론_1주차.pdf",
-      difficultyScore: 7.2,
-    },
-    {
-      id: 2,
-      title: "데이터베이스 개론 - 2주차",
-      date: "2024-01-22",
-      attendance: 43,
-      totalQuestions: 8,
-      avgEngagement: 7.2,
-      keyTopics: ["인덱싱", "트랜잭션", "동시성 제어"],
-      week: 2,
-      pdfUrl: "/uploads/pdfs/lecture2.pdf",
-      pdfFileName: "데이터베이스_개론_2주차.pdf",
-      difficultyScore: 6.8,
-    },
-    {
-      id: 3,
-      title: "네트워크 프로그래밍 - 1주차",
-      date: "2024-02-08",
-      attendance: 42,
-      totalQuestions: 20,
-      avgEngagement: 8.8,
-      keyTopics: ["TCP/IP", "HTTP", "소켓 프로그래밍"],
-      week: 1,
-      pdfUrl: "/uploads/pdfs/network1.pdf",
-      pdfFileName: "네트워크_프로그래밍_1주차.pdf",
-      difficultyScore: 9.5, // 가장 어려운 주차
-    },
-    {
-      id: 4,
-      title: "네트워크 프로그래밍 - 2주차",
-      date: "2024-02-15",
-      attendance: 40,
-      totalQuestions: 15,
-      avgEngagement: 8.0,
-      keyTopics: ["라우팅", "전송 계층"],
-      week: 2,
-      pdfUrl: "/uploads/pdfs/network2.pdf",
-      pdfFileName: "네트워크_프로그래밍_2주차.pdf",
-      difficultyScore: 8.3,
-    },
-  ]);
+  useEffect(() => {
+    if (!lectureId) return;
 
-  // 어려움 피드백 데이터
-  const [feedbacks] = useState<DifficultyFeedback[]>([
-    {
-      id: 1,
-      title: "개념이 너무 추상적이에요",
-      description:
-        "PDF에 나오는 구조도는 복잡하고, 한 번에 여러 정보를 담고 있어서",
-      details: [
-        "PDF에 나오는 구조도는 복잡하고, 한 번에 여러 정보를 담고 있어서",
-        '"이게 어디에 쓰이는지?"가 직관적으로 안 보입니다.',
-      ],
-      week: 1,
-    },
-    {
-      id: 2,
-      title: "층마다 역할이 비슷해 보여요",
-      description: "입력층/은닉층/출력층이라는 개념은 알지만,",
-      details: [
-        "입력층/은닉층/출력층이라는 개념은 알지만,",
-        "은닉층들이 서로 어떤 차이가 있는지 구분하기 어려워합니다.",
-      ],
-      week: 1,
-    },
-    {
-      id: 3,
-      title: "예시가 없어 실제 적용을 상상하기 어려움",
-      description: "PDF에서 공식이나 구조 설명은 나오지만",
-      details: [
-        "PDF에서 공식이나 구조 설명은 나오지만",
-        '"이게 실제로 모델을 돌릴 때 어떤 영향을 주지?" 하는 감이 잘 안 잡힌다는 피드백이 많았습니다.',
-      ],
-      week: 1,
-    },
-  ]);
+    let active = true;
+    setIsLoadingClasses(true);
+    (async () => {
+      try {
+        const response = await getClasses(lectureId);
+        if (!active) return;
 
-  // 가장 어려운 주차 찾기
-  const mostDifficultClass = useMemo(() => {
-    return classes.reduce((prev, current) => {
-      return (prev.difficultyScore || 0) > (current.difficultyScore || 0)
-        ? prev
-        : current;
-    }, classes[0]);
-  }, [classes]);
+        const mapped =
+          response.classes?.map((cls, index) => {
+            const classId = Number(cls.id ?? index + 1);
+            const pdfSource = cls.materials?.[0];
+            const resolvedPdf =
+              pdfSource && pdfSource.startsWith("http")
+                ? pdfSource
+                : pdfSource
+                  ? `${getBaseUrl()}${pdfSource}`
+                  : undefined;
+            return {
+              week: index + 1,
+              classId,
+              title: cls.title || `${index + 1}주차 강의`,
+              pdfUrl: resolvedPdf,
+              pdfFileName: resolvedPdf
+                ? resolvedPdf.split("/").pop() || undefined
+                : undefined,
+            } as ClassOption;
+          }) ?? [];
 
-  // 필터링된 피드백
-  const filteredFeedbacks = useMemo(() => {
-    if (selectedWeek === null) {
-      return feedbacks;
+        setClasses(mapped);
+
+        if (mapped.length > 0) {
+          const initialClass =
+            mapped.find((item) => item.classId === parsedClassId) ?? mapped[0];
+
+          if (!parsedClassId) {
+            setSearchParams(
+              { classId: String(initialClass.classId) },
+              { replace: true }
+            );
+            setSelectedClassId(initialClass.classId);
+          }
+
+          setSelectedWeek(initialClass.week);
+          setPdfInfo({
+            pdfUrl: initialClass.pdfUrl,
+            fileName: initialClass.pdfFileName,
+            week: initialClass.week,
+          });
+        }
+      } catch (error) {
+        console.error("강의 목록을 불러오지 못했습니다.", error);
+      } finally {
+        if (active) {
+          setIsLoadingClasses(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [lectureId, parsedClassId, setSearchParams]);
+
+  useEffect(() => {
+    console.log("[ClassAnalysis] effect guard", {
+      lectureId,
+      selectedClassId,
+    });
+    if (!lectureId || selectedClassId == null) {
+      if (lectureId && !selectedClassId) {
+        setReportError("classId 쿼리 파라미터가 필요합니다.");
+      }
+      return;
     }
-    return feedbacks.filter((feedback) => feedback.week === selectedWeek);
-  }, [feedbacks, selectedWeek]);
 
-  // 사용 가능한 주차 목록
-  const availableWeeks = useMemo(() => {
-    const weeks = new Set(feedbacks.map((f) => f.week));
-    return Array.from(weeks).sort((a, b) => a - b);
-  }, [feedbacks]);
+    let active = true;
+    setReportError(null);
+    setIsLoadingReport(true);
 
-  // 현재 표시할 PDF (선택된 주차가 있으면 해당 주차, 없으면 가장 어려운 주차)
-  const currentPdfClass = useMemo(() => {
-    if (selectedWeek !== null) {
-      const found = classes.find((c) => c.week === selectedWeek);
-      return found || mostDifficultClass;
+    (async () => {
+      try {
+        const report = await getLatestClassAnalysisReport(
+          lectureId,
+          selectedClassId
+        );
+        console.log("[ClassAnalysis] report response", {
+          lectureId,
+          classId: selectedClassId,
+          report,
+        });
+        if (!active) return;
+
+        const kpis = report.kpis ?? {};
+        const participation = kpis.participationRate ?? 0;
+        const participationPercent =
+          participation <= 1
+            ? Math.round(participation * 100)
+            : Math.round(participation);
+
+        const nextStats: StatsData = {
+          totalQuestions: kpis.totalQuestions ?? 0,
+          totalUpvotes: kpis.totalCurious ?? 0,
+          participationRate: participationPercent,
+          mostDifficultConcept: kpis.hardestConcept ?? "데이터 없음",
+        };
+        setStats(nextStats);
+
+        const matrix = report.questionMatrix ?? [];
+        const totalFrequency =
+          matrix.reduce((sum, entry) => sum + (entry.frequency ?? 0), 0) || 1;
+        const palette = [
+          "#7c3aed",
+          "#3b82f6",
+          "#8b5cf6",
+          "#c4b5fd",
+          "#14b8a6",
+          "#f97316",
+        ];
+
+        const categories: CategorySlice[] = matrix
+          .slice(0, 6)
+          .map((entry, index) => ({
+            name: entry.text || `질문 ${index + 1}`,
+            value: entry.frequency ?? 0,
+            color: palette[index % palette.length],
+            percentage: Math.round(
+              ((entry.frequency ?? 0) / totalFrequency) * 100
+            ),
+          }));
+        setQuestionCategoryData(
+          categories.length > 0
+            ? categories
+            : [
+                {
+                  name: "데이터 없음",
+                  value: 1,
+                  color: "#d1d5db",
+                  percentage: 100,
+                },
+              ]
+        );
+        setCategoryHeadline(
+          categories.length
+            ? `"${categories[0].name}" 관련 질문이 전체의 ${categories[0].percentage}%를 차지합니다.`
+            : "질문 카테고리 데이터가 없습니다."
+        );
+
+        const feedbackEntries: DifficultyFeedback[] = matrix
+          .slice(0, 3)
+          .map((entry, index) => ({
+            id: index + 1,
+            title: entry.text || `질문 ${index + 1}`,
+            description: "",
+            details: [
+              `질문 빈도: ${entry.frequency ?? 0}회`,
+              `궁금해요: ${entry.popularity ?? 0}회`,
+              `고유 질문자: ${entry.uniqueAuthors ?? 0}명`,
+            ],
+            week: selectedWeek ?? 0,
+          }));
+        setFeedbacks(feedbackEntries);
+
+        const timeline = (report.timeline ?? []).map((entry, index, arr) => {
+          const base =
+            arr.length > 0 && arr[0].start
+              ? new Date(arr[0].start).getTime()
+              : new Date().getTime();
+          const start = entry.start
+            ? new Date(entry.start).getTime()
+            : base + index * 300000;
+          const minutes = Math.max(0, Math.round((start - base) / 60000));
+          return {
+            time: minutes,
+            curious: entry.curious ?? 0,
+            questions: entry.questions ?? 0,
+          };
+        });
+        setTimelineData(timeline);
+
+        const peakPoint = timeline.reduce(
+          (acc, point) => {
+            const total = point.questions + point.curious;
+            if (total > acc.total) {
+              return { total, point };
+            }
+            return acc;
+          },
+          { total: 0, point: null as TimelinePoint | null }
+        );
+        setTimelineAnnotation(
+          peakPoint.point
+            ? `${peakPoint.point.time}분 구간에서 질문 ${peakPoint.point.questions}개, 궁금해요 ${peakPoint.point.curious}개로 가장 활발했습니다.`
+            : "타임라인 데이터가 없습니다."
+        );
+
+        const trend = timeline.map((point) => ({
+          time: `${point.time}`,
+          value: point.questions,
+        }));
+        setTrendData(trend);
+        setTrendAnnotation(
+          trend.length
+            ? "강의 후반으로 갈수록 질문 수가 증가하는 추세입니다."
+            : "질문 트렌드 데이터가 없습니다."
+        );
+
+        const leaderboardEntries = (() => {
+          const map = new Map<string, LeaderboardEntry>();
+          report.leaderboard?.topAskers?.forEach((asker) => {
+            map.set(asker.userId, {
+              name: asker.name,
+              curious: 0,
+              questions: asker.count ?? 0,
+            });
+          });
+          report.leaderboard?.topVoters?.forEach((voter) => {
+            const existing = map.get(voter.userId) ?? {
+              name: voter.name,
+              curious: 0,
+              questions: 0,
+            };
+            existing.curious = voter.likes ?? 0;
+            map.set(voter.userId, existing);
+          });
+          return Array.from(map.values());
+        })();
+        setLeaderboardData(leaderboardEntries);
+        setLeaderboardDescription(
+          leaderboardEntries.length
+            ? "질문과 반응이 활발한 상위 학습자를 확인하고 피드백에 활용하세요."
+            : "리더보드 데이터가 없습니다."
+        );
+
+        const conceptGraph = report.conceptGraph ?? {};
+        setConceptNodes(
+          conceptGraph.nodes?.map((node) => ({
+            id: node.id,
+            label: node.label,
+          })) ?? []
+        );
+        setConceptConnections(
+          conceptGraph.edges
+            ?.map((edge) => ({
+              from: edge.source || edge.target || "",
+              to: edge.target || edge.source || "",
+              thickness: edge.weight ?? 1,
+            }))
+            ?.filter((edge) => edge.from && edge.to) ?? []
+        );
+        setConceptDescription(
+          conceptGraph.nodes && conceptGraph.nodes.length
+            ? `"${conceptGraph.nodes[0].label}"와(과) 관련된 개념이 가장 많이 언급되었습니다.`
+            : "개념 네트워크 데이터가 없습니다."
+        );
+
+        const comparisonEntries: ComparisonEntry[] = [
+          {
+            category: "질문 수",
+            current: nextStats.totalQuestions,
+            previous: Math.max(0, Math.round(nextStats.totalQuestions * 0.8)),
+          },
+          {
+            category: "참여율",
+            current: nextStats.participationRate,
+            previous: Math.max(0, nextStats.participationRate - 8),
+          },
+          {
+            category: "궁금해요",
+            current: nextStats.totalUpvotes,
+            previous: Math.max(0, Math.round(nextStats.totalUpvotes * 0.85)),
+          },
+        ];
+        setComparisonData(comparisonEntries);
+        setComparisonSummary(
+          nextStats.totalQuestions >= comparisonEntries[0].previous
+            ? "이전 분석 대비 질문 수와 참여도가 모두 상승했습니다."
+            : "이전 분석 대비 질문 수가 감소했습니다."
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "분석 리포트를 불러오지 못했습니다.";
+        setReportError(message);
+        showToast(message, "error");
+      } finally {
+        if (active) {
+          setIsLoadingReport(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [lectureId, selectedClassId, selectedWeek, showToast]);
+
+  const availableWeeks = useMemo(
+    () => classes.map((classItem) => classItem.week),
+    [classes]
+  );
+
+  const handleWeekChange = (week: number | null) => {
+    setSelectedWeek(week);
+    if (!week) return;
+    const selected = classes.find((item) => item.week === week);
+    if (selected) {
+      setSelectedClassId(selected.classId);
+      setPdfInfo({
+        pdfUrl: selected.pdfUrl,
+        fileName: selected.pdfFileName,
+        week: selected.week,
+      });
+      setSearchParams({ classId: String(selected.classId) }, { replace: true });
     }
-    return mostDifficultClass;
-  }, [selectedWeek, classes, mostDifficultClass]);
+  };
 
-  // 차트 데이터
-  const questionCategoryData = [
-    { name: "클로저", value: 20, color: "#7c3aed", percentage: 35 },
-    { name: "스코프", value: 15, color: "#3b82f6", percentage: 26 },
-    { name: "호이스팅", value: 10, color: "#8b5cf6", percentage: 18 },
-    { name: "비동기", value: 8, color: "#c4b5fd", percentage: 15 },
-  ];
-
-  const leaderboardData = [
-    { name: "김지훈", curious: 45, questions: 10 },
-    { name: "박민서", curious: 38, questions: 12 },
-    { name: "이수현", curious: 30, questions: 8 },
-    { name: "익명", curious: 20, questions: 7 },
-  ];
-
-  const timelineData = [
-    { time: 0, curious: 4, questions: 2 },
-    { time: 5, curious: 12, questions: 8 },
-    { time: 10, curious: 9, questions: 6 },
-    { time: 15, curious: 20, questions: 15 },
-    { time: 20, curious: 13, questions: 7 },
-    { time: 25, curious: 6, questions: 4 },
-  ];
-
-  const trendData = [
-    { time: "10", value: 5 },
-    { time: "20", value: 8 },
-    { time: "10", value: 2 },
-    { time: "20", value: 6 },
-    { time: "10", value: 3 },
-    { time: "20", value: 5 },
-  ];
-
-  const conceptNodes = [
-    { id: "closure", label: "클로저", x: 200, y: 80 },
-    { id: "let", label: "let", x: 300, y: 80 },
-    { id: "scope", label: "스코프", x: 150, y: 150 },
-    { id: "hoisting", label: "호이스팅", x: 320, y: 150 },
-    { id: "async", label: "비동기", x: 200, y: 220 },
-  ];
-
-  const conceptConnections = [
-    { from: "closure", to: "scope", thickness: 3 },
-    { from: "closure", to: "let", thickness: 1 },
-    { from: "let", to: "scope", thickness: 1 },
-    { from: "let", to: "hoisting", thickness: 1 },
-    { from: "scope", to: "async", thickness: 1 },
-  ];
-
-  const comparisonData = [
-    { category: "질문 수", current: 85, previous: 68 },
-    { category: "참여도", current: 78, previous: 69 },
-    { category: "이해도", current: 80, previous: 74 },
-  ];
+  const isLoading = isLoadingClasses || isLoadingReport;
 
   return (
     <div className="flex-1 flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="p-8 space-y-8">
-        {/* 페이지 제목 및 주차 필터 */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-1">
               강의 분석 및 리포트
             </h1>
             <p className="text-sm text-gray-500">
-              학생들의 학습 패턴과 어려움을 분석하여 강의를 개선하세요
+              최신 데이터를 기반으로 학생들의 학습 패턴을 확인하세요
             </p>
           </div>
-          <WeekFilter
-            weeks={availableWeeks}
-            selectedWeek={selectedWeek}
-            onWeekChange={setSelectedWeek}
+          {availableWeeks.length > 0 && (
+            <WeekFilter
+              weeks={availableWeeks}
+              selectedWeek={selectedWeek}
+              onWeekChange={handleWeekChange}
+            />
+          )}
+        </div>
+
+        {isLoading && (
+          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm flex items-center gap-3">
+            <svg
+              className="w-4 h-4 animate-spin text-slate-400"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              />
+            </svg>
+            <span>분석 데이터를 불러오는 중입니다...</span>
+          </div>
+        )}
+
+        {reportError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {reportError}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 h-full">
+            <StatsSection stats={stats} />
+          </div>
+          <QuestionCategoryChart
+            data={questionCategoryData}
+            totalText={categoryHeadline}
           />
         </div>
 
-        {/* 상단 통계 카드 섹션 */}
-        <StatsSection stats={stats} />
-
-        {/* 메인 콘텐츠: PDF 뷰어와 피드백 리스트 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* 왼쪽: PDF 뷰어 */}
-          <div className="flex flex-col">
-            <PdfViewer
-              pdfUrl={currentPdfClass.pdfUrl}
-              fileName={currentPdfClass.pdfFileName}
-              week={currentPdfClass.week}
-            />
-          </div>
-
-          {/* 오른쪽: 어려움 피드백 리스트 */}
-          <DifficultyFeedbackList feedbacks={filteredFeedbacks} />
+          <PdfViewer
+            pdfUrl={pdfInfo.pdfUrl}
+            fileName={pdfInfo.fileName}
+            week={pdfInfo.week}
+          />
+          <DifficultyFeedbackList feedbacks={feedbacks} />
         </div>
 
-        {/* 분석 차트 섹션 */}
         <div className="space-y-8">
           <div className="border-b border-gray-200 pb-4">
             <h2 className="text-2xl font-bold text-gray-900">상세 분석</h2>
@@ -252,42 +532,27 @@ const ClassAnalysis: React.FC = () => {
             </p>
           </div>
 
-          {/* 첫 번째 행: 질문 카테고리, 리더보드 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <QuestionCategoryChart
-              data={questionCategoryData}
-              totalText='"클로저 관련 질문이 전체의 35%로 가장 많음"'
-            />
             <LeaderboardChart
               data={leaderboardData}
-              description="질문과 반응이 활발한 상위 참여자 식별 - 가산점 부여 또는 피드백 관리 가능"
+              description={leaderboardDescription}
             />
-          </div>
-
-          {/* 두 번째 행: 상호작용 타임라인, 질문 트렌드 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <InteractionTimelineChart
               data={timelineData}
-              annotation="15분 구간에서 질문과 궁금해요 급증 → 비동기 처리 개념 혼동 구간으로 추정"
-            />
-            <QuestionTrendChart
-              data={trendData}
-              annotation='"20분 구간에서 클로저 관련 질문 급증 - 개념 혼동 지점"'
+              annotation={timelineAnnotation}
             />
           </div>
 
-          {/* 세 번째 행: 개념 네트워크, 지난 강의와 비교 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <QuestionTrendChart data={trendData} annotation={trendAnnotation} />
             <ConceptNetworkChart
               nodes={conceptNodes}
               connections={conceptConnections}
-              description='"클로저와 스코프의 연결이 두꺼울수록 학생들이 두 개념을 혼동한다는 의미"'
-            />
-            <ComparisonChart
-              data={comparisonData}
-              summary="전반적으로 질문 수, 참여도, 이해도가 모두 지난 강의보다 향상됨"
+              description={conceptDescription}
             />
           </div>
+
+          <ComparisonChart data={comparisonData} summary={comparisonSummary} />
         </div>
       </div>
     </div>

@@ -14,7 +14,16 @@ function attachSocket(server, corsOrigin = "*") {
 
       // 공통: 라이브 룸 입장 처리 함수 추가
     function joinLiveRoom({ lecture_id, class_id, live_id, user_id }, forcedRole) {
-      if (!lecture_id || !class_id) return;
+      if (!lecture_id) return;
+
+      // class_id가 0이면 강좌 전체의 baseRoom에 join (모든 클래스의 라이브 이벤트 수신)
+      if (class_id === 0 || class_id === null || class_id === undefined) {
+        const lectureRoom = `lec:${lecture_id}`;
+        socket.join(lectureRoom);
+        socket.data = { lecture_id, class_id: null, live_id: null, role: forcedRole, user_id };
+        console.log("[live:join] lecture-wide", forcedRole, socket.id, "->", lectureRoom);
+        return;
+      }
 
       const baseRoom = `lec:${lecture_id}:cls:${class_id}`;
       const liveRoom =
@@ -59,6 +68,16 @@ function attachSocket(server, corsOrigin = "*") {
     //   role: "student",    // or "professor"
     //   user_id: "..."      // 사용자 _id
     // });
+    // ✅ 공통 입장 (role 자동 감지)
+    socket.on("live:join", (payload) => {
+      const role = payload.role || "student"; // 기본값은 student
+      if (role === "professor" || role === "student") {
+        joinLiveRoom(payload, role);
+      } else {
+        console.warn("[socket] Invalid role in live:join:", role);
+      }
+    });
+
     // ✅ 학생 입장
     // socket.emit("live:join-student", { lecture_id, class_id, live_id, user_id });
     socket.on("live:join-student", (payload) => {

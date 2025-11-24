@@ -18,7 +18,6 @@ const BroadcastAgreementModal: React.FC<BroadcastAgreementModalProps> = ({
 
   const handleAgree = () => {
     if (isAgreed) {
-      onClose(); // 동의 모달 닫기
       setShowParticipantModal(true);
     }
   };
@@ -36,12 +35,13 @@ const BroadcastAgreementModal: React.FC<BroadcastAgreementModalProps> = ({
   const handleCancel = () => {
     onClose();
     setIsAgreed(false);
+    setShowParticipantModal(false);
   };
 
   return (
     <>
       <Modal
-        isOpen={isOpen}
+        isOpen={isOpen && !showParticipantModal}
         onClose={handleCancel}
         title="강의 시작 전, 꼭 확인하세요!"
         size="lg"
@@ -135,7 +135,7 @@ const BroadcastAgreementModal: React.FC<BroadcastAgreementModalProps> = ({
 
       {/* 참여자 설정 모달 */}
       <ParticipantSettingsModal
-        isOpen={showParticipantModal}
+        isOpen={isOpen && showParticipantModal}
         onClose={handleCancel}
         onBack={handleParticipantBack}
         onNext={handleParticipantNext}

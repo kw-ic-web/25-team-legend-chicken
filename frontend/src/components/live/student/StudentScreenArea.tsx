@@ -1,5 +1,3 @@
-// 변경 전: import React, { RefObject } from "react";
-// 변경 후:
 import React from "react";
 import type { RefObject, MutableRefObject } from "react";
 
@@ -9,7 +7,7 @@ type AnyVideoRef =
 
 interface Props {
   isLive: boolean;
-  videoRef: AnyVideoRef;      // <- 여기 수정
+  videoRef: AnyVideoRef;
   statusText?: string;
 }
 
@@ -18,28 +16,28 @@ const StudentScreenArea: React.FC<Props> = ({
   videoRef,
   statusText = "방송 대기 중",
 }) => {
+
   return (
-    <div className="flex-1 p-6 relative">
+    <div className="flex-1 relative px-4 pb-16 pt-4 overflow-hidden">
       <div className="w-full h-full flex items-center justify-center">
+        {/* 화면 공유 영역 */}
         <div
-          className="max-w-full rounded-lg border border-gray-200 bg-black flex items-center justify-center overflow-hidden relative"
+          className="w-full max-w-5xl max-h-full aspect-video rounded-xl border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden relative shadow-lg"
           style={{
-            height: "60vh",
-            width: "calc(60vh * 16 / 9)",
-            maxHeight: "calc(100% - 3rem)",
-            maxWidth: "100%",
+            maxHeight: "100%",
           }}
         >
           <video
-            ref={videoRef as React.RefObject<HTMLVideoElement>} // TS 만족용 캐스팅
+            ref={videoRef as React.RefObject<HTMLVideoElement>}
             autoPlay
             playsInline
-            className={`w-full h-full object-contain ${isLive ? "opacity-100" : "opacity-0"}`}
+            muted
+            className={`w-full h-full object-contain bg-black ${isLive ? "visible" : "hidden"}`}
           />
           {!isLive && (
-            <span className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
-              {statusText}
-            </span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+              <div>{statusText}</div>
+            </div>
           )}
         </div>
       </div>

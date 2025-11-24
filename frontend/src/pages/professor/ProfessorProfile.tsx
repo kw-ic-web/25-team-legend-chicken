@@ -2,22 +2,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getMyInfo, updateMyInfo, logoutUser } from "../../api/auth";
 import { getBaseUrl } from "../../api/auth/client";
-import Toast from "../../components/common/Toast";
 import { useAuth } from "../../contexts/AuthContext";
-
-type ToastState = {
-  message: string;
-  type: "success" | "error";
-} | null;
+import { useToast } from "../../contexts/ToastContext";
 
 const ProfessorProfile: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [toast, setToast] = useState<ToastState>(null);
 
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const { showToast } = useToast();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -44,14 +39,14 @@ const ProfessorProfile: React.FC = () => {
           error instanceof Error
             ? error.message
             : "내 정보를 불러오지 못했습니다.";
-        setToast({ message, type: "error" });
+        showToast(message, "error");
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchMyInfo();
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     return () => {
@@ -109,17 +104,14 @@ const ProfessorProfile: React.FC = () => {
 
       window.dispatchEvent(new Event("myinfo:update"));
 
-      setToast({
-        message: response.message ?? "내 정보가 저장되었습니다.",
-        type: "success",
-      });
+      showToast(response.message ?? "내 정보가 저장되었습니다.", "success");
     } catch (error) {
       console.error("내 정보 수정 실패:", error);
       const message =
         error instanceof Error
           ? error.message
           : "내 정보를 저장하는 중 오류가 발생했습니다.";
-      setToast({ message, type: "error" });
+      showToast(message, "error");
     } finally {
       setIsSaving(false);
     }
@@ -129,22 +121,30 @@ const ProfessorProfile: React.FC = () => {
     if (isLoggingOut) return;
     setIsLoggingOut(true);
     try {
-      await logoutUser();
+      const response = await logoutUser();
+      showToast(
+        response.message ?? "정상적으로 로그아웃되었습니다.",
+        "success"
+      );
     } catch (error) {
       console.error("로그아웃 실패:", error);
       const message =
         error instanceof Error
           ? error.message
           : "로그아웃 중 오류가 발생했습니다.";
-      setToast({ message, type: "error" });
+      showToast(message, "error");
       setIsLoggingOut(false);
       return;
     }
 
     localStorage.removeItem("lecq.token");
+    localStorage.removeItem("lecq.refreshToken");
+    localStorage.removeItem("lecq.tokenExpiresAt");
     logout();
     setIsLoggingOut(false);
-    navigate("/login", { replace: true });
+    setTimeout(() => {
+      navigate("/login", { replace: true });
+    }, 600);
   };
 
   return (
@@ -306,14 +306,6 @@ const ProfessorProfile: React.FC = () => {
           </form>
         )}
       </div>
-
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
     </div>
   );
 };

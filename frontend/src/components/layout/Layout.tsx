@@ -10,19 +10,35 @@ const Layout: React.FC = () => {
 
   const isStudentRoute = location.pathname.startsWith("/student");
   const isProfessorRoute = location.pathname.startsWith("/professor");
-  const isRealtimeDashboard =
-    location.pathname === "/professor/realtime-dashboard";
+  const isRealtimeDashboard = location.pathname.startsWith(
+    "/professor/realtime-dashboard"
+  );
+  const isStudentClass = location.pathname.startsWith("/student/courses/");
+  const isStudentParticipate = location.pathname.startsWith(
+    "/student/participate"
+  );
+
+  const shouldShowSidebar =
+    !isRealtimeDashboard && !isStudentClass && !isStudentParticipate;
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col">
+    <div
+      className={`h-screen bg-gray-50 flex flex-col ${
+        shouldShowSidebar ? "" : "overflow-hidden"
+      }`}
+    >
       {/* 헤더 */}
       {isProfessorRoute && <ProfessorHeader />}
       {isStudentRoute && <StudentHeader />}
 
       {/* 메인 레이아웃 */}
-      <div className="flex flex-1 mt-20">
+      <div
+        className={`flex flex-1 pt-20 ${
+          shouldShowSidebar ? "overflow-auto" : "overflow-hidden"
+        }`}
+      >
         {/* 사이드바 */}
-        {!isRealtimeDashboard && (
+        {shouldShowSidebar && (
           <>
             {isStudentRoute && <StudentSidebar />}
             {isProfessorRoute && <ProfessorSidebar />}
@@ -32,7 +48,9 @@ const Layout: React.FC = () => {
         {/* 메인 콘텐츠 */}
         <main
           className={`flex-1 flex flex-col ${
-            !isRealtimeDashboard && (isStudentRoute || isProfessorRoute)
+            shouldShowSidebar ? "overflow-auto" : "overflow-hidden"
+          } ${
+            shouldShowSidebar && (isStudentRoute || isProfessorRoute)
               ? "ml-80"
               : ""
           }`}

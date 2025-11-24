@@ -2,12 +2,12 @@ const express = require("express");
 const router = express.Router();
 const Question = require("../models/Question");
 const Lecture = require("../models/lectures");
+const WhiteboardPage = require("../models/whiteboardPage");
 const { authenticateToken } = require("../middleware/auth");
 const mongoose = require("mongoose");
+const OpenAI = require("openai");
 
-// 권한 체크: 강좌/클래스 접근 가능?
 async function canAccess(user, lecture_id) {
-  // lecture_id가 ObjectId일 수도, 커스텀 문자열일 수도 있는 상황 모두 대응
   let lec = await Lecture.findOne({ lecture_id });
   if (!lec) {
     if (mongoose.Types.ObjectId.isValid(String(lecture_id))) {
@@ -31,7 +31,6 @@ async function canAccess(user, lecture_id) {
   return { ok: true, lec };
 }
 
-// 질문 생성
 router.post("/", authenticateToken, async (req, res) => {
   try {
     const user = req.user;
@@ -48,20 +47,17 @@ router.post("/", authenticateToken, async (req, res) => {
       metadata,
     } = req.body;
 
-    // 필수값 체크
     if (!lecture_id || !class_id || !page || !position || !text) {
       return res
         .status(400)
         .json({ message: "필수 필드가 누락되었습니다." });
     }
 
-    // 접근 권한 확인
     const access = await canAccess(user, lecture_id);
     if (!access.ok) {
       return res.status(access.code).json({ message: access.msg });
     }
 
-    // 클래스 존재 확인
     const cls = Array.isArray(access.lec.classes)
       ? access.lec.classes.find((c) => Number(c.id) === Number(class_id))
       : null;
@@ -71,13 +67,11 @@ router.post("/", authenticateToken, async (req, res) => {
         .json({ message: "해당 클래스를 찾을 수 없습니다." });
     }
 
-    // 🔥 현재 라이브 상태에 따라 live_id 자동 설정
     let liveId = null;
     if (cls.isLiveActive && cls.currentLiveId) {
       liveId = Number(cls.currentLiveId);
     }
 
-    // author를 명시 안 한 경우, 토큰 사용자에서 기본값 구성
     const authorSafe =
       author && typeof author === "object"
         ? author
@@ -87,28 +81,34 @@ router.post("/", authenticateToken, async (req, res) => {
             role: user.user_type || "student",
           };
 
-    // 질문 생성
     const q = await Question.create({
       lecture_id,
       class_id: Number(class_id),
       page,
-      // section은 점차 없앨 예정이면 여기서 null로만 두고, 스키마에서 삭제해도 됨
       section: section || null,
       position,
       timestamp: new Date(timestamp || Date.now()),
       type,
       author: authorSafe,
       text,
-      metadata: metadata || {},
-      live_id: liveId, // ✅ 현재 라이브면 번호, 아니면 null
+      metadata: {
+        ...(metadata || {}),
+        likes: 0,
+      },
+      live_id: liveId,
+      upvote_count: 0,
+      upvoted_by: [],
     });
 
-    // 실시간 알림 송출
     const io = req.app.get("io");
     if (io) {
       const room = `lec:${lecture_id}:cls:${class_id}`;
       io.to(room).emit("question:new", q.toObject());
     }
+
+    generateGPTAnswer(q._id, lecture_id, class_id, text, io).catch((err) => {
+      console.error("GPT 답변 생성 오류:", err);
+    });
 
     return res
       .status(201)
@@ -121,7 +121,6 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-// 질문 조회 (필터: lecture_id, class_id, page)
 router.get("/list", authenticateToken, async (req, res) => {
   try {
     const user = req.user;
@@ -144,7 +143,6 @@ router.get("/list", authenticateToken, async (req, res) => {
     };
     if (page) filter.page = Number(page);
 
-    // createdAt(타임스탬프 자동필드)와 created_at(커스텀) 양쪽 정렬 대응
     const data = await Question.find(filter)
       .sort({ createdAt: -1, created_at: -1 })
       .limit(Math.min(Number(limit) || 50, 200));
@@ -158,8 +156,6 @@ router.get("/list", authenticateToken, async (req, res) => {
   }
 });
 
-// 질문 업보트 토글
-// POST /api/questions/:id/upvote
 router.post("/:id/upvote", authenticateToken, async (req, res) => {
   try {
     const userId = String(req.user._id);
@@ -190,6 +186,9 @@ router.post("/:id/upvote", authenticateToken, async (req, res) => {
       q.upvote_count += 1;
     }
 
+    if (!q.metadata) q.metadata = {};
+    q.metadata.likes = q.upvote_count;
+
     await q.save();
 
     const io = req.app.get("io");
@@ -211,9 +210,60 @@ router.post("/:id/upvote", authenticateToken, async (req, res) => {
   }
 });
 
+// 교수자 답변 추가/수정
+router.post("/:id/answer", authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const questionId = req.params.id;
+    const { answer } = req.body;
 
-// 강좌/클래스 기준 질문 조회 (교수 + 학생)
-// GET /api/questions/lectures/:lectureId/classes/:classId
+    if (!answer || typeof answer !== "string" || !answer.trim()) {
+      return res
+        .status(400)
+        .json({ message: "답변 내용이 필요합니다." });
+    }
+
+    const q = await Question.findById(questionId);
+    if (!q) {
+      return res.status(404).json({ message: "질문을 찾을 수 없습니다." });
+    }
+
+    const access = await canAccess(user, q.lecture_id);
+    if (!access.ok) {
+      return res.status(access.code).json({ message: access.msg });
+    }
+
+    // 교수자만 답변을 추가/수정할 수 있도록 체크 (선택사항)
+    // if (user.user_type !== "professor") {
+    //   return res.status(403).json({ message: "교수자만 답변을 추가할 수 있습니다." });
+    // }
+
+    q.answer = answer.trim();
+    await q.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      const room = `lec:${q.lecture_id}:cls:${q.class_id}`;
+      io.to(room).emit("question:answer", {
+        question_id: questionId,
+        answer: q.answer,
+        question: q.toObject(),
+      });
+    }
+
+    return res.json({
+      message: "답변이 저장되었습니다.",
+      question: q,
+    });
+  } catch (err) {
+    console.error("답변 저장 오류:", err);
+    return res
+      .status(500)
+      .json({ message: "서버 오류가 발생했습니다.", error: err.message });
+  }
+});
+
+
 router.get(
   "/lectures/:lectureId/classes/:classId",
   authenticateToken,
@@ -253,5 +303,136 @@ router.get(
   }
 );
 
+router.get(
+  "/lectures/:lectureId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const { lectureId } = req.params;
+      const { page, limit = 50 } = req.query;
+
+      const access = await canAccess(user, lectureId);
+      if (!access.ok) {
+        return res.status(access.code).json({ message: access.msg });
+      }
+
+      const filter = {
+        lecture_id: lectureId,
+      };
+      if (page) filter.page = Number(page);
+
+      const allQuestions = await Question.find(filter)
+        .sort({ createdAt: -1, created_at: -1 })
+        .limit(Math.min(Number(limit) || 50, 200));
+
+      const topQuestions = await Question.find(filter)
+        .sort({ "metadata.likes": -1, createdAt: -1 })
+        .limit(5)
+        .lean();
+
+      return res.json({
+        lecture_id: lectureId,
+        count: allQuestions.length,
+        questions: allQuestions,
+        top_questions_by_upvote: topQuestions.map((q) => ({
+          _id: q._id,
+          text: q.text,
+          author: q.author,
+          upvotes: q.metadata?.likes || 0,
+          class_id: q.class_id,
+          page: q.page,
+          created_at: q.created_at || q.createdAt,
+        })),
+      });
+    } catch (err) {
+      console.error("강좌 질문 조회 오류:", err);
+      return res
+        .status(500)
+        .json({ message: "서버 오류가 발생했습니다.", error: err.message });
+    }
+  }
+);
+
+async function generateGPTAnswer(questionId, lectureId, classId, questionText, io = null) {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_API;
+    if (!apiKey) {
+      console.warn("OpenAI API 키가 설정되지 않아 GPT 답변을 생성할 수 없습니다.");
+      return;
+    }
+
+    const whiteboardPages = await WhiteboardPage.find({
+      lecture_id: lectureId,
+      class_id: String(classId),
+      status: "finalized",
+    })
+      .sort({ page_number: 1 })
+      .select("text page_number")
+      .lean();
+
+    const lectureText = whiteboardPages
+      .map((page) => `[페이지 ${page.page_number}]\n${page.text || ""}`)
+      .join("\n\n");
+
+    if (!lectureText.trim()) {
+      console.log("교안 텍스트가 없어 GPT 답변을 생성하지 않습니다.");
+      return;
+    }
+
+    const openai = new OpenAI({ apiKey });
+
+    const prompt = `다음 교안 내용을 참고하여 질문에 대해 간결하게 답변해주세요. 한두 문장으로 핵심만 답변해주세요.
+
+## 교안 내용:
+${lectureText}
+
+## 질문:
+${questionText}
+
+교안 내용을 기반으로 간결하고 명확하게 답변해주세요. 교안에 없는 내용은 언급하지 마세요.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "교안 내용을 기반으로 질문에 대해 간결하고 명확하게 답변합니다. 한두 문장으로 핵심만 답변합니다.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      max_tokens: 200,
+      temperature: 0.5,
+    });
+
+    const answer = completion.choices?.[0]?.message?.content?.trim();
+
+    if (answer) {
+      const updatedQuestion = await Question.findByIdAndUpdate(
+        questionId,
+        { answer },
+        { new: true }
+      );
+
+      if (io) {
+        const room = `lec:${lectureId}:cls:${classId}`;
+        io.to(room).emit("question:answer", {
+          question_id: questionId,
+          answer: answer,
+          question: updatedQuestion.toObject(),
+        });
+      }
+
+      console.log(`✅ GPT 답변이 생성되었습니다. (질문 ID: ${questionId})`);
+    } else {
+      console.warn("GPT 답변이 생성되지 않았습니다.");
+    }
+  } catch (error) {
+    console.error("GPT 답변 생성 중 오류 발생:", error.message || error);
+  }
+}
 
 module.exports = router;
