@@ -14,7 +14,7 @@ import type {
   StatsData,
 } from "../../components/professor/analysis/class/types";
 import { getLatestClassAnalysisReport } from "../../api/reports";
-import { getClasses } from "../../api/professor";
+import { getClasses, getClassPdfs } from "../../api/professor";
 import WeekFilter from "../../components/professor/analysis/class/WeekFilter";
 import { getBaseUrl } from "../../api/auth/client";
 import { useToast } from "../../contexts/ToastContext";
@@ -174,14 +174,12 @@ const ClassAnalysis: React.FC = () => {
               { replace: true }
             );
             setSelectedClassId(initialClass.classId);
+          } else {
+            setSelectedClassId(parsedClassId);
           }
 
           setSelectedWeek(initialClass.week);
-          setPdfInfo({
-            pdfUrl: initialClass.pdfUrl,
-            fileName: initialClass.pdfFileName,
-            week: initialClass.week,
-          });
+          // PDF 정보는 selectedClassId가 설정되면 useEffect에서 자동으로 가져옵니다
         }
       } catch (error) {
         console.error("강의 목록을 불러오지 못했습니다.", error);
@@ -431,6 +429,74 @@ const ClassAnalysis: React.FC = () => {
     };
   }, [lectureId, selectedClassId, selectedWeek, showToast]);
 
+  // selectedClassId가 변경될 때 PDF 정보 가져오기
+  useEffect(() => {
+    if (!lectureId || selectedClassId == null) return;
+
+    let active = true;
+    (async () => {
+      try {
+        const pdfsResponse = await getClassPdfs(lectureId, selectedClassId);
+        if (!active) return;
+
+        // 첫 번째 PDF 가져오기
+        const firstPdf = pdfsResponse.pdfs?.[0];
+        if (firstPdf) {
+          const pdfUrl =
+            typeof firstPdf === "string"
+              ? firstPdf.startsWith("http")
+                ? firstPdf
+                : `${getBaseUrl()}${firstPdf}`
+              : firstPdf.url
+                ? firstPdf.url.startsWith("http")
+                  ? firstPdf.url
+                  : `${getBaseUrl()}${firstPdf.url}`
+                : undefined;
+
+          const fileName =
+            typeof firstPdf === "string"
+              ? firstPdf.split("/").pop() || undefined
+              : firstPdf.originalName || firstPdf.url?.split("/").pop() || undefined;
+
+          const selectedClass = classes.find(
+            (item) => item.classId === selectedClassId
+          );
+
+          setPdfInfo({
+            pdfUrl,
+            fileName,
+            week: selectedClass?.week,
+          });
+        } else {
+          // PDF가 없으면 빈 상태로 설정
+          const selectedClass = classes.find(
+            (item) => item.classId === selectedClassId
+          );
+          setPdfInfo({
+            pdfUrl: undefined,
+            fileName: undefined,
+            week: selectedClass?.week,
+          });
+        }
+      } catch (error) {
+        console.error("PDF 정보를 불러오지 못했습니다.", error);
+        // 에러가 발생해도 빈 상태로 설정
+        const selectedClass = classes.find(
+          (item) => item.classId === selectedClassId
+        );
+        setPdfInfo({
+          pdfUrl: undefined,
+          fileName: undefined,
+          week: selectedClass?.week,
+        });
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [lectureId, selectedClassId, classes]);
+
   const availableWeeks = useMemo(
     () => classes.map((classItem) => classItem.week),
     [classes]
@@ -442,12 +508,8 @@ const ClassAnalysis: React.FC = () => {
     const selected = classes.find((item) => item.week === week);
     if (selected) {
       setSelectedClassId(selected.classId);
-      setPdfInfo({
-        pdfUrl: selected.pdfUrl,
-        fileName: selected.pdfFileName,
-        week: selected.week,
-      });
       setSearchParams({ classId: String(selected.classId) }, { replace: true });
+      // PDF 정보는 useEffect에서 자동으로 가져옵니다
     }
   };
 
