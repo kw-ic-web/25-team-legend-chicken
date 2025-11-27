@@ -716,13 +716,22 @@ const RealtimeDashboard: React.FC = () => {
     // 기존 메시지 조회
     const loadMessages = async () => {
       try {
-        const response = await getChatMessages({
+        const params: {
+          lecture_id: string;
+          class_id: number;
+          live_id?: number;
+          limit: number;
+        } = {
           lecture_id: resolvedLectureId!,
           class_id: resolvedClassId!,
-          live_id: resolvedLiveId ?? null,
           limit: 50,
-        });
-        setChatMessages(response.messages);
+        };
+        // live_id가 undefined가 아니고 null이 아닐 때만 추가
+        if (resolvedLiveId !== undefined && resolvedLiveId !== null) {
+          params.live_id = resolvedLiveId;
+        }
+        const response = await getChatMessages(params);
+        setChatMessages(response.messages || []);
         // 스크롤을 맨 아래로
         setTimeout(() => {
           if (chatContainerRef.current) {
@@ -732,6 +741,11 @@ const RealtimeDashboard: React.FC = () => {
         }, 100);
       } catch (error) {
         console.error("메시지 조회 실패:", error);
+        // 404 에러는 조용히 처리 (채팅이 없을 수 있음)
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes("404") && !errorMessage.includes("찾을 수 없습니다")) {
+          console.warn("채팅 메시지 조회 중 오류:", errorMessage);
+        }
       }
     };
 

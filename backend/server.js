@@ -16,8 +16,8 @@ const whiteboardRouter = require("./routes/whiteboard"); // 화이트보드 스�
 const questionsRouter = require("./routes/questions"); // 질문 관련 API
 const reportsRouter = require("./routes/reports"); // 리포트 관련 API
 
-// 채팅 API는 현재 사용하지 않음
-// const chatRouter = require("./routes/chat");
+// 채팅 API
+const chatRouter = require("./routes/chat");
 
 const handwritingRouter = require("./routes/handwriting");
 
@@ -42,7 +42,7 @@ app.use("/api/professor", professorRouter);
 app.use("/api", lecturesRouter);
 app.use("/api", whiteboardRouter);
 app.use("/api/questions", questionsRouter); 
-//app.use("/api/chat", chatRouter); 
+app.use("/api/chat", chatRouter); 
 app.use("/api/reports", reportsRouter);
 app.use("/api/handwriting", handwritingRouter);
 
