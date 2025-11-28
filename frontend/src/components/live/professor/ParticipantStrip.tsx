@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { VideoOff } from "lucide-react";
+import { VideoOff, X } from "lucide-react";
 import type { RemoteParticipant } from "../../../hooks/useLiveWebRTC";
 
 interface ParticipantStripProps {
@@ -7,6 +7,7 @@ interface ParticipantStripProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   remoteParticipants?: RemoteParticipant[];
   studentNameMap?: Map<string, string>;
+  onClose?: () => void;
 }
 
 const ParticipantStrip: React.FC<ParticipantStripProps> = ({
@@ -14,6 +15,7 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
   videoRef,
   remoteParticipants = [],
   studentNameMap = new Map(),
+  onClose,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -260,6 +262,20 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
   return (
     <div className="pointer-events-none">
       <div className="inline-flex items-center px-3 py-2 rounded-2xl bg-white/80 backdrop-blur-lg border border-white/40 shadow-lg pointer-events-auto relative">
+        {onClose && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClose();
+            }}
+            className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gray-800 text-white flex items-center justify-center hover:bg-gray-900 transition-colors shadow-lg z-10"
+            aria-label="카메라 목록 닫기"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => scrollByDelta(-140)}

@@ -23,6 +23,7 @@ import {
 import { getMyInfo } from "../../api/auth";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
 import { getClassDetail, getWhiteboardPages, type WhiteboardPage } from "../../api/professor";
+import StudentPdfViewer from "../../components/live/student/StudentPdfViewer";
 
 const LiveWatching: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -70,6 +71,7 @@ const LiveWatching: React.FC = () => {
     pages?: WhiteboardPage[];
   } | null>(null);
   const [isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
+  const [sharedPdf, setSharedPdf] = useState<{ url: string; name: string } | null>(null);
   const chatSocketRef = useRef<Socket | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const questionSocketRef = useRef<Socket | null>(null);
@@ -903,6 +905,20 @@ const LiveWatching: React.FC = () => {
     socket.on("question:updated", handleQuestionUpdated);
     socket.on("question:answer", handleQuestionAnswer);
 
+    // PDF 공유 이벤트 수신
+    socket.on("pdf:shared", (data: { pdf_url: string; pdf_name: string }) => {
+      console.log("[LiveWatching] PDF 공유 수신:", data);
+      setSharedPdf({
+        url: data.pdf_url,
+        name: data.pdf_name,
+      });
+    });
+
+    socket.on("pdf:stopped", () => {
+      console.log("[LiveWatching] PDF 공유 중지 수신");
+      setSharedPdf(null);
+    });
+
     return () => {
       socket.off("connect");
       socket.off("connect_error");
@@ -913,6 +929,8 @@ const LiveWatching: React.FC = () => {
       socket.off("question:new", handleQuestionNew);
       socket.off("question:updated", handleQuestionUpdated);
       socket.off("question:answer", handleQuestionAnswer);
+      socket.off("pdf:shared");
+      socket.off("pdf:stopped");
       socket.disconnect();
       chatSocketRef.current = null;
     };
@@ -971,21 +989,29 @@ const LiveWatching: React.FC = () => {
 
             {/* 강의 콘텐츠(화면 공유 영역) - 컨트롤 제거 */}
             <div className="relative flex-1">
-              <StudentScreenArea
-                isLive={isLive}
-                videoRef={videoRef}
-                statusText={
-                  isLoading
-                    ? "로딩 중..."
-                    : !lectureInfo?.liveId
-                    ? "방송 대기 중"
-                    : webrtcStatus === "connecting"
-                    ? "연결 중..."
-                    : webrtcStatus === "connected"
-                    ? "라이브 방송 중"
-                    : "연결 오류"
-                }
-              />
+              {sharedPdf ? (
+                <StudentPdfViewer
+                  pdfUrl={sharedPdf.url}
+                  pdfName={sharedPdf.name}
+                  socket={chatSocketRef.current}
+                />
+              ) : (
+                <StudentScreenArea
+                  isLive={isLive}
+                  videoRef={videoRef}
+                  statusText={
+                    isLoading
+                      ? "로딩 중..."
+                      : !lectureInfo?.liveId
+                      ? "방송 대기 중"
+                      : webrtcStatus === "connecting"
+                      ? "연결 중..."
+                      : webrtcStatus === "connected"
+                      ? "라이브 방송 중"
+                      : "연결 오류"
+                  }
+                />
+              )}
               <StudentLiveControls
                 isMicOn={isStudentMicOn}
                 isCameraOn={isStudentCameraOn}

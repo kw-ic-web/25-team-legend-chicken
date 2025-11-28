@@ -19,6 +19,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
 import { endLive, getClassPdfs, getClassDetail, getWhiteboardPages, getMembers, type WhiteboardPage } from "../../api/professor";
+import AnnotatablePdfViewer from "../../components/live/professor/AnnotatablePdfViewer";
+import { analyzeHandwriting } from "../../api/handwriting";
 import {
   sendChatMessage,
   getChatMessages,
@@ -83,6 +85,7 @@ const RealtimeDashboard: React.FC = () => {
     classTitle?: string;
   } | null>(null);
   const [selectedPdf, setSelectedPdf] = useState<PdfItem | null>(null);
+  const [whiteboardPages, setWhiteboardPages] = useState<WhiteboardPage[]>([]);
   const [isLessonQuestionModalOpen, setIsLessonQuestionModalOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<{
     title: string;
@@ -99,6 +102,7 @@ const RealtimeDashboard: React.FC = () => {
   }, []);
   const [students, setStudents] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [studentNameMap, setStudentNameMap] = useState<Map<string, string>>(new Map());
+  const [isParticipantStripVisible, setIsParticipantStripVisible] = useState(true);
 
   const parseNumeric = (value?: number | string | null) => {
     if (value === null || value === undefined || value === "") return undefined;
@@ -326,14 +330,42 @@ const RealtimeDashboard: React.FC = () => {
   }, [fetchPdfList]);
 
   const handleSelectPdf = useCallback(
-    (pdf: PdfItem) => {
+    async (pdf: PdfItem) => {
+      console.log("[RealtimeDashboard] PDF 선택:", pdf);
       setSelectedPdf(pdf);
       setIsPdfModalOpen(false);
       if (isSharing) {
         stopScreenShare();
       }
+      
+      // Whiteboard pages 가져오기
+      if (resolvedLectureId && resolvedClassId !== undefined) {
+        try {
+          const pagesResponse = await getWhiteboardPages(resolvedLectureId, resolvedClassId, "finalized");
+          setWhiteboardPages(pagesResponse.pages || []);
+          console.log("[RealtimeDashboard] Whiteboard pages 로드:", pagesResponse.pages);
+        } catch (error) {
+          console.error("[RealtimeDashboard] Whiteboard pages 로드 실패:", error);
+          setWhiteboardPages([]);
+        }
+      }
+      
+      // Socket.io로 PDF 공유 이벤트 전송
+      if (chatSocketRef.current && resolvedLectureId && resolvedClassId !== undefined) {
+        console.log("[RealtimeDashboard] PDF 공유 이벤트 전송:", { pdf_url: pdf.url, pdf_name: pdf.name });
+        chatSocketRef.current.emit("pdf:share", {
+          pdf_url: pdf.url,
+          pdf_name: pdf.name,
+        });
+      } else {
+        console.warn("[RealtimeDashboard] Socket 또는 ID가 없음:", {
+          hasSocket: !!chatSocketRef.current,
+          lectureId: resolvedLectureId,
+          classId: resolvedClassId,
+        });
+      }
     },
-    [isSharing, stopScreenShare]
+    [isSharing, stopScreenShare, resolvedLectureId, resolvedClassId]
   );
 
   const handleOpenLessonQuestionModal = useCallback(
@@ -407,8 +439,46 @@ const RealtimeDashboard: React.FC = () => {
   );
 
   const handleStopPdfShare = useCallback(() => {
+    // Socket.io로 PDF 공유 중지 이벤트 전송
+    if (chatSocketRef.current) {
+      chatSocketRef.current.emit("pdf:stop-share");
+    }
     setSelectedPdf(null);
   }, []);
+
+  // PDF+필기 캡쳐 핸들러
+  const handlePdfCapture = useCallback(
+    async (imageData: string, timestamp: number) => {
+      if (!resolvedLectureId || resolvedClassId === undefined || !selectedPdf) {
+        return;
+      }
+
+      try {
+        // base64 데이터에서 실제 이미지 데이터만 추출 (data:image/jpeg;base64, 제거)
+        const base64Data = imageData.includes(",")
+          ? imageData.split(",")[1]
+          : imageData;
+
+        // 현재 PDF 페이지 번호 추정 (간단히 1로 설정, 추후 개선 가능)
+        // 실제로는 PDF 뷰어에서 현재 페이지를 추적해야 함
+        const currentPage = 1;
+
+        await analyzeHandwriting({
+          image_data: base64Data,
+          timestamp,
+          lecture_id: resolvedLectureId,
+          class_id: resolvedClassId,
+          page_number: currentPage,
+          pdf_url: selectedPdf.url,
+        });
+
+        console.log("[RealtimeDashboard] PDF+필기 캡쳐 및 분석 완료:", timestamp);
+      } catch (error) {
+        console.error("[RealtimeDashboard] PDF+필기 캡쳐 실패:", error);
+      }
+    },
+    [resolvedLectureId, resolvedClassId, selectedPdf]
+  );
 
   const handleClosePdfModal = useCallback(() => {
     setIsPdfModalOpen(false);
@@ -983,16 +1053,31 @@ const RealtimeDashboard: React.FC = () => {
             >
               <>
                 {selectedPdf && (
-                  <PdfOverlay pdf={selectedPdf} onStop={handleStopPdfShare} />
+                  <div className="absolute inset-4 z-20">
+                    <AnnotatablePdfViewer
+                      pdfUrl={selectedPdf.url}
+                      pdfName={selectedPdf.name}
+                      onStop={handleStopPdfShare}
+                      onCapture={handlePdfCapture}
+                      lectureId={resolvedLectureId}
+                      classId={resolvedClassId}
+                      socket={chatSocketRef.current}
+                      currentPage={1}
+                      whiteboardPages={whiteboardPages}
+                    />
+                  </div>
                 )}
-                <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
-                  <ParticipantStrip
-                    isCameraOn={isCameraOn}
-                    videoRef={videoRef}
-                    remoteParticipants={remoteParticipants}
-                    studentNameMap={studentNameMap}
-                  />
-                </div>
+                {isParticipantStripVisible && (
+                  <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
+                    <ParticipantStrip
+                      isCameraOn={isCameraOn}
+                      videoRef={videoRef}
+                      remoteParticipants={remoteParticipants}
+                      studentNameMap={studentNameMap}
+                      onClose={() => setIsParticipantStripVisible(false)}
+                    />
+                  </div>
+                )}
                 <LiveControls
                   isMicOn={isMicOn}
                   isCameraOn={isCameraOn}
