@@ -34,3 +34,7 @@ dist-ssr
 **/*service-account*.json
 backend/daring-runway-*.json
 **/*-*-*-*.json
+
+# Test captures and uploads
+backend/captures/
+backend/uploads/pdfs/whiteboard/
