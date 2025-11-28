@@ -18,12 +18,15 @@ import Toast from "../../components/common/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
-import { endLive, getClassPdfs } from "../../api/professor";
+import { endLive, getClassPdfs, getClassDetail, getWhiteboardPages, getMembers, type WhiteboardPage } from "../../api/professor";
+import AnnotatablePdfViewer from "../../components/live/professor/AnnotatablePdfViewer";
+import { analyzeHandwriting } from "../../api/handwriting";
 import {
   sendChatMessage,
   getChatMessages,
   type ChatMessage,
 } from "../../api/chat";
+import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
 
 interface Question {
   id: number;
@@ -82,16 +85,24 @@ const RealtimeDashboard: React.FC = () => {
     classTitle?: string;
   } | null>(null);
   const [selectedPdf, setSelectedPdf] = useState<PdfItem | null>(null);
+  const [whiteboardPages, setWhiteboardPages] = useState<WhiteboardPage[]>([]);
+  const [isLessonQuestionModalOpen, setIsLessonQuestionModalOpen] = useState(false);
+  const [selectedLesson, setSelectedLesson] = useState<{
+    title: string;
+    fileName: string;
+    fileSize: string;
+    url?: string;
+    lectureId?: string;
+    classId?: number;
+    pages?: WhiteboardPage[];
+  } | null>(null);
+  const [isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
   const showError = useCallback((message: string) => {
     setToast({ message, type: "error" });
   }, []);
-  const [students] = useState(
-    Array.from({ length: 8 }).map((_, i) => ({
-      id: i + 1,
-      name: `수강생 ${i + 1}`,
-      email: `student${i + 1}@example.com`,
-    }))
-  );
+  const [students, setStudents] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [studentNameMap, setStudentNameMap] = useState<Map<string, string>>(new Map());
+  const [isParticipantStripVisible, setIsParticipantStripVisible] = useState(true);
 
   const parseNumeric = (value?: number | string | null) => {
     if (value === null || value === undefined || value === "") return undefined;
@@ -140,23 +151,7 @@ const RealtimeDashboard: React.FC = () => {
     localStreams,
   });
 
-  const [questions, setQuestions] = useState<Question[]>([
-    {
-      id: 1,
-      studentName: "익명의 오소리",
-      question: "이 부분이 이해가 잘 안가서 그러는데 파이썬이 뭐죠?",
-      timestamp: "08:15",
-      status: "pending",
-    },
-    {
-      id: 2,
-      studentName: "익명의 오소리",
-      question:
-        "그리고 왜 좋은 프로그램을 그렇게 설명하시는 거죠? 저는 파이썬을 쓰고 싶지 않은데 다른 걸로 해도 되나요?",
-      timestamp: "08:15",
-      status: "pending",
-    },
-  ]);
+  const [questions, setQuestions] = useState<Question[]>([]);
 
   // 웹캠 시작
   const startCamera = useCallback(async () => {
@@ -335,19 +330,155 @@ const RealtimeDashboard: React.FC = () => {
   }, [fetchPdfList]);
 
   const handleSelectPdf = useCallback(
-    (pdf: PdfItem) => {
+    async (pdf: PdfItem) => {
+      console.log("[RealtimeDashboard] PDF 선택:", pdf);
       setSelectedPdf(pdf);
       setIsPdfModalOpen(false);
       if (isSharing) {
         stopScreenShare();
       }
+      
+      // Whiteboard pages 가져오기
+      if (resolvedLectureId && resolvedClassId !== undefined) {
+        try {
+          const pagesResponse = await getWhiteboardPages(resolvedLectureId, resolvedClassId, "finalized");
+          setWhiteboardPages(pagesResponse.pages || []);
+          console.log("[RealtimeDashboard] Whiteboard pages 로드:", pagesResponse.pages);
+        } catch (error) {
+          console.error("[RealtimeDashboard] Whiteboard pages 로드 실패:", error);
+          setWhiteboardPages([]);
+        }
+      }
+      
+      // Socket.io로 PDF 공유 이벤트 전송
+      if (chatSocketRef.current && resolvedLectureId && resolvedClassId !== undefined) {
+        console.log("[RealtimeDashboard] PDF 공유 이벤트 전송:", { pdf_url: pdf.url, pdf_name: pdf.name });
+        chatSocketRef.current.emit("pdf:share", {
+          pdf_url: pdf.url,
+          pdf_name: pdf.name,
+        });
+      } else {
+        console.warn("[RealtimeDashboard] Socket 또는 ID가 없음:", {
+          hasSocket: !!chatSocketRef.current,
+          lectureId: resolvedLectureId,
+          classId: resolvedClassId,
+        });
+      }
     },
-    [isSharing, stopScreenShare]
+    [isSharing, stopScreenShare, resolvedLectureId, resolvedClassId]
+  );
+
+  const handleOpenLessonQuestionModal = useCallback(
+    async (pdf?: PdfItem) => {
+      if (!resolvedLectureId || resolvedClassId === undefined) {
+        showError("클래스 정보를 찾을 수 없습니다.");
+        return;
+      }
+
+      setIsLessonDetailLoading(true);
+      if (pdf) {
+        setIsPdfModalOpen(false);
+      }
+      
+      try {
+        const detail = await getClassDetail(resolvedLectureId, resolvedClassId);
+        const materials = detail.class?.materials as Array<string | { url?: string; originalName?: string }> | undefined;
+
+        // PDF URL 찾기
+        let materialUrl: string | undefined;
+        let materialName: string | undefined;
+        
+        if (materials && materials.length > 0) {
+          const firstMaterial = materials[0];
+          if (typeof firstMaterial === "string") {
+            materialUrl = resolveAssetUrl(firstMaterial);
+            materialName = firstMaterial.split("/").pop() || "강의 자료";
+          } else {
+            materialUrl = firstMaterial.url
+              ? resolveAssetUrl(firstMaterial.url)
+              : pdf?.url;
+            materialName = firstMaterial.originalName || pdf?.name || "강의 자료";
+          }
+        } else if (pdf) {
+          materialUrl = pdf.url;
+          materialName = pdf.name;
+        }
+
+        // whiteboard pages 가져오기 시도
+        let pages: WhiteboardPage[] | undefined;
+        try {
+          const pagesResponse = await getWhiteboardPages(
+            resolvedLectureId,
+            resolvedClassId,
+            "finalized"
+          );
+          pages = pagesResponse.pages || [];
+        } catch (error) {
+          console.error("Whiteboard pages 조회 실패:", error);
+          pages = undefined;
+        }
+
+        setSelectedLesson({
+          title: detail.class?.title || pdfMeta?.classTitle || "강의 자료",
+          fileName: materialName || "강의 자료",
+          fileSize: "파일",
+          url: materialUrl,
+          lectureId: resolvedLectureId,
+          classId: resolvedClassId,
+          pages: pages,
+        });
+        setIsLessonQuestionModalOpen(true);
+      } catch (error) {
+        console.error("클래스 정보 조회 실패:", error);
+        showError("교안 정보를 불러오는데 실패했습니다.");
+      } finally {
+        setIsLessonDetailLoading(false);
+      }
+    },
+    [resolvedLectureId, resolvedClassId, pdfMeta, showError, resolveAssetUrl]
   );
 
   const handleStopPdfShare = useCallback(() => {
+    // Socket.io로 PDF 공유 중지 이벤트 전송
+    if (chatSocketRef.current) {
+      chatSocketRef.current.emit("pdf:stop-share");
+    }
     setSelectedPdf(null);
   }, []);
+
+  // PDF+필기 캡쳐 핸들러
+  const handlePdfCapture = useCallback(
+    async (imageData: string, timestamp: number) => {
+      if (!resolvedLectureId || resolvedClassId === undefined || !selectedPdf) {
+        return;
+      }
+
+      try {
+        // base64 데이터에서 실제 이미지 데이터만 추출 (data:image/jpeg;base64, 제거)
+        const base64Data = imageData.includes(",")
+          ? imageData.split(",")[1]
+          : imageData;
+
+        // 현재 PDF 페이지 번호 추정 (간단히 1로 설정, 추후 개선 가능)
+        // 실제로는 PDF 뷰어에서 현재 페이지를 추적해야 함
+        const currentPage = 1;
+
+        await analyzeHandwriting({
+          image_data: base64Data,
+          timestamp,
+          lecture_id: resolvedLectureId,
+          class_id: resolvedClassId,
+          page_number: currentPage,
+          pdf_url: selectedPdf.url,
+        });
+
+        console.log("[RealtimeDashboard] PDF+필기 캡쳐 및 분석 완료:", timestamp);
+      } catch (error) {
+        console.error("[RealtimeDashboard] PDF+필기 캡쳐 실패:", error);
+      }
+    },
+    [resolvedLectureId, resolvedClassId, selectedPdf]
+  );
 
   const handleClosePdfModal = useCallback(() => {
     setIsPdfModalOpen(false);
@@ -650,13 +781,22 @@ const RealtimeDashboard: React.FC = () => {
     // 기존 메시지 조회
     const loadMessages = async () => {
       try {
-        const response = await getChatMessages({
+        const params: {
+          lecture_id: string;
+          class_id: number;
+          live_id?: number;
+          limit: number;
+        } = {
           lecture_id: resolvedLectureId!,
           class_id: resolvedClassId!,
-          live_id: resolvedLiveId ?? null,
           limit: 50,
-        });
-        setChatMessages(response.messages);
+        };
+        // live_id가 undefined가 아니고 null이 아닐 때만 추가
+        if (resolvedLiveId !== undefined && resolvedLiveId !== null) {
+          params.live_id = resolvedLiveId;
+        }
+        const response = await getChatMessages(params);
+        setChatMessages(response.messages || []);
         // 스크롤을 맨 아래로
         setTimeout(() => {
           if (chatContainerRef.current) {
@@ -666,6 +806,11 @@ const RealtimeDashboard: React.FC = () => {
         }, 100);
       } catch (error) {
         console.error("메시지 조회 실패:", error);
+        // 404 에러는 조용히 처리 (채팅이 없을 수 있음)
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes("404") && !errorMessage.includes("찾을 수 없습니다")) {
+          console.warn("채팅 메시지 조회 중 오류:", errorMessage);
+        }
       }
     };
 
@@ -718,6 +863,33 @@ const RealtimeDashboard: React.FC = () => {
       chatSocketRef.current = null;
     };
   }, [resolvedLectureId, resolvedClassId, resolvedLiveId, user?.id]);
+
+  // 학생 목록 가져오기
+  useEffect(() => {
+    const fetchStudents = async () => {
+      if (!resolvedLectureId) return;
+      try {
+        const membersResponse = await getMembers(resolvedLectureId);
+        const studentsList = membersResponse.students.map((student) => ({
+          id: student.id,
+          name: student.name,
+          email: student.email,
+        }));
+        setStudents(studentsList);
+        
+        // userId -> name 맵 생성
+        const nameMap = new Map<string, string>();
+        studentsList.forEach((student) => {
+          nameMap.set(student.id, student.name);
+        });
+        setStudentNameMap(nameMap);
+      } catch (error) {
+        console.error("학생 목록 조회 실패:", error);
+      }
+    };
+
+    fetchStudents();
+  }, [resolvedLectureId]);
 
   // 컴포넌트 마운트 시 웹캠 자동 시작 및 화면 공유 자동 시작
   useEffect(() => {
@@ -881,15 +1053,31 @@ const RealtimeDashboard: React.FC = () => {
             >
               <>
                 {selectedPdf && (
-                  <PdfOverlay pdf={selectedPdf} onStop={handleStopPdfShare} />
+                  <div className="absolute inset-4 z-20">
+                    <AnnotatablePdfViewer
+                      pdfUrl={selectedPdf.url}
+                      pdfName={selectedPdf.name}
+                      onStop={handleStopPdfShare}
+                      onCapture={handlePdfCapture}
+                      lectureId={resolvedLectureId}
+                      classId={resolvedClassId}
+                      socket={chatSocketRef.current}
+                      currentPage={1}
+                      whiteboardPages={whiteboardPages}
+                    />
+                  </div>
                 )}
-                <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
-                  <ParticipantStrip
-                    isCameraOn={isCameraOn}
-                    videoRef={videoRef}
-                    remoteParticipants={remoteParticipants}
-                  />
-                </div>
+                {isParticipantStripVisible && (
+                  <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
+                    <ParticipantStrip
+                      isCameraOn={isCameraOn}
+                      videoRef={videoRef}
+                      remoteParticipants={remoteParticipants}
+                      studentNameMap={studentNameMap}
+                      onClose={() => setIsParticipantStripVisible(false)}
+                    />
+                  </div>
+                )}
                 <LiveControls
                   isMicOn={isMicOn}
                   isCameraOn={isCameraOn}
@@ -925,7 +1113,10 @@ const RealtimeDashboard: React.FC = () => {
                 실시간 채팅
               </button>
               <button
-                onClick={() => setActiveTab("questions")}
+                onClick={() => {
+                  setActiveTab("questions");
+                  handleOpenLessonQuestionModal();
+                }}
                 className={`flex-1 py-3 px-4 text-sm font-medium ${
                   activeTab === "questions"
                     ? "text-blue-600 border-b-2 border-blue-600"
@@ -939,46 +1130,54 @@ const RealtimeDashboard: React.FC = () => {
             {/* 탭 콘텐츠 */}
             <div className="flex-1 overflow-y-auto" ref={chatContainerRef}>
               {activeTab === "questions" ? (
-                <div className="p-4 space-y-4">
-                  {questions
-                    .filter((q) => q.status === "pending")
-                    .map((question) => (
-                      <div
-                        key={question.id}
-                        className="bg-gray-50 rounded-lg p-4"
-                      >
-                        <div className="flex items-center space-x-2 mb-2">
-                          <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs font-medium">
-                              익
-                            </span>
+                <div className="p-4">
+                  {questions.length === 0 ? (
+                    <div className="text-center text-gray-500 text-sm py-8">
+                      질문이 없습니다. 교안 및 질문 보기 모달에서 질문을 확인하세요.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {questions
+                        .filter((q) => q.status === "pending")
+                        .map((question) => (
+                          <div
+                            key={question.id}
+                            className="bg-gray-50 rounded-lg p-4"
+                          >
+                            <div className="flex items-center space-x-2 mb-2">
+                              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                                <span className="text-white text-xs font-medium">
+                                  익
+                                </span>
+                              </div>
+                              <span className="text-sm font-medium text-gray-900">
+                                {question.studentName}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {question.timestamp}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-700 mb-3">
+                              {question.question}
+                            </p>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => handleAnswerQuestion(question.id)}
+                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                              >
+                                답변하기
+                              </button>
+                              <button
+                                onClick={() => handleDismissQuestion(question.id)}
+                                className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
+                              >
+                                답변 생략
+                              </button>
+                            </div>
                           </div>
-                          <span className="text-sm font-medium text-gray-900">
-                            {question.studentName}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {question.timestamp}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-700 mb-3">
-                          {question.question}
-                        </p>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleAnswerQuestion(question.id)}
-                            className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                          >
-                            답변하기
-                          </button>
-                          <button
-                            onClick={() => handleDismissQuestion(question.id)}
-                            className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
-                          >
-                            답변 생략
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                        ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-4 space-y-3">
@@ -1087,6 +1286,22 @@ const RealtimeDashboard: React.FC = () => {
         onRefresh={handleRefreshPdfList}
         onSelect={handleSelectPdf}
       />
+      {selectedLesson && (
+        <LessonQuestionModal
+          isOpen={isLessonQuestionModalOpen}
+          onClose={() => {
+            setIsLessonQuestionModalOpen(false);
+            setSelectedLesson(null);
+          }}
+          lessonTitle={selectedLesson.title}
+          fileName={selectedLesson.fileName}
+          fileSize={selectedLesson.fileSize}
+          pdfUrl={selectedLesson.url}
+          lectureId={selectedLesson.lectureId}
+          classId={selectedLesson.classId}
+          pages={selectedLesson.pages}
+        />
+      )}
       {toast && (
         <Toast
           message={toast.message}
