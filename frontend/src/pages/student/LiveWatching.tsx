@@ -15,13 +15,14 @@ import {
   getChatMessages,
   type ChatMessage,
 } from "../../api/chat";
-
-interface Question {
-  id: number;
-  studentName: string;
-  question: string;
-  timestamp: string;
-}
+import {
+  createQuestion,
+  getClassQuestions,
+  type Question as ApiQuestion,
+} from "../../api/questions";
+import { getMyInfo } from "../../api/auth";
+import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
+import { getClassDetail, getWhiteboardPages, type WhiteboardPage } from "../../api/professor";
 
 const LiveWatching: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -52,13 +53,26 @@ const LiveWatching: React.FC = () => {
   const classId = classIdParam ? Number(classIdParam) : null;
 
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("chat");
-  const [questionText, setQuestionText] = useState("");
   const [chatMessage, setChatMessage] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<ApiQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [userInfo, setUserInfo] = useState<{ name: string; id: string; role: string } | null>(null);
+  const [isLessonQuestionModalOpen, setIsLessonQuestionModalOpen] = useState(false);
+  const [selectedLesson, setSelectedLesson] = useState<{
+    title: string;
+    fileName: string;
+    fileSize: string;
+    url?: string;
+    lectureId?: string;
+    classId?: number;
+    pages?: WhiteboardPage[];
+  } | null>(null);
+  const [isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
   const chatSocketRef = useRef<Socket | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const questionSocketRef = useRef<Socket | null>(null);
 
   // 학생의 로컬 스트림 (카메라/마이크)
   const [studentLocalStream, setStudentLocalStream] = useState<MediaStream | null>(null);
@@ -473,26 +487,115 @@ const LiveWatching: React.FC = () => {
     }
   }, [webrtcError]);
 
-  const nowTime = useMemo(() => {
-    const d = new Date();
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    const hh = String(d.getHours()).padStart(2, "0");
-    return `${hh}:${mm}`;
-  }, [questions.length]);
+  // 사용자 정보 가져오기
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const response = await getMyInfo();
+        const userId =
+          (response.user as typeof response.user & { _id?: string })._id ||
+          response.user.id;
+        setUserInfo({
+          name: response.user.name,
+          id: userId,
+          role: response.user.user_type || "student",
+        });
+      } catch (error) {
+        console.error("사용자 정보 조회 실패:", error);
+      }
+    };
+    if (lectureInfo) {
+      fetchUserInfo();
+    }
+  }, [lectureInfo]);
 
-  const handleSubmitQuestion = () => {
-    if (!questionText.trim()) return;
-    setQuestions((prev) => [
-      ...prev,
-      {
-        id: prev.length + 1,
-        studentName: "나",
-        question: questionText.trim(),
-        timestamp: nowTime,
-      },
-    ]);
-    setQuestionText("");
-  };
+  // 질문 목록 가져오기
+  const fetchQuestions = useCallback(async () => {
+    if (!lectureInfo?.lectureId || !lectureInfo?.classId) return;
+    setIsLoadingQuestions(true);
+    try {
+      const response = await getClassQuestions(lectureInfo.lectureId, lectureInfo.classId);
+      setQuestions(response.questions || []);
+    } catch (error) {
+      console.error("질문 목록 조회 실패:", error);
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  }, [lectureInfo]);
+
+  // 질문 목록 초기 로드
+  useEffect(() => {
+    if (lectureInfo?.lectureId && lectureInfo?.classId) {
+      fetchQuestions();
+    }
+  }, [lectureInfo?.lectureId, lectureInfo?.classId, fetchQuestions]);
+
+  // 교안 및 질문 모달 열기
+  const handleOpenLessonQuestionModal = useCallback(async () => {
+    if (!lectureInfo?.lectureId || !lectureInfo?.classId) {
+      setToast({
+        message: "클래스 정보를 찾을 수 없습니다.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsLessonDetailLoading(true);
+    try {
+      const detail = await getClassDetail(lectureInfo.lectureId, lectureInfo.classId);
+      const materials = detail.class?.materials as Array<string | { url?: string; originalName?: string }> | undefined;
+
+      // PDF URL 찾기
+      let materialUrl: string | undefined;
+      let materialName: string | undefined;
+      
+      if (materials && materials.length > 0) {
+        const firstMaterial = materials[0];
+        if (typeof firstMaterial === "string") {
+          materialUrl = firstMaterial.startsWith("http") ? firstMaterial : `${getBaseUrl()}${firstMaterial}`;
+          materialName = firstMaterial.split("/").pop() || "강의 자료";
+        } else {
+          materialUrl = firstMaterial.url
+            ? (firstMaterial.url.startsWith("http") ? firstMaterial.url : `${getBaseUrl()}${firstMaterial.url}`)
+            : undefined;
+          materialName = firstMaterial.originalName || "강의 자료";
+        }
+      }
+
+      // whiteboard pages 가져오기 시도
+      let pages: WhiteboardPage[] | undefined;
+      try {
+        const pagesResponse = await getWhiteboardPages(
+          lectureInfo.lectureId,
+          lectureInfo.classId,
+          "finalized"
+        );
+        pages = pagesResponse.pages || [];
+      } catch (error) {
+        console.error("Whiteboard pages 조회 실패:", error);
+        pages = undefined;
+      }
+
+      setSelectedLesson({
+        title: detail.class?.title || lectureInfo.classTitle || "강의 자료",
+        fileName: materialName || "강의 자료",
+        fileSize: "파일",
+        url: materialUrl,
+        lectureId: lectureInfo.lectureId,
+        classId: lectureInfo.classId,
+        pages: pages,
+      });
+      setIsLessonQuestionModalOpen(true);
+    } catch (error) {
+      console.error("클래스 정보 조회 실패:", error);
+      setToast({
+        message: error instanceof Error ? error.message : "교안 정보를 불러오는데 실패했습니다.",
+        type: "error",
+      });
+    } finally {
+      setIsLessonDetailLoading(false);
+    }
+  }, [lectureInfo]);
 
   const handleSendChatMessage = useCallback(async () => {
     if (!chatMessage.trim() || !lectureInfo) {
@@ -765,6 +868,41 @@ const LiveWatching: React.FC = () => {
 
     socket.on("chat:message", handleChatMessage);
 
+    // 질문 실시간 업데이트
+    const handleQuestionNew = (question: ApiQuestion) => {
+      console.log("[LiveWatching] question:new 이벤트 수신:", question);
+      setQuestions((prev) => {
+        if (prev.some((q) => q._id === question._id)) {
+          return prev;
+        }
+        return [question, ...prev];
+      });
+    };
+
+    const handleQuestionUpdated = (question: ApiQuestion) => {
+      console.log("[LiveWatching] question:updated 이벤트 수신:", question);
+      setQuestions((prev) =>
+        prev.map((q) => (q._id === question._id ? question : q))
+      );
+    };
+
+    const handleQuestionAnswer = (data: { question_id: string; answer: string; question: ApiQuestion }) => {
+      console.log("[LiveWatching] question:answer 이벤트 수신:", data);
+      setQuestions((prev) => {
+        const updated = prev.map((q) => 
+          q._id === data.question_id ? { ...q, answer: data.answer } : q
+        );
+        if (!prev.some((q) => q._id === data.question_id)) {
+          return [data.question, ...updated];
+        }
+        return updated;
+      });
+    };
+
+    socket.on("question:new", handleQuestionNew);
+    socket.on("question:updated", handleQuestionUpdated);
+    socket.on("question:answer", handleQuestionAnswer);
+
     return () => {
       socket.off("connect");
       socket.off("connect_error");
@@ -772,6 +910,9 @@ const LiveWatching: React.FC = () => {
       socket.off("reconnect");
       socket.off("reconnect_failed");
       socket.off("chat:message", handleChatMessage);
+      socket.off("question:new", handleQuestionNew);
+      socket.off("question:updated", handleQuestionUpdated);
+      socket.off("question:answer", handleQuestionAnswer);
       socket.disconnect();
       chatSocketRef.current = null;
     };
@@ -871,7 +1012,10 @@ const LiveWatching: React.FC = () => {
                 실시간 채팅
               </button>
               <button
-                onClick={() => setActiveTab("questions")}
+                onClick={() => {
+                  setActiveTab("questions");
+                  handleOpenLessonQuestionModal();
+                }}
                 className={`flex-1 py-3 px-4 text-sm font-medium ${
                   activeTab === "questions"
                     ? "text-blue-600 border-b-2 border-blue-600"
@@ -885,24 +1029,10 @@ const LiveWatching: React.FC = () => {
             {/* 탭 콘텐츠 */}
             <div className="flex-1 overflow-y-auto" ref={chatContainerRef}>
               {activeTab === "questions" ? (
-                <div className="p-4 space-y-4">
-                  {questions.length === 0 ? (
-                    <div className="text-center text-gray-500 text-sm">등록한 질문이 없습니다.</div>
-                  ) : (
-                    questions.map((q) => (
-                      <div key={q.id} className="bg-gray-50 rounded-lg p-4">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs font-medium">익</span>
-                          </div>
-                          <span className="text-sm font-medium text-gray-900">{q.studentName}</span>
-                          <span className="text-xs text-gray-500">{q.timestamp}</span>
-                        </div>
-                        <p className="text-sm text-gray-700">{q.question}</p>
-                        {/* 학생은 컨트롤 없음 */}
-                      </div>
-                    ))
-                  )}
+                <div className="p-4">
+                  <div className="text-center text-gray-500 text-sm py-8">
+                    질문이 없습니다. 교안 및 질문 보기 모달에서 질문을 확인하세요.
+                  </div>
                 </div>
               ) : (
                 <div className="p-4 space-y-3">
@@ -968,8 +1098,8 @@ const LiveWatching: React.FC = () => {
             </div>
 
             {/* 하단 입력 영역 */}
-            <div className="border-t border-gray-200 p-4">
-              {activeTab === "chat" ? (
+            {activeTab === "chat" && (
+              <div className="border-t border-gray-200 p-4">
                 <div className="flex items-center space-x-2">
                   <input
                     type="text"
@@ -991,25 +1121,8 @@ const LiveWatching: React.FC = () => {
                     <Send className="w-4 h-4" />
                   </button>
                 </div>
-              ) : (
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={questionText}
-                  onChange={(e) => setQuestionText(e.target.value)}
-                  placeholder="질문을 입력하세요"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  onKeyDown={(e) => e.key === "Enter" && handleSubmitQuestion()}
-                />
-                <button
-                  onClick={handleSubmitQuestion}
-                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
               </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -1018,6 +1131,22 @@ const LiveWatching: React.FC = () => {
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
+        />
+      )}
+      {selectedLesson && (
+        <LessonQuestionModal
+          isOpen={isLessonQuestionModalOpen}
+          onClose={() => {
+            setIsLessonQuestionModalOpen(false);
+            setSelectedLesson(null);
+          }}
+          lessonTitle={selectedLesson.title}
+          fileName={selectedLesson.fileName}
+          fileSize={selectedLesson.fileSize}
+          pdfUrl={selectedLesson.url}
+          lectureId={selectedLesson.lectureId}
+          classId={selectedLesson.classId}
+          pages={selectedLesson.pages}
         />
       )}
     </div>
