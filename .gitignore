@@ -28,3 +28,13 @@ dist-ssr
 .env.local
 .env.production
 .vercel
+
+# Google Cloud Service Account Credentials
+**/*credentials*.json
+**/*service-account*.json
+backend/daring-runway-*.json
+**/*-*-*-*.json
+
+# Test captures and uploads
+backend/captures/
+backend/uploads/pdfs/whiteboard/

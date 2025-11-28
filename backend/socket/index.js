@@ -159,6 +159,84 @@ socket.on("chat:send", ({ message }) => {
     });
 
     // ─────────────────────────────────────────────
+    // PDF 공유 이벤트
+    // ─────────────────────────────────────────────
+    socket.on("pdf:share", ({ pdf_url, pdf_name }) => {
+      const { lecture_id, class_id, live_id, role } = socket.data || {};
+      if (!lecture_id || !class_id || role !== "professor") return;
+
+      const baseRoom = `lec:${lecture_id}:cls:${class_id}`;
+      const liveRoom =
+        live_id === null || typeof live_id === "undefined"
+          ? `${baseRoom}:live:none`
+          : `${baseRoom}:live:${live_id}`;
+
+      io.to(liveRoom).emit("pdf:shared", {
+        pdf_url,
+        pdf_name,
+        lecture_id,
+        class_id,
+        live_id,
+      });
+    });
+
+    socket.on("pdf:stop-share", () => {
+      const { lecture_id, class_id, live_id, role } = socket.data || {};
+      if (!lecture_id || !class_id || role !== "professor") return;
+
+      const baseRoom = `lec:${lecture_id}:cls:${class_id}`;
+      const liveRoom =
+        live_id === null || typeof live_id === "undefined"
+          ? `${baseRoom}:live:none`
+          : `${baseRoom}:live:${live_id}`;
+
+      io.to(liveRoom).emit("pdf:stopped", {
+        lecture_id,
+        class_id,
+        live_id,
+      });
+    });
+
+    // ─────────────────────────────────────────────
+    // 화이트보드 필기 이벤트
+    // ─────────────────────────────────────────────
+    socket.on("whiteboard:draw", (data) => {
+      const { lecture_id, class_id, live_id, role } = socket.data || {};
+      if (!lecture_id || !class_id || role !== "professor") return;
+
+      const baseRoom = `lec:${lecture_id}:cls:${class_id}`;
+      const liveRoom =
+        live_id === null || typeof live_id === "undefined"
+          ? `${baseRoom}:live:none`
+          : `${baseRoom}:live:${live_id}`;
+
+      io.to(liveRoom).emit("whiteboard:draw", {
+        ...data,
+        lecture_id,
+        class_id,
+        live_id,
+      });
+    });
+
+    socket.on("whiteboard:page-change", (data) => {
+      const { lecture_id, class_id, live_id, role } = socket.data || {};
+      if (!lecture_id || !class_id || role !== "professor") return;
+
+      const baseRoom = `lec:${lecture_id}:cls:${class_id}`;
+      const liveRoom =
+        live_id === null || typeof live_id === "undefined"
+          ? `${baseRoom}:live:none`
+          : `${baseRoom}:live:${live_id}`;
+
+      io.to(liveRoom).emit("whiteboard:page-change", {
+        ...data,
+        lecture_id,
+        class_id,
+        live_id,
+      });
+    });
+
+    // ─────────────────────────────────────────────
     // 연결 종료 알림
     // ─────────────────────────────────────────────
     socket.on("disconnect", () => {

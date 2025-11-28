@@ -378,10 +378,10 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
 
         <div className="flex gap-6">
           {/* 왼쪽: 교안 내용 */}
-          <div className="flex-1 bg-gray-50 p-6 border border-gray-200">
+          <div className="flex-1 flex flex-col border border-gray-200 bg-white rounded-lg overflow-hidden">
             {/* 페이지네이션 */}
             {(pages && pages.length > 0) && (
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-b border-gray-200">
                 <button
                   onClick={() => handlePageChange("prev")}
                   disabled={currentPage === 1}
@@ -409,13 +409,13 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
             )}
 
             {/* 교안 내용 - 페이지별 PDF 표시 */}
-            <div ref={pdfContainerRef} className="w-full min-h-[600px] bg-white border border-gray-200 relative">
+            <div ref={pdfContainerRef} className="flex-1 bg-gray-50 border-t border-gray-200">
               {pages && pages.length > 0 ? (
                 (() => {
                   const currentPageData = pages.find((p) => p.page_number === currentPage);
                   if (!currentPageData) {
                     return (
-                      <div className="flex flex-col items-center justify-center min-h-[600px] bg-gray-50 border border-gray-200 p-8">
+                      <div className="w-full min-h-[600px] flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-8">
                         <p className="text-gray-400 text-lg font-medium">페이지를 찾을 수 없습니다</p>
                       </div>
                     );
@@ -430,11 +430,13 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                   return (
                     <>
                       {actualImageUrl ? (
-                        <img
-                          src={actualImageUrl}
-                          alt={`페이지 ${currentPage}`}
-                          className="max-w-full max-h-[600px] object-contain mx-auto"
-                        />
+                        <div className="w-full min-h-[600px] flex items-center justify-center bg-white p-4">
+                          <img
+                            src={actualImageUrl}
+                            alt={`페이지 ${currentPage}`}
+                            className="max-w-full max-h-[600px] object-contain"
+                          />
+                        </div>
                       ) : actualPdfUrl ? (
                         <iframe
                           src={actualPdfUrl}
@@ -442,7 +444,7 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                           title={`PDF 페이지 ${currentPage}`}
                         />
                       ) : (
-                        <div className="flex flex-col items-center justify-center p-8">
+                        <div className="w-full min-h-[600px] flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-8">
                           <FileText className="w-10 h-10 text-gray-400 mb-4" />
                           <p className="text-gray-400 text-lg font-medium">페이지 데이터를 불러올 수 없습니다</p>
                         </div>
@@ -453,11 +455,11 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
               ) : pdfUrl ? (
                 <iframe
                   src={pdfUrl}
-                  className="w-full h-full min-h-[600px] bg-white border border-gray-200"
+                  className="w-full h-full min-h-[600px] bg-white"
                   title="PDF Viewer"
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center min-h-[600px] bg-gray-50 border border-gray-200 p-8">
+                <div className="w-full min-h-[600px] flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-8">
                   <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center mb-4">
                     <FileText className="w-10 h-10 text-gray-400" />
                   </div>
