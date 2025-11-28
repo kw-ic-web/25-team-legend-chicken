@@ -191,8 +191,9 @@ export function useLiveWebRTC({
   }, []);
 
   const sendOffer = useCallback(
-    async (remoteSocketId: string) => {
-      if (!shouldInitiate) return;
+    async (remoteSocketId: string, force: boolean = false) => {
+      // force가 true이면 shouldInitiate와 관계없이 offer 전송 (재협상용)
+      if (!shouldInitiate && !force) return;
       const socket = socketRef.current;
       const peer = peersRef.current.get(remoteSocketId);
       if (!socket || !peer) return;
@@ -226,6 +227,7 @@ export function useLiveWebRTC({
             user_id: userId,
           },
         });
+        console.log("[WebRTC] offer sent to", remoteSocketId, "force:", force);
       } catch (offerError) {
         console.error("[WebRTC] offer error", offerError);
         if (
@@ -377,7 +379,15 @@ export function useLiveWebRTC({
       };
 
       peer.onnegotiationneeded = () => {
-        void sendOffer(remoteSocketId);
+        console.log("[WebRTC] negotiation needed for", remoteSocketId, "shouldInitiate:", shouldInitiate);
+        // 재협상이 필요하면 항상 offer 전송 (학생도 재협상 가능)
+        // 단, 이미 연결이 설정된 경우에만 (stable 상태)
+        const currentState = peer.signalingState;
+        if (currentState === "stable" || shouldInitiate) {
+          void sendOffer(remoteSocketId, !shouldInitiate);
+        } else {
+          console.log("[WebRTC] negotiation needed but signaling state is", currentState);
+        }
       };
 
       return peer;
@@ -522,10 +532,28 @@ export function useLiveWebRTC({
   );
 
   const handleAnswer = useCallback(
-    async ({ from, sdp }: WebRTCSignalPayload) => {
+    async ({ from, sdp, meta }: WebRTCSignalPayload) => {
       if (!from || !sdp) return;
       const peer = peersRef.current.get(from);
       if (!peer) return;
+
+      // meta에서 role과 user_id 추출하여 metadata 저장
+      if (meta) {
+        const roleFromMeta = meta.role as UserRole | undefined;
+        const userIdFromMeta = meta.user_id as string | undefined;
+        if (roleFromMeta || userIdFromMeta) {
+          metadataRef.current.set(from, {
+            role: roleFromMeta,
+            userId: userIdFromMeta,
+          });
+          console.log("[WebRTC] handleAnswer: metadata set", {
+            socketId: from,
+            role: roleFromMeta,
+            userId: userIdFromMeta,
+          });
+          updateRemoteParticipants();
+        }
+      }
 
       try {
         const currentState = peer.signalingState;
@@ -543,6 +571,7 @@ export function useLiveWebRTC({
 
         await peer.setRemoteDescription(new RTCSessionDescription(sdp));
         setStatus("connected");
+        updateRemoteParticipants();
       } catch (answerError) {
         console.error("[WebRTC] handle answer error", answerError);
         if (
@@ -559,7 +588,7 @@ export function useLiveWebRTC({
         setStatus("error");
       }
     },
-    []
+    [updateRemoteParticipants]
   );
 
   const handleIceCandidate = useCallback(
