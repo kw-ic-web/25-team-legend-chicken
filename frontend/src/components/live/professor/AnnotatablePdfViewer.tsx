@@ -46,6 +46,93 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
   const lastCaptureTimeRef = useRef<number>(0);
   const [pdfPage, setPdfPage] = useState(currentPage);
   const [currentPdfUrl, setCurrentPdfUrl] = useState(pdfUrl);
+  // 페이지별 캔버스 상태 저장 (페이지 번호 -> ImageData)
+  const pageCanvasDataRef = useRef<Map<number, ImageData>>(new Map());
+  
+  // 현재 페이지의 캔버스 상태 복원
+  const restorePageCanvas = useCallback((page: number) => {
+    if (!canvasRef.current) {
+      console.log("[AnnotatablePdfViewer] 캔버스 ref 없음, 복원 불가:", page);
+      return;
+    }
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      console.log("[AnnotatablePdfViewer] 컨텍스트 없음, 복원 불가:", page);
+      return;
+    }
+    
+    if (canvas.width === 0 || canvas.height === 0) {
+      console.log("[AnnotatablePdfViewer] 캔버스 크기가 0, 복원 불가:", page, {
+        width: canvas.width,
+        height: canvas.height
+      });
+      return;
+    }
+    
+    const savedData = pageCanvasDataRef.current.get(page);
+    console.log("[AnnotatablePdfViewer] 필기 복원 시도:", page, {
+      hasSavedData: !!savedData,
+      canvasSize: { width: canvas.width, height: canvas.height },
+      savedSize: savedData ? { width: savedData.width, height: savedData.height } : null
+    });
+    
+    // 항상 먼저 캔버스 초기화
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (savedData) {
+      // 저장된 데이터의 크기가 현재 캔버스와 다를 수 있으므로 확인
+      if (savedData.width === canvas.width && savedData.height === canvas.height) {
+        ctx.putImageData(savedData, 0, 0);
+        console.log("[AnnotatablePdfViewer] 페이지 필기 복원 성공:", page);
+      } else {
+        // 크기가 다르면 초기화만 (복원 실패)
+        console.log("[AnnotatablePdfViewer] 캔버스 크기 불일치, 복원 실패:", page, {
+          saved: { width: savedData.width, height: savedData.height },
+          current: { width: canvas.width, height: canvas.height }
+        });
+      }
+    } else {
+      console.log("[AnnotatablePdfViewer] 저장된 필기 없음, 초기화:", page);
+    }
+  }, []);
+  
+  // 현재 페이지의 캔버스 상태 저장
+  const savePageCanvas = useCallback((page: number) => {
+    if (!canvasRef.current) {
+      console.log("[AnnotatablePdfViewer] 캔버스 ref 없음, 저장 불가:", page);
+      return;
+    }
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      console.log("[AnnotatablePdfViewer] 컨텍스트 없음, 저장 불가:", page);
+      return;
+    }
+    
+    if (canvas.width === 0 || canvas.height === 0) {
+      console.log("[AnnotatablePdfViewer] 캔버스 크기가 0, 저장 불가:", page, {
+        width: canvas.width,
+        height: canvas.height
+      });
+      return;
+    }
+    
+    try {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      pageCanvasDataRef.current.set(page, imageData);
+      const hasData = imageData.data.some((pixel, index) => index % 4 !== 3 && pixel !== 0);
+      console.log("[AnnotatablePdfViewer] 페이지 필기 저장 성공:", page, {
+        width: canvas.width,
+        height: canvas.height,
+        hasData: hasData
+      });
+    } catch (error) {
+      console.error("[AnnotatablePdfViewer] 필기 저장 실패:", error, page);
+    }
+  }, []);
 
   // Whiteboard pages가 있으면 해당 페이지의 PDF를 사용
   useEffect(() => {
@@ -65,6 +152,57 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
       setCurrentPdfUrl(pdfUrl);
     }
   }, [pdfPage, whiteboardPages, pdfUrl]);
+  
+  // PDF URL 변경 후 필기 복원
+  useEffect(() => {
+    if (!canvasRef.current || !currentPdfUrl) return;
+    
+    // 캔버스가 준비될 때까지 대기
+    const checkAndRestore = (retryCount = 0) => {
+      if (retryCount > 10) {
+        console.log("[AnnotatablePdfViewer] 복원 시도 실패 (최대 재시도 횟수 초과):", pdfPage);
+        return;
+      }
+      
+      if (canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
+        restorePageCanvas(pdfPage);
+      } else {
+        // 캔버스가 아직 준비되지 않았으면 다시 시도
+        setTimeout(() => checkAndRestore(retryCount + 1), 100);
+      }
+    };
+    
+    // PDF 로드 후 필기 복원 (약간의 지연을 두어 PDF 로드 후 복원)
+    const timer = setTimeout(() => {
+      checkAndRestore();
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [currentPdfUrl, pdfPage, restorePageCanvas]);
+  
+  // 초기 마운트 시 필기 복원 (currentPdfUrl이 이미 설정된 경우)
+  useEffect(() => {
+    if (!canvasRef.current || !currentPdfUrl) return;
+    
+    const checkAndRestore = (retryCount = 0) => {
+      if (retryCount > 15) {
+        console.log("[AnnotatablePdfViewer] 초기 복원 시도 실패 (최대 재시도 횟수 초과):", pdfPage);
+        return;
+      }
+      
+      if (canvasRef.current && canvasRef.current.width > 0 && canvasRef.current.height > 0) {
+        restorePageCanvas(pdfPage);
+      } else {
+        setTimeout(() => checkAndRestore(retryCount + 1), 100);
+      }
+    };
+    
+    const timer = setTimeout(() => {
+      checkAndRestore();
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, []); // 초기 마운트 시에만 실행
 
   // PDF 로드 후 캔버스 크기 조정
   useEffect(() => {
@@ -82,6 +220,13 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
         // Canvas 스타일도 조정
         canvas.style.width = `${rect.width}px`;
         canvas.style.height = `${rect.height}px`;
+        
+        // 캔버스 크기 조정 후 현재 페이지 필기 복원
+        if (rect.width > 0 && rect.height > 0) {
+          setTimeout(() => {
+            restorePageCanvas(pdfPage);
+          }, 100);
+        }
       }
     };
 
@@ -91,7 +236,7 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
     return () => {
       window.removeEventListener("resize", adjustCanvasSize);
     };
-  }, []);
+  }, [pdfPage, restorePageCanvas]);
 
   // 5초마다 캡쳐
   useEffect(() => {
@@ -231,7 +376,10 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
     
     // Socket.io로 전송
     sendDrawingEvent("end");
-  }, [sendDrawingEvent]);
+    
+    // 현재 페이지의 캔버스 상태 저장
+    savePageCanvas(pdfPage);
+  }, [sendDrawingEvent, savePageCanvas, pdfPage]);
 
   // 전체 지우기
   const clearCanvas = useCallback(() => {
@@ -244,21 +392,43 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
     
     // Socket.io로 전송
     sendDrawingEvent("clear");
-  }, [sendDrawingEvent]);
+    
+    // 현재 페이지의 캔버스 상태 저장 (빈 상태)
+    savePageCanvas(pdfPage);
+  }, [sendDrawingEvent, savePageCanvas, pdfPage]);
 
   // 페이지 변경
   const changePage = useCallback((newPage: number) => {
-    console.log("[AnnotatablePdfViewer] 페이지 변경 시도:", newPage);
+    console.log("[AnnotatablePdfViewer] 페이지 변경 시도:", newPage, "현재 페이지:", pdfPage);
     if (newPage < 1) {
       console.log("[AnnotatablePdfViewer] 페이지 번호가 1보다 작음");
       return;
     }
     
-    // 캔버스 초기화
+    // 현재 페이지와 새 페이지가 같으면 무시
+    if (newPage === pdfPage) {
+      console.log("[AnnotatablePdfViewer] 같은 페이지로 변경 시도, 무시");
+      return;
+    }
+    
+    // 현재 페이지의 캔버스 상태 저장 (페이지 변경 전에 저장)
+    const currentPageToSave = pdfPage;
     if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      if (ctx && canvas.width > 0 && canvas.height > 0) {
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          // 현재 페이지 번호로 저장
+          pageCanvasDataRef.current.set(currentPageToSave, imageData);
+          console.log("[AnnotatablePdfViewer] 현재 페이지 필기 저장:", currentPageToSave, {
+            width: canvas.width,
+            height: canvas.height,
+            hasData: imageData.data.some(pixel => pixel !== 0)
+          });
+        } catch (error) {
+          console.error("[AnnotatablePdfViewer] 필기 저장 실패:", error);
+        }
       }
     }
     
@@ -268,13 +438,18 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
       onPageChange(newPage);
     }
     
+    // 새 페이지의 캔버스 상태 복원은 useEffect에서 처리
+    
     // Whiteboard pages에서 해당 페이지의 PDF 찾기
     const pageData = whiteboardPages.find(p => p.page_number === newPage);
     const pdfToLoad = pageData?.pdf_path || pdfUrl;
     
+    // currentPdfUrl state 업데이트
+    setCurrentPdfUrl(pdfToLoad);
+    
     // PDF iframe 페이지 변경
     if (pdfIframeRef.current) {
-      const newSrc = `${pdfToLoad}#zoom=page-width&toolbar=0&navpanes=0&scrollbar=0`;
+      const newSrc = `${pdfToLoad}#page=${newPage}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`;
       console.log("[AnnotatablePdfViewer] PDF iframe src 변경:", {
         page: newPage,
         pdf_path: pdfToLoad,
@@ -300,17 +475,17 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
     } else {
       console.log("[AnnotatablePdfViewer] Socket 또는 ID가 없음:", { socket: !!socket, lectureId, classId });
     }
-  }, [socket, lectureId, classId, pdfUrl, onPageChange, whiteboardPages]);
+  }, [socket, lectureId, classId, pdfUrl, onPageChange, whiteboardPages, pdfPage]);
 
   return (
     <div className="w-full h-full bg-white flex flex-col overflow-hidden rounded-xl shadow-lg">
       {/* 헤더 */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50">
-        <div>
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+        <div className="flex-shrink-0">
           <p className="text-sm font-semibold text-gray-900">공유 중인 PDF</p>
           <p className="text-xs text-gray-500 truncate max-w-xs">{pdfName}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* 페이지 네비게이션 */}
           <div className="flex items-center gap-1 px-2 py-1 bg-white rounded-lg border border-gray-200">
             <button
@@ -383,21 +558,25 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
               className="w-6 h-6 border border-gray-300 rounded cursor-pointer"
               disabled={isEraser}
             />
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={brushSize}
-              onChange={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setBrushSize(Number(e.target.value));
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-              className="w-20"
-            />
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-600">크기:</span>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={brushSize}
+                onChange={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setBrushSize(Number(e.target.value));
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                className="w-20"
+              />
+              <span className="text-xs text-gray-600 w-4">{brushSize}</span>
+            </div>
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -430,7 +609,7 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
         <iframe
           ref={pdfIframeRef}
-          src={`${currentPdfUrl}#zoom=page-width&toolbar=0&navpanes=0&scrollbar=0`}
+          src={`${currentPdfUrl}#page=${pdfPage}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
           title="공유 중인 PDF"
           className="absolute inset-0 w-full h-full"
           style={{ pointerEvents: 'none' }}
