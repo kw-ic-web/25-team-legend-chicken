@@ -18,7 +18,7 @@ import Toast from "../../components/common/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
-import { endLive, getClassPdfs, getClassDetail, getWhiteboardPages, type WhiteboardPage } from "../../api/professor";
+import { endLive, getClassPdfs, getClassDetail, getWhiteboardPages, getMembers, type WhiteboardPage } from "../../api/professor";
 import {
   sendChatMessage,
   getChatMessages,
@@ -97,13 +97,8 @@ const RealtimeDashboard: React.FC = () => {
   const showError = useCallback((message: string) => {
     setToast({ message, type: "error" });
   }, []);
-  const [students] = useState(
-    Array.from({ length: 8 }).map((_, i) => ({
-      id: i + 1,
-      name: `수강생 ${i + 1}`,
-      email: `student${i + 1}@example.com`,
-    }))
-  );
+  const [students, setStudents] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [studentNameMap, setStudentNameMap] = useState<Map<string, string>>(new Map());
 
   const parseNumeric = (value?: number | string | null) => {
     if (value === null || value === undefined || value === "") return undefined;
@@ -799,6 +794,33 @@ const RealtimeDashboard: React.FC = () => {
     };
   }, [resolvedLectureId, resolvedClassId, resolvedLiveId, user?.id]);
 
+  // 학생 목록 가져오기
+  useEffect(() => {
+    const fetchStudents = async () => {
+      if (!resolvedLectureId) return;
+      try {
+        const membersResponse = await getMembers(resolvedLectureId);
+        const studentsList = membersResponse.students.map((student) => ({
+          id: student.id,
+          name: student.name,
+          email: student.email,
+        }));
+        setStudents(studentsList);
+        
+        // userId -> name 맵 생성
+        const nameMap = new Map<string, string>();
+        studentsList.forEach((student) => {
+          nameMap.set(student.id, student.name);
+        });
+        setStudentNameMap(nameMap);
+      } catch (error) {
+        console.error("학생 목록 조회 실패:", error);
+      }
+    };
+
+    fetchStudents();
+  }, [resolvedLectureId]);
+
   // 컴포넌트 마운트 시 웹캠 자동 시작 및 화면 공유 자동 시작
   useEffect(() => {
     let mounted = true;
@@ -968,6 +990,7 @@ const RealtimeDashboard: React.FC = () => {
                     isCameraOn={isCameraOn}
                     videoRef={videoRef}
                     remoteParticipants={remoteParticipants}
+                    studentNameMap={studentNameMap}
                   />
                 </div>
                 <LiveControls

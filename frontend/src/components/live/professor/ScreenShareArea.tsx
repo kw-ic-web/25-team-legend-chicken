@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useMemo } from "react";
 import {
   type RemoteParticipant,
   type WebRTCStatus,
@@ -43,8 +43,6 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
     }
   }, [connectionStatus]);
 
-  const previewParticipants = remoteParticipants.slice(0, 3);
-
   return (
     <div className="flex-1 relative px-4 pb-16 pt-4 overflow-hidden">
       <div className="w-full h-full flex items-center justify-center">
@@ -76,56 +74,9 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
               화면 공유 영역
             </span>
           )}
-          {!!previewParticipants.length && (
-            <div className="absolute bottom-4 right-4 flex items-center space-x-2 z-20">
-              {previewParticipants.map((participant) => (
-                <RemoteStreamPreview
-                  key={participant.socketId}
-                  participant={participant}
-                />
-              ))}
-              {remoteParticipants.length > previewParticipants.length && (
-                <div className="w-12 h-20 rounded-lg bg-black/60 text-white text-xs font-semibold flex items-center justify-center border border-white/10">
-                  +{remoteParticipants.length - previewParticipants.length}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
       {children}
-    </div>
-  );
-};
-
-const RemoteStreamPreview: React.FC<{ participant: RemoteParticipant }> = ({
-  participant,
-}) => {
-  const previewRef = useRef<HTMLVideoElement | null>(null);
-
-  useEffect(() => {
-    if (
-      previewRef.current &&
-      previewRef.current.srcObject !== participant.stream
-    ) {
-      previewRef.current.srcObject = participant.stream;
-    }
-  }, [participant.stream]);
-
-  return (
-    <div className="w-28 h-20 rounded-lg overflow-hidden bg-black/70 border border-white/10 shadow-lg relative">
-      <video
-        ref={previewRef}
-        autoPlay
-        playsInline
-        muted
-        className="w-full h-full object-cover opacity-90"
-      />
-      <span className="absolute bottom-1 left-1 right-1 text-[10px] text-white/90 font-medium truncate">
-        {participant.role === "professor"
-          ? "교수자"
-          : participant.userId || `참여자 ${participant.socketId.slice(-4)}`}
-      </span>
     </div>
   );
 };

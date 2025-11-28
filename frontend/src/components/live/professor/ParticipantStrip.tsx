@@ -6,21 +6,75 @@ interface ParticipantStripProps {
   isCameraOn: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   remoteParticipants?: RemoteParticipant[];
+  studentNameMap?: Map<string, string>;
 }
 
 const ParticipantStrip: React.FC<ParticipantStripProps> = ({
   isCameraOn,
   videoRef,
   remoteParticipants = [],
+  studentNameMap = new Map(),
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  // 학생 참여자 필터링 (role이 student인 것만)
+  // 학생 참여자 필터링 (role이 student이거나 교수자가 아닌 경우)
+  // 디버깅을 위해 로그 출력
+  useEffect(() => {
+    console.log("[ParticipantStrip] ===== remoteParticipants 분석 =====");
+    console.log("[ParticipantStrip] 총 참여자 수:", remoteParticipants.length);
+    remoteParticipants.forEach((p, index) => {
+      const videoTracks = p.stream?.getVideoTracks() || [];
+      const audioTracks = p.stream?.getAudioTracks() || [];
+      console.log(`[ParticipantStrip] 참여자 ${index + 1}:`, {
+        socketId: p.socketId,
+        role: p.role,
+        userId: p.userId,
+        streamId: p.stream?.id,
+        streamExists: !!p.stream,
+        videoTracksCount: videoTracks.length,
+        audioTracksCount: audioTracks.length,
+        videoTracksInfo: videoTracks.map(t => ({
+          id: t.id,
+          label: t.label,
+          enabled: t.enabled,
+          readyState: t.readyState,
+        })),
+      });
+    });
+  }, [remoteParticipants]);
+
   const studentParticipants = remoteParticipants.filter(
-    (p) => p.role === "student"
+    (p) => {
+      // role이 student이거나, role이 없거나 undefined인 경우 (교수자가 아닌 경우)
+      // 교수자는 role이 "professor"로 명확히 설정되어야 함
+      const isStudent = p.role === "student" || (p.role !== "professor" && (p.role === undefined || p.role === null));
+      const hasVideoTrack = p.stream?.getVideoTracks().length > 0;
+      
+      if (isStudent) {
+        console.log("[ParticipantStrip] 학생으로 필터링됨:", {
+          socketId: p.socketId,
+          role: p.role,
+          userId: p.userId,
+          hasVideoTrack: hasVideoTrack,
+        });
+      }
+      
+      return isStudent;
+    }
   );
+
+  useEffect(() => {
+    console.log("[ParticipantStrip] 필터링된 학생 수:", studentParticipants.length);
+    if (studentParticipants.length > 0) {
+      console.log("[ParticipantStrip] 학생 목록:", studentParticipants.map(p => ({
+        socketId: p.socketId,
+        userId: p.userId,
+        role: p.role,
+      })));
+    }
+  }, [studentParticipants]);
 
   const updateScrollState = useCallback(() => {
     const container = scrollRef.current;
@@ -59,9 +113,34 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
       if (studentVideoRef.current && participant.stream) {
         // 학생의 카메라 스트림 찾기 (화면 공유가 아닌 카메라)
         const videoTracks = participant.stream.getVideoTracks();
-        const cameraTrack = videoTracks.find(
-          (track) => track.kind === "video" && track.label !== "screen"
-        );
+        
+        // 화면 공유 트랙을 정확히 필터링
+        const cameraTrack = videoTracks.find((track) => {
+          try {
+            const settings = track.getSettings();
+            const label = track.label || "";
+            const displaySurface = settings.displaySurface;
+            const width = settings.width;
+            const height = settings.height;
+            
+            // 화면 공유가 아닌 트랙만 선택
+            const isScreen = (
+              label.toLowerCase().includes("screen") ||
+              label.toLowerCase().includes("화면") ||
+              displaySurface === "monitor" ||
+              displaySurface === "window" ||
+              displaySurface === "browser" ||
+              // 일반 카메라보다 큰 해상도면 화면 공유로 간주
+              (width && height && width > 1280 && height > 720)
+            );
+            
+            return !isScreen;
+          } catch {
+            // 예외 발생 시 label만으로 체크
+            const label = track.label || "";
+            return !label.toLowerCase().includes("screen") && !label.toLowerCase().includes("화면");
+          }
+        });
 
         if (cameraTrack && studentVideoRef.current) {
           const cameraStream = new MediaStream([cameraTrack]);
@@ -71,8 +150,38 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
           studentVideoRef.current.srcObject = cameraStream;
           studentVideoRef.current.play().catch(console.error);
         } else if (studentVideoRef.current && videoTracks.length > 0) {
-          studentVideoRef.current.srcObject = participant.stream;
-          studentVideoRef.current.play().catch(console.error);
+          // 화면 공유 트랙이 아닌 첫 번째 비디오 트랙 사용
+          const nonScreenTrack = videoTracks.find((track) => {
+            try {
+              const settings = track.getSettings();
+              const label = track.label || "";
+              const displaySurface = settings.displaySurface;
+              const isScreen = (
+                label.toLowerCase().includes("screen") ||
+                label.toLowerCase().includes("화면") ||
+                displaySurface === "monitor" ||
+                displaySurface === "window" ||
+                displaySurface === "browser"
+              );
+              return !isScreen;
+            } catch {
+              const label = track.label || "";
+              return !label.toLowerCase().includes("screen") && !label.toLowerCase().includes("화면");
+            }
+          });
+          
+          if (nonScreenTrack) {
+            const cameraStream = new MediaStream([nonScreenTrack]);
+            if (participant.stream.getAudioTracks().length > 0) {
+              cameraStream.addTrack(participant.stream.getAudioTracks()[0]);
+            }
+            studentVideoRef.current.srcObject = cameraStream;
+            studentVideoRef.current.play().catch(console.error);
+          } else {
+            // 모든 트랙이 화면 공유인 경우에도 일단 표시
+            studentVideoRef.current.srcObject = participant.stream;
+            studentVideoRef.current.play().catch(console.error);
+          }
         }
       }
     }, [participant.stream]);
@@ -96,7 +205,9 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
           </div>
         )}
         <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded text-white">
-          {participant.userId || "학생"}
+          {participant.userId && studentNameMap.has(participant.userId)
+            ? studentNameMap.get(participant.userId)
+            : participant.userId || "학생"}
         </div>
       </div>
     );
