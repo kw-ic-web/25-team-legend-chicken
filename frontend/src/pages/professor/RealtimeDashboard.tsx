@@ -116,6 +116,8 @@ const RealtimeDashboard: React.FC = () => {
   );
   const [isParticipantStripVisible, setIsParticipantStripVisible] =
     useState(true);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const lastMessageTimeRef = useRef<number>(0);
 
   const parseNumeric = (value?: number | string | null) => {
     if (value === null || value === undefined || value === "") return undefined;
@@ -762,6 +764,12 @@ const RealtimeDashboard: React.FC = () => {
   }, [showError]);
 
   const handleSendMessage = useCallback(async () => {
+    // 중복 전송 방지
+    if (isSendingMessage) {
+      return;
+    }
+
+    // 메시지가 비어있거나 필수 정보가 없으면 리턴
     if (
       !chatMessage.trim() ||
       !resolvedLectureId ||
@@ -770,12 +778,22 @@ const RealtimeDashboard: React.FC = () => {
       return;
     }
 
+    // 너무 빠른 연속 전송 방지 (최소 300ms 간격)
+    const now = Date.now();
+    if (now - lastMessageTimeRef.current < 300) {
+      return;
+    }
+
+    const messageText = chatMessage.trim();
+    setIsSendingMessage(true);
+    lastMessageTimeRef.current = now;
+
     try {
       await sendChatMessage({
         lecture_id: resolvedLectureId,
         class_id: resolvedClassId,
         live_id: resolvedLiveId ?? null,
-        text: chatMessage.trim(),
+        text: messageText,
       });
       setChatMessage("");
     } catch (error) {
@@ -783,9 +801,15 @@ const RealtimeDashboard: React.FC = () => {
       showError(
         error instanceof Error ? error.message : "메시지 전송에 실패했습니다."
       );
+    } finally {
+      // 전송 완료 후 약간의 지연을 두고 플래그 해제
+      setTimeout(() => {
+        setIsSendingMessage(false);
+      }, 500);
     }
   }, [
     chatMessage,
+    isSendingMessage,
     resolvedLectureId,
     resolvedClassId,
     resolvedLiveId,
@@ -1295,17 +1319,28 @@ const RealtimeDashboard: React.FC = () => {
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
                   placeholder="채팅 입력 (Enter)"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:opacity-50"
+                  disabled={isSendingMessage}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      handleSendMessage();
+                      e.stopPropagation();
+                      if (!isSendingMessage) {
+                        handleSendMessage();
+                      }
                     }
                   }}
                 />
                 <button
-                  onClick={handleSendMessage}
-                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!isSendingMessage) {
+                      handleSendMessage();
+                    }
+                  }}
+                  disabled={isSendingMessage}
+                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="w-4 h-4" />
                 </button>
