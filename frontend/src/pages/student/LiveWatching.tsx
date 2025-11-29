@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Send } from "lucide-react";
 import { io, Socket } from "socket.io-client";
@@ -16,13 +16,16 @@ import {
   type ChatMessage,
 } from "../../api/chat";
 import {
-  createQuestion,
   getClassQuestions,
   type Question as ApiQuestion,
 } from "../../api/questions";
 import { getMyInfo } from "../../api/auth";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
-import { getClassDetail, getWhiteboardPages, type WhiteboardPage } from "../../api/professor";
+import {
+  getClassDetail,
+  getWhiteboardPages,
+  type WhiteboardPage,
+} from "../../api/professor";
 import StudentPdfViewer from "../../components/live/student/StudentPdfViewer";
 
 const LiveWatching: React.FC = () => {
@@ -56,11 +59,16 @@ const LiveWatching: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"chat" | "questions">("chat");
   const [chatMessage, setChatMessage] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [questions, setQuestions] = useState<ApiQuestion[]>([]);
+  const [_questions, setQuestions] = useState<ApiQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
-  const [userInfo, setUserInfo] = useState<{ name: string; id: string; role: string } | null>(null);
-  const [isLessonQuestionModalOpen, setIsLessonQuestionModalOpen] = useState(false);
+  const [_isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [_userInfo, setUserInfo] = useState<{
+    name: string;
+    id: string;
+    role: string;
+  } | null>(null);
+  const [isLessonQuestionModalOpen, setIsLessonQuestionModalOpen] =
+    useState(false);
   const [selectedLesson, setSelectedLesson] = useState<{
     title: string;
     fileName: string;
@@ -70,16 +78,19 @@ const LiveWatching: React.FC = () => {
     classId?: number;
     pages?: WhiteboardPage[];
   } | null>(null);
-  const [isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
-  const [sharedPdf, setSharedPdf] = useState<{ url: string; name: string } | null>(null);
+  const [_isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
+  const [sharedPdf, setSharedPdf] = useState<{
+    url: string;
+    name: string;
+  } | null>(null);
   const chatSocketRef = useRef<Socket | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const questionSocketRef = useRef<Socket | null>(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const lastMessageTimeRef = useRef<number>(0);
 
   // 학생의 로컬 스트림 (카메라/마이크)
-  const [studentLocalStream, setStudentLocalStream] = useState<MediaStream | null>(null);
+  const [studentLocalStream, setStudentLocalStream] =
+    useState<MediaStream | null>(null);
 
   // 라이브 참여 정보 가져오기
   useEffect(() => {
@@ -112,7 +123,9 @@ const LiveWatching: React.FC = () => {
           });
         } else if (!info.live_id) {
           // 라이브가 활성화되어 있지만 liveId가 없는 경우 (채팅/질문만 가능)
-          console.warn("[LiveWatching] 라이브가 활성화되어 있지만 liveId가 없습니다. 채팅/질문 기능만 사용 가능합니다.");
+          console.warn(
+            "[LiveWatching] 라이브가 활성화되어 있지만 liveId가 없습니다. 채팅/질문 기능만 사용 가능합니다."
+          );
         }
       } catch (error) {
         console.error("라이브 참여 정보 조회 실패:", error);
@@ -143,7 +156,11 @@ const LiveWatching: React.FC = () => {
     role: "student",
     userId: user?.id,
     localStreams: studentLocalStream ? [studentLocalStream] : [],
-    enabled: !!lectureInfo && !!lectureInfo.isLiveActive && !!lectureInfo.lectureId && !!lectureInfo.classId,
+    enabled:
+      !!lectureInfo &&
+      !!lectureInfo.isLiveActive &&
+      !!lectureInfo.lectureId &&
+      !!lectureInfo.classId,
     autoInitiate: false, // 학생은 offer를 보내지 않음
   });
 
@@ -151,50 +168,59 @@ const LiveWatching: React.FC = () => {
   useEffect(() => {
     console.log("[LiveWatching] ===== 화면 공유 스트림 찾기 시작 =====");
     console.log("[LiveWatching] remoteParticipants:", remoteParticipants);
-    console.log("[LiveWatching] remoteParticipants.length:", remoteParticipants.length);
-    console.log("[LiveWatching] remoteParticipants 상세:", remoteParticipants.map(p => ({
-      socketId: p.socketId,
-      role: p.role,
-      userId: p.userId,
-      streamId: p.stream.id,
-      videoTracks: p.stream.getVideoTracks().length,
-      audioTracks: p.stream.getAudioTracks().length
-    })));
+    console.log(
+      "[LiveWatching] remoteParticipants.length:",
+      remoteParticipants.length
+    );
+    console.log(
+      "[LiveWatching] remoteParticipants 상세:",
+      remoteParticipants.map((p) => ({
+        socketId: p.socketId,
+        role: p.role,
+        userId: p.userId,
+        streamId: p.stream.id,
+        videoTracks: p.stream.getVideoTracks().length,
+        audioTracks: p.stream.getAudioTracks().length,
+      }))
+    );
     console.log("[LiveWatching] videoRef.current:", videoRef.current);
-    
+
     if (remoteParticipants.length > 0 && videoRef.current) {
       // 교수자의 스트림 찾기 (role이 professor이거나 role이 없는 경우도 포함)
       const professorParticipants = remoteParticipants.filter(
         (p) => p.role === "professor" || !p.role
       );
 
-      console.log("[LiveWatching] 교수자 참여자 수 (role 포함):", professorParticipants.length);
+      console.log(
+        "[LiveWatching] 교수자 참여자 수 (role 포함):",
+        professorParticipants.length
+      );
 
       // 교수자의 화면 공유 스트림 찾기 (screen 트랙이 있는 것만)
       let screenShareStream: MediaStream | null = null;
       let cameraStream: MediaStream | null = null;
-      
+
       for (const participant of professorParticipants) {
         const stream = participant.stream;
         const videoTracks = stream.getVideoTracks();
-        
+
         console.log("[LiveWatching] 스트림 확인:", {
           streamId: stream.id,
           videoTracksCount: videoTracks.length,
-          tracks: videoTracks.map(t => ({
+          tracks: videoTracks.map((t) => ({
             label: t.label,
             kind: t.kind,
             enabled: t.enabled,
-            readyState: t.readyState
-          }))
+            readyState: t.readyState,
+          })),
         });
-        
+
         if (videoTracks.length === 0) continue;
 
         // 화면 공유 트랙인지 확인
         let hasScreenTrack = false;
-        let trackDetails: any = null;
-        
+        let trackDetails: Record<string, unknown> | null = null;
+
         for (const track of videoTracks) {
           try {
             const settings = track.getSettings();
@@ -202,42 +228,43 @@ const LiveWatching: React.FC = () => {
             const displaySurface = settings.displaySurface;
             const width = settings.width;
             const height = settings.height;
-            
+
             trackDetails = {
               label: label,
               displaySurface: displaySurface,
               width: width,
               height: height,
-              allSettings: settings
+              allSettings: settings,
             };
-            
+
             // 화면 공유 트랙 판별 조건
-            const isScreen = (
+            const isScreen =
               label.toLowerCase().includes("screen") ||
               label.toLowerCase().includes("화면") ||
               displaySurface === "monitor" ||
               displaySurface === "window" ||
               displaySurface === "browser" ||
               // 일반 카메라보다 큰 해상도면 화면 공유로 간주
-              (width && height && width > 1280 && height > 720)
-            );
-            
+              (width && height && width > 1280 && height > 720);
+
             console.log("[LiveWatching] 트랙 확인 (화면 공유):", {
               ...trackDetails,
-              isScreen: isScreen
+              isScreen: isScreen,
             });
-            
+
             if (isScreen) {
               hasScreenTrack = true;
               break;
             }
           } catch (e) {
             const label = track.label || "";
-            const isScreen = label.toLowerCase().includes("screen") || label.toLowerCase().includes("화면");
+            const isScreen =
+              label.toLowerCase().includes("screen") ||
+              label.toLowerCase().includes("화면");
             console.log("[LiveWatching] 트랙 확인 (예외, 화면 공유):", {
               label: label,
               isScreen: isScreen,
-              error: e
+              error: e,
             });
             if (isScreen) {
               hasScreenTrack = true;
@@ -248,7 +275,11 @@ const LiveWatching: React.FC = () => {
 
         // 화면 공유 트랙이 있는 스트림만 사용
         if (hasScreenTrack) {
-          console.log("[LiveWatching] 화면 공유 스트림 발견:", stream.id, trackDetails);
+          console.log(
+            "[LiveWatching] 화면 공유 스트림 발견:",
+            stream.id,
+            trackDetails
+          );
           screenShareStream = stream;
         } else {
           // 화면 공유가 아니면 카메라로 간주 (나중에 교수자 카메라로 사용)
@@ -258,49 +289,67 @@ const LiveWatching: React.FC = () => {
           }
         }
       }
-      
+
       // 화면 공유 스트림이 없으면, 교수자 카메라가 아닌 다른 스트림 사용
       if (!screenShareStream) {
         if (professorParticipants.length > 1 && cameraStream) {
           // 이미 카메라로 분류된 스트림이 있으면, 다른 스트림을 화면 공유로 사용
-          const otherStream = professorParticipants.find(p => p.stream.id !== cameraStream.id)?.stream;
+          const otherStream = professorParticipants.find(
+            (p) => p.stream.id !== cameraStream.id
+          )?.stream;
           if (otherStream) {
-            console.log("[LiveWatching] 화면 공유 스트림을 찾지 못했지만 다른 스트림 사용:", otherStream.id);
+            console.log(
+              "[LiveWatching] 화면 공유 스트림을 찾지 못했지만 다른 스트림 사용:",
+              otherStream.id
+            );
             screenShareStream = otherStream;
           }
         } else if (professorParticipants.length === 1) {
           // 스트림이 1개만 있으면, 화면 공유로 사용 (카메라가 아닌 것으로 간주)
-          console.log("[LiveWatching] 스트림이 1개만 있어서 화면 공유로 사용:", professorParticipants[0].stream.id);
+          console.log(
+            "[LiveWatching] 스트림이 1개만 있어서 화면 공유로 사용:",
+            professorParticipants[0].stream.id
+          );
           screenShareStream = professorParticipants[0].stream;
         }
       }
 
-      console.log("[LiveWatching] 최종 화면 공유 스트림:", screenShareStream ? screenShareStream.id : "없음");
+      console.log(
+        "[LiveWatching] 최종 화면 공유 스트림:",
+        screenShareStream ? screenShareStream.id : "없음"
+      );
 
       // 화면 공유 스트림만 사용 (카메라는 사용하지 않음)
       if (screenShareStream && videoRef.current) {
         // 현재 연결된 스트림과 다를 때만 업데이트
         console.log("[LiveWatching] 화면 공유 스트림 찾음, 연결 시도:", {
           streamId: screenShareStream.id,
-          currentSrcObject: videoRef.current.srcObject ? (videoRef.current.srcObject as MediaStream).id : "null",
+          currentSrcObject: videoRef.current.srcObject
+            ? (videoRef.current.srcObject as MediaStream).id
+            : "null",
           videoTracks: screenShareStream.getVideoTracks().length,
-          audioTracks: screenShareStream.getAudioTracks().length
+          audioTracks: screenShareStream.getAudioTracks().length,
         });
-        
+
         if (videoRef.current.srcObject !== screenShareStream) {
-          console.log("[LiveWatching] Setting video srcObject (화면 공유)", screenShareStream.id);
+          console.log(
+            "[LiveWatching] Setting video srcObject (화면 공유)",
+            screenShareStream.id
+          );
           videoRef.current.srcObject = screenShareStream;
-          
+
           // 즉시 확인
           setTimeout(() => {
             console.log("[LiveWatching] 연결 후 확인:", {
-              srcObject: videoRef.current?.srcObject ? (videoRef.current.srcObject as MediaStream).id : "null"
+              srcObject: videoRef.current?.srcObject
+                ? (videoRef.current.srcObject as MediaStream).id
+                : "null",
             });
           }, 100);
         } else {
           console.log("[LiveWatching] 이미 같은 스트림이 연결되어 있음");
         }
-        
+
         // 비디오 재생 시도
         const playVideo = async () => {
           try {
@@ -318,18 +367,21 @@ const LiveWatching: React.FC = () => {
                 console.log("[LiveWatching] 화면 공유 재생 성공 (muted)");
                 setIsLive(true);
               } catch (mutedError) {
-                console.warn("[LiveWatching] Even muted play failed:", mutedError);
+                console.warn(
+                  "[LiveWatching] Even muted play failed:",
+                  mutedError
+                );
                 setIsLive(false);
               }
             }
           }
         };
-        
+
         videoRef.current.onloadedmetadata = () => {
           console.log("[LiveWatching] 화면 공유 메타데이터 로드됨");
           playVideo();
         };
-        
+
         if (videoRef.current.readyState >= 2) {
           console.log("[LiveWatching] 비디오 이미 로드됨, 바로 재생 시도");
           playVideo();
@@ -359,25 +411,28 @@ const LiveWatching: React.FC = () => {
   // 교수자 카메라 스트림을 professorVideoRef에 연결
   useEffect(() => {
     console.log("[LiveWatching] 교수자 카메라 스트림 찾기 시작");
-    
+
     if (remoteParticipants.length > 0 && professorVideoRef.current) {
       // 교수자의 스트림 찾기 (role이 professor이거나 role이 없는 경우도 포함)
       const professorParticipants = remoteParticipants.filter(
         (p) => p.role === "professor" || !p.role
       );
 
-      console.log("[LiveWatching] 교수자 참여자 수 (카메라, role 포함):", professorParticipants.length);
+      console.log(
+        "[LiveWatching] 교수자 참여자 수 (카메라, role 포함):",
+        professorParticipants.length
+      );
 
       // 교수자의 카메라 스트림 찾기 (화면 공유가 아닌 것)
       // 먼저 화면 공유 스트림을 찾아서 제외
       let professorCameraStream: MediaStream | null = null;
-      let screenShareStreamIds = new Set<string>();
-      
+      const screenShareStreamIds = new Set<string>();
+
       // 먼저 화면 공유 스트림 ID 수집
       for (const participant of professorParticipants) {
         const stream = participant.stream;
         const videoTracks = stream.getVideoTracks();
-        
+
         if (videoTracks.length === 0) continue;
 
         const hasScreenTrack = videoTracks.some((track) => {
@@ -387,20 +442,22 @@ const LiveWatching: React.FC = () => {
             const displaySurface = settings.displaySurface;
             const width = settings.width;
             const height = settings.height;
-            
-            const isScreen = (
+
+            const isScreen =
               label.toLowerCase().includes("screen") ||
               label.toLowerCase().includes("화면") ||
               displaySurface === "monitor" ||
               displaySurface === "window" ||
               displaySurface === "browser" ||
-              (width && height && width > 1280 && height > 720)
-            );
-            
+              (width && height && width > 1280 && height > 720);
+
             return isScreen;
           } catch {
             const label = track.label || "";
-            return label.toLowerCase().includes("screen") || label.toLowerCase().includes("화면");
+            return (
+              label.toLowerCase().includes("screen") ||
+              label.toLowerCase().includes("화면")
+            );
           }
         });
 
@@ -408,46 +465,61 @@ const LiveWatching: React.FC = () => {
           screenShareStreamIds.add(stream.id);
         }
       }
-      
+
       // 화면 공유가 아닌 스트림을 카메라로 사용
       for (const participant of professorParticipants) {
         const stream = participant.stream;
-        
+
         if (screenShareStreamIds.has(stream.id)) {
-          console.log("[LiveWatching] 화면 공유 스트림 무시 (카메라용):", stream.id);
+          console.log(
+            "[LiveWatching] 화면 공유 스트림 무시 (카메라용):",
+            stream.id
+          );
           continue;
         }
-        
+
         console.log("[LiveWatching] 교수자 카메라 스트림 발견:", stream.id);
         professorCameraStream = stream;
         break;
       }
 
-      console.log("[LiveWatching] 최종 교수자 카메라 스트림:", professorCameraStream ? professorCameraStream.id : "없음");
+      console.log(
+        "[LiveWatching] 최종 교수자 카메라 스트림:",
+        professorCameraStream ? professorCameraStream.id : "없음"
+      );
 
       if (professorCameraStream && professorVideoRef.current) {
         // 현재 연결된 스트림과 다를 때만 업데이트
         console.log("[LiveWatching] 교수자 카메라 스트림 찾음, 연결 시도:", {
           streamId: professorCameraStream.id,
-          currentSrcObject: professorVideoRef.current.srcObject ? (professorVideoRef.current.srcObject as MediaStream).id : "null",
+          currentSrcObject: professorVideoRef.current.srcObject
+            ? (professorVideoRef.current.srcObject as MediaStream).id
+            : "null",
           videoTracks: professorCameraStream.getVideoTracks().length,
-          audioTracks: professorCameraStream.getAudioTracks().length
+          audioTracks: professorCameraStream.getAudioTracks().length,
         });
-        
+
         if (professorVideoRef.current.srcObject !== professorCameraStream) {
-          console.log("[LiveWatching] Setting professorVideoRef srcObject (카메라)", professorCameraStream.id);
+          console.log(
+            "[LiveWatching] Setting professorVideoRef srcObject (카메라)",
+            professorCameraStream.id
+          );
           professorVideoRef.current.srcObject = professorCameraStream;
-          
+
           // 즉시 확인
           setTimeout(() => {
             console.log("[LiveWatching] 교수자 카메라 연결 후 확인:", {
-              srcObject: professorVideoRef.current?.srcObject ? (professorVideoRef.current.srcObject as MediaStream).id : "null"
+              srcObject: professorVideoRef.current?.srcObject
+                ? (professorVideoRef.current.srcObject as MediaStream).id
+                : "null",
             });
           }, 100);
         } else {
-          console.log("[LiveWatching] 교수자 카메라 이미 같은 스트림이 연결되어 있음");
+          console.log(
+            "[LiveWatching] 교수자 카메라 이미 같은 스트림이 연결되어 있음"
+          );
         }
-        
+
         const playVideo = async () => {
           try {
             if (professorVideoRef.current) {
@@ -518,7 +590,10 @@ const LiveWatching: React.FC = () => {
     if (!lectureInfo?.lectureId || !lectureInfo?.classId) return;
     setIsLoadingQuestions(true);
     try {
-      const response = await getClassQuestions(lectureInfo.lectureId, lectureInfo.classId);
+      const response = await getClassQuestions(
+        lectureInfo.lectureId,
+        lectureInfo.classId
+      );
       setQuestions(response.questions || []);
     } catch (error) {
       console.error("질문 목록 조회 실패:", error);
@@ -546,21 +621,30 @@ const LiveWatching: React.FC = () => {
 
     setIsLessonDetailLoading(true);
     try {
-      const detail = await getClassDetail(lectureInfo.lectureId, lectureInfo.classId);
-      const materials = detail.class?.materials as Array<string | { url?: string; originalName?: string }> | undefined;
+      const detail = await getClassDetail(
+        lectureInfo.lectureId,
+        lectureInfo.classId
+      );
+      const materials = detail.class?.materials as
+        | Array<string | { url?: string; originalName?: string }>
+        | undefined;
 
       // PDF URL 찾기
       let materialUrl: string | undefined;
       let materialName: string | undefined;
-      
+
       if (materials && materials.length > 0) {
         const firstMaterial = materials[0];
         if (typeof firstMaterial === "string") {
-          materialUrl = firstMaterial.startsWith("http") ? firstMaterial : `${getBaseUrl()}${firstMaterial}`;
+          materialUrl = firstMaterial.startsWith("http")
+            ? firstMaterial
+            : `${getBaseUrl()}${firstMaterial}`;
           materialName = firstMaterial.split("/").pop() || "강의 자료";
         } else {
           materialUrl = firstMaterial.url
-            ? (firstMaterial.url.startsWith("http") ? firstMaterial.url : `${getBaseUrl()}${firstMaterial.url}`)
+            ? firstMaterial.url.startsWith("http")
+              ? firstMaterial.url
+              : `${getBaseUrl()}${firstMaterial.url}`
             : undefined;
           materialName = firstMaterial.originalName || "강의 자료";
         }
@@ -593,7 +677,10 @@ const LiveWatching: React.FC = () => {
     } catch (error) {
       console.error("클래스 정보 조회 실패:", error);
       setToast({
-        message: error instanceof Error ? error.message : "교안 정보를 불러오는데 실패했습니다.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "교안 정보를 불러오는데 실패했습니다.",
         type: "error",
       });
     } finally {
@@ -706,7 +793,9 @@ const LiveWatching: React.FC = () => {
         studentStreamRef.current = stream;
         attachStudentStream(stream);
         setIsStudentCameraOn(true);
-        setIsStudentMicOn(stream.getAudioTracks().some((track) => track.enabled));
+        setIsStudentMicOn(
+          stream.getAudioTracks().some((track) => track.enabled)
+        );
       } else {
         // 스트림이 있으면 비디오 트랙만 활성화
         const videoTracks = studentStreamRef.current.getVideoTracks();
@@ -818,7 +907,7 @@ const LiveWatching: React.FC = () => {
     // Socket.io 연결
     const baseUrl = getBaseUrl();
     const token = localStorage.getItem("lecq.token");
-    
+
     if (!token) {
       console.warn("[LiveWatching] No token found, skipping socket connection");
       return;
@@ -858,7 +947,11 @@ const LiveWatching: React.FC = () => {
 
     // 재연결 성공
     socket.on("reconnect", (attemptNumber) => {
-      console.log("[LiveWatching] Reconnected after", attemptNumber, "attempts");
+      console.log(
+        "[LiveWatching] Reconnected after",
+        attemptNumber,
+        "attempts"
+      );
       socket.emit("live:join", {
         lecture_id: lectureInfo.lectureId,
         class_id: lectureInfo.classId,
@@ -911,10 +1004,14 @@ const LiveWatching: React.FC = () => {
       );
     };
 
-    const handleQuestionAnswer = (data: { question_id: string; answer: string; question: ApiQuestion }) => {
+    const handleQuestionAnswer = (data: {
+      question_id: string;
+      answer: string;
+      question: ApiQuestion;
+    }) => {
       console.log("[LiveWatching] question:answer 이벤트 수신:", data);
       setQuestions((prev) => {
-        const updated = prev.map((q) => 
+        const updated = prev.map((q) =>
           q._id === data.question_id ? { ...q, answer: data.answer } : q
         );
         if (!prev.some((q) => q._id === data.question_id)) {
@@ -992,8 +1089,8 @@ const LiveWatching: React.FC = () => {
                 {isLoading
                   ? "로딩 중..."
                   : lectureInfo
-                  ? `${lectureInfo.classTitle} - ${lectureInfo.lectureName}`
-                  : "강의 정보 없음"}
+                    ? `${lectureInfo.classTitle} - ${lectureInfo.lectureName}`
+                    : "강의 정보 없음"}
               </h1>
               {lectureInfo && !lectureInfo.liveId && (
                 <p className="text-sm text-gray-500 mt-2">
@@ -1026,12 +1123,12 @@ const LiveWatching: React.FC = () => {
                     isLoading
                       ? "로딩 중..."
                       : !lectureInfo?.liveId
-                      ? "방송 대기 중"
-                      : webrtcStatus === "connecting"
-                      ? "연결 중..."
-                      : webrtcStatus === "connected"
-                      ? "라이브 방송 중"
-                      : "연결 오류"
+                        ? "방송 대기 중"
+                        : webrtcStatus === "connecting"
+                          ? "연결 중..."
+                          : webrtcStatus === "connected"
+                            ? "라이브 방송 중"
+                            : "연결 오류"
                   }
                 />
               )}
@@ -1080,7 +1177,8 @@ const LiveWatching: React.FC = () => {
               {activeTab === "questions" ? (
                 <div className="p-4">
                   <div className="text-center text-gray-500 text-sm py-8">
-                    질문이 없습니다. 교안 및 질문 보기 모달에서 질문을 확인하세요.
+                    질문이 없습니다. 교안 및 질문 보기 모달에서 질문을
+                    확인하세요.
                   </div>
                 </div>
               ) : (
@@ -1106,8 +1204,8 @@ const LiveWatching: React.FC = () => {
                               isOwnMessage
                                 ? "bg-blue-600 text-white"
                                 : isProfessor
-                                ? "bg-green-100 text-gray-900"
-                                : "bg-gray-100 text-gray-900"
+                                  ? "bg-green-100 text-gray-900"
+                                  : "bg-gray-100 text-gray-900"
                             }`}
                           >
                             <div className="flex items-center gap-2 mb-1">
@@ -1116,15 +1214,15 @@ const LiveWatching: React.FC = () => {
                                   isOwnMessage
                                     ? "text-blue-100"
                                     : isProfessor
-                                    ? "text-green-700"
-                                    : "text-gray-600"
+                                      ? "text-green-700"
+                                      : "text-gray-600"
                                 }`}
                               >
                                 {isOwnMessage
                                   ? "나"
                                   : isProfessor
-                                  ? "교수자"
-                                  : msg.sender.name}
+                                    ? "교수자"
+                                    : msg.sender.name}
                               </span>
                               <span
                                 className={`text-[10px] ${
@@ -1214,4 +1312,3 @@ const LiveWatching: React.FC = () => {
 };
 
 export default LiveWatching;
-

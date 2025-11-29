@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { Eraser, X } from "lucide-react";
+import { Eraser } from "lucide-react";
 import { Socket } from "socket.io-client";
 
 interface WhiteboardPage {
@@ -235,7 +235,6 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
       if (containerRef.current && canvasRef.current && pdfIframeRef.current) {
         const container = containerRef.current;
         const canvas = canvasRef.current;
-        const iframe = pdfIframeRef.current;
 
         // iframe의 실제 크기 가져오기
         const rect = container.getBoundingClientRect();

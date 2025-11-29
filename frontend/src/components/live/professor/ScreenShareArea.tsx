@@ -19,7 +19,7 @@ const ScreenShareArea: React.FC<ScreenShareAreaProps> = ({
   hasPdfOverlay = false,
   videoRef,
   connectionStatus = "idle",
-  remoteParticipants = [],
+  remoteParticipants: _remoteParticipants = [],
 }) => {
   const statusBadge = useMemo(() => {
     switch (connectionStatus) {

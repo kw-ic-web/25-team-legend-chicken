@@ -104,7 +104,7 @@ const RealtimeDashboard: React.FC = () => {
     classId?: number;
     pages?: WhiteboardPage[];
   } | null>(null);
-  const [isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
+  const [_isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
   const showError = useCallback((message: string) => {
     setToast({ message, type: "error" });
   }, []);
@@ -1494,43 +1494,6 @@ const PdfShareModal: React.FC<PdfShareModalProps> = ({
           )}
         </div>
       </div>
-    </div>
-  );
-};
-
-const PdfOverlay: React.FC<{ pdf: PdfItem; onStop: () => void }> = ({
-  pdf,
-  onStop,
-}) => {
-  return (
-    <div className="absolute inset-6 rounded-2xl bg-white shadow-[0_25px_60px_rgba(15,23,42,0.45)] border border-gray-200 flex flex-col overflow-hidden z-20">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50">
-        <div>
-          <p className="text-sm font-semibold text-gray-900">공유 중인 PDF</p>
-          <p className="text-xs text-gray-500 truncate max-w-xs">{pdf.name}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <a
-            href={pdf.url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-          >
-            새 창에서 열기
-          </a>
-          <button
-            onClick={onStop}
-            className="px-3 py-1.5 text-xs font-semibold text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors"
-          >
-            공유 종료
-          </button>
-        </div>
-      </div>
-      <iframe
-        src={`${pdf.url}#view=FitH`}
-        title="공유 중인 PDF"
-        className="flex-1 w-full h-full"
-      />
     </div>
   );
 };
