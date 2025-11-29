@@ -1113,10 +1113,10 @@ const ProfessorClass: React.FC = () => {
         userType="professor"
         userInfo={{
           id: myInfo?.id,
-          name: myInfo?.name || "교수자",
+          name: myInfo?.name || "강의자",
           title:
             myInfo?.user_type === "professor"
-              ? "교수"
+              ? "강의자"
               : myInfo?.user_type || "강의자",
           affiliation: course.description || "강의자 정보",
           currentLectures: lectureCount,
@@ -1147,13 +1147,13 @@ const ProfessorClass: React.FC = () => {
               </div>
             </div>
             <div>
-              <div className="flex items-center justify-between border-t border-gray-200 pt-2">
-                <h4 className="text-md font-semibold text-gray-900 mb-3">
+              <div className="flex items-center justify-between gap-2 border-t border-gray-200 pt-2 mb-3">
+                <h4 className="text-md font-semibold text-gray-900 whitespace-nowrap flex-shrink-0">
                   최신 질문
                 </h4>
                 {weeks.length > 0 && (
                   <select
-                    className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                    className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white flex-shrink min-w-0 max-w-full"
                     value={selectedQuestionClassId ?? ""}
                     onChange={(e) => {
                       const value = Number(e.target.value);
@@ -1189,11 +1189,15 @@ const ProfessorClass: React.FC = () => {
                       key={item._id}
                       className="border border-gray-200 rounded-lg p-3 bg-white/60"
                     >
-                      <div className="flex items-center justify-between text-[11px] text-gray-500 mb-1">
-                        <span>{item.author?.name || "익명"}</span>
-                        <span>{formatQuestionTimestamp(item.timestamp)}</span>
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 mb-1">
+                        <span className="truncate flex-shrink-0">
+                          {item.author?.name || "익명"}
+                        </span>
+                        <span className="whitespace-nowrap flex-shrink-0">
+                          {formatQuestionTimestamp(item.timestamp)}
+                        </span>
                       </div>
-                      <div className="text-sm font-medium text-gray-900">
+                      <div className="text-sm font-medium text-gray-900 break-words">
                         Q. {item.text}
                       </div>
                     </div>

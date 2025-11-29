@@ -18,7 +18,14 @@ import Toast from "../../components/common/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
-import { endLive, getClassPdfs, getClassDetail, getWhiteboardPages, getMembers, type WhiteboardPage } from "../../api/professor";
+import {
+  endLive,
+  getClassPdfs,
+  getClassDetail,
+  getWhiteboardPages,
+  getMembers,
+  type WhiteboardPage,
+} from "../../api/professor";
 import AnnotatablePdfViewer from "../../components/live/professor/AnnotatablePdfViewer";
 import { analyzeHandwriting } from "../../api/handwriting";
 import {
@@ -86,7 +93,8 @@ const RealtimeDashboard: React.FC = () => {
   } | null>(null);
   const [selectedPdf, setSelectedPdf] = useState<PdfItem | null>(null);
   const [whiteboardPages, setWhiteboardPages] = useState<WhiteboardPage[]>([]);
-  const [isLessonQuestionModalOpen, setIsLessonQuestionModalOpen] = useState(false);
+  const [isLessonQuestionModalOpen, setIsLessonQuestionModalOpen] =
+    useState(false);
   const [selectedLesson, setSelectedLesson] = useState<{
     title: string;
     fileName: string;
@@ -100,9 +108,16 @@ const RealtimeDashboard: React.FC = () => {
   const showError = useCallback((message: string) => {
     setToast({ message, type: "error" });
   }, []);
-  const [students, setStudents] = useState<Array<{ id: string; name: string; email: string }>>([]);
-  const [studentNameMap, setStudentNameMap] = useState<Map<string, string>>(new Map());
-  const [isParticipantStripVisible, setIsParticipantStripVisible] = useState(true);
+  const [students, setStudents] = useState<
+    Array<{ id: string; name: string; email: string }>
+  >([]);
+  const [studentNameMap, setStudentNameMap] = useState<Map<string, string>>(
+    new Map()
+  );
+  const [isParticipantStripVisible, setIsParticipantStripVisible] =
+    useState(true);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const lastMessageTimeRef = useRef<number>(0);
 
   const parseNumeric = (value?: number | string | null) => {
     if (value === null || value === undefined || value === "") return undefined;
@@ -337,22 +352,39 @@ const RealtimeDashboard: React.FC = () => {
       if (isSharing) {
         stopScreenShare();
       }
-      
+
       // Whiteboard pages 가져오기
       if (resolvedLectureId && resolvedClassId !== undefined) {
         try {
-          const pagesResponse = await getWhiteboardPages(resolvedLectureId, resolvedClassId, "finalized");
+          const pagesResponse = await getWhiteboardPages(
+            resolvedLectureId,
+            resolvedClassId,
+            "finalized"
+          );
           setWhiteboardPages(pagesResponse.pages || []);
-          console.log("[RealtimeDashboard] Whiteboard pages 로드:", pagesResponse.pages);
+          console.log(
+            "[RealtimeDashboard] Whiteboard pages 로드:",
+            pagesResponse.pages
+          );
         } catch (error) {
-          console.error("[RealtimeDashboard] Whiteboard pages 로드 실패:", error);
+          console.error(
+            "[RealtimeDashboard] Whiteboard pages 로드 실패:",
+            error
+          );
           setWhiteboardPages([]);
         }
       }
-      
+
       // Socket.io로 PDF 공유 이벤트 전송
-      if (chatSocketRef.current && resolvedLectureId && resolvedClassId !== undefined) {
-        console.log("[RealtimeDashboard] PDF 공유 이벤트 전송:", { pdf_url: pdf.url, pdf_name: pdf.name });
+      if (
+        chatSocketRef.current &&
+        resolvedLectureId &&
+        resolvedClassId !== undefined
+      ) {
+        console.log("[RealtimeDashboard] PDF 공유 이벤트 전송:", {
+          pdf_url: pdf.url,
+          pdf_name: pdf.name,
+        });
         chatSocketRef.current.emit("pdf:share", {
           pdf_url: pdf.url,
           pdf_name: pdf.name,
@@ -379,15 +411,17 @@ const RealtimeDashboard: React.FC = () => {
       if (pdf) {
         setIsPdfModalOpen(false);
       }
-      
+
       try {
         const detail = await getClassDetail(resolvedLectureId, resolvedClassId);
-        const materials = detail.class?.materials as Array<string | { url?: string; originalName?: string }> | undefined;
+        const materials = detail.class?.materials as
+          | Array<string | { url?: string; originalName?: string }>
+          | undefined;
 
         // PDF URL 찾기
         let materialUrl: string | undefined;
         let materialName: string | undefined;
-        
+
         if (materials && materials.length > 0) {
           const firstMaterial = materials[0];
           if (typeof firstMaterial === "string") {
@@ -397,7 +431,8 @@ const RealtimeDashboard: React.FC = () => {
             materialUrl = firstMaterial.url
               ? resolveAssetUrl(firstMaterial.url)
               : pdf?.url;
-            materialName = firstMaterial.originalName || pdf?.name || "강의 자료";
+            materialName =
+              firstMaterial.originalName || pdf?.name || "강의 자료";
           }
         } else if (pdf) {
           materialUrl = pdf.url;
@@ -472,7 +507,10 @@ const RealtimeDashboard: React.FC = () => {
           pdf_url: selectedPdf.url,
         });
 
-        console.log("[RealtimeDashboard] PDF+필기 캡쳐 및 분석 완료:", timestamp);
+        console.log(
+          "[RealtimeDashboard] PDF+필기 캡쳐 및 분석 완료:",
+          timestamp
+        );
       } catch (error) {
         console.error("[RealtimeDashboard] PDF+필기 캡쳐 실패:", error);
       }
@@ -726,6 +764,12 @@ const RealtimeDashboard: React.FC = () => {
   }, [showError]);
 
   const handleSendMessage = useCallback(async () => {
+    // 중복 전송 방지
+    if (isSendingMessage) {
+      return;
+    }
+
+    // 메시지가 비어있거나 필수 정보가 없으면 리턴
     if (
       !chatMessage.trim() ||
       !resolvedLectureId ||
@@ -734,12 +778,22 @@ const RealtimeDashboard: React.FC = () => {
       return;
     }
 
+    // 너무 빠른 연속 전송 방지 (최소 300ms 간격)
+    const now = Date.now();
+    if (now - lastMessageTimeRef.current < 300) {
+      return;
+    }
+
+    const messageText = chatMessage.trim();
+    setIsSendingMessage(true);
+    lastMessageTimeRef.current = now;
+
     try {
       await sendChatMessage({
         lecture_id: resolvedLectureId,
         class_id: resolvedClassId,
         live_id: resolvedLiveId ?? null,
-        text: chatMessage.trim(),
+        text: messageText,
       });
       setChatMessage("");
     } catch (error) {
@@ -747,9 +801,15 @@ const RealtimeDashboard: React.FC = () => {
       showError(
         error instanceof Error ? error.message : "메시지 전송에 실패했습니다."
       );
+    } finally {
+      // 전송 완료 후 약간의 지연을 두고 플래그 해제
+      setTimeout(() => {
+        setIsSendingMessage(false);
+      }, 500);
     }
   }, [
     chatMessage,
+    isSendingMessage,
     resolvedLectureId,
     resolvedClassId,
     resolvedLiveId,
@@ -807,8 +867,12 @@ const RealtimeDashboard: React.FC = () => {
       } catch (error) {
         console.error("메시지 조회 실패:", error);
         // 404 에러는 조용히 처리 (채팅이 없을 수 있음)
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        if (!errorMessage.includes("404") && !errorMessage.includes("찾을 수 없습니다")) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        if (
+          !errorMessage.includes("404") &&
+          !errorMessage.includes("찾을 수 없습니다")
+        ) {
           console.warn("채팅 메시지 조회 중 오류:", errorMessage);
         }
       }
@@ -876,7 +940,7 @@ const RealtimeDashboard: React.FC = () => {
           email: student.email,
         }));
         setStudents(studentsList);
-        
+
         // userId -> name 맵 생성
         const nameMap = new Map<string, string>();
         studentsList.forEach((student) => {
@@ -1133,7 +1197,8 @@ const RealtimeDashboard: React.FC = () => {
                 <div className="p-4">
                   {questions.length === 0 ? (
                     <div className="text-center text-gray-500 text-sm py-8">
-                      질문이 없습니다. 교안 및 질문 보기 모달에서 질문을 확인하세요.
+                      질문이 없습니다. 교안 및 질문 보기 모달에서 질문을
+                      확인하세요.
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -1162,13 +1227,17 @@ const RealtimeDashboard: React.FC = () => {
                             </p>
                             <div className="flex space-x-2">
                               <button
-                                onClick={() => handleAnswerQuestion(question.id)}
+                                onClick={() =>
+                                  handleAnswerQuestion(question.id)
+                                }
                                 className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
                               >
                                 답변하기
                               </button>
                               <button
-                                onClick={() => handleDismissQuestion(question.id)}
+                                onClick={() =>
+                                  handleDismissQuestion(question.id)
+                                }
                                 className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
                               >
                                 답변 생략
@@ -1250,17 +1319,28 @@ const RealtimeDashboard: React.FC = () => {
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
                   placeholder="채팅 입력 (Enter)"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:opacity-50"
+                  disabled={isSendingMessage}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      handleSendMessage();
+                      e.stopPropagation();
+                      if (!isSendingMessage) {
+                        handleSendMessage();
+                      }
                     }
                   }}
                 />
                 <button
-                  onClick={handleSendMessage}
-                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!isSendingMessage) {
+                      handleSendMessage();
+                    }
+                  }}
+                  disabled={isSendingMessage}
+                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -1348,62 +1428,64 @@ const PdfShareModal: React.FC<PdfShareModalProps> = ({
 }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-100">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div>
-            <p className="text-base font-semibold text-gray-900">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-2 sm:px-4">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-[90vh] flex flex-col">
+        <div className="flex items-start sm:items-center justify-between gap-2 sm:gap-4 px-3 sm:px-5 py-3 sm:py-4 border-b border-gray-100 flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm sm:text-base font-semibold text-gray-900 truncate">
               PDF 자료 공유
             </p>
             {meta && (
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 truncate">
                 {meta.lectureName || "강좌"} · {meta.classTitle || "클래스"}
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <button
               onClick={onRefresh}
-              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors whitespace-nowrap"
             >
               새로고침
             </button>
             <button
               onClick={onClose}
-              className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
+              className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap"
             >
               닫기
             </button>
           </div>
         </div>
-        <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
+        <div className="p-3 sm:p-4 space-y-2 sm:space-y-3 overflow-y-auto flex-1 min-h-0">
           {isLoading ? (
-            <div className="py-10 text-center text-sm text-gray-500">
+            <div className="py-10 text-center text-xs sm:text-sm text-gray-500">
               PDF 목록을 불러오는 중입니다...
             </div>
           ) : error ? (
-            <div className="py-10 text-center text-sm text-red-500">
+            <div className="py-10 text-center text-xs sm:text-sm text-red-500 break-words px-2">
               {error}
             </div>
           ) : pdfs.length === 0 ? (
-            <div className="py-10 text-center text-sm text-gray-500">
+            <div className="py-10 text-center text-xs sm:text-sm text-gray-500">
               등록된 PDF 자료가 없습니다.
             </div>
           ) : (
             pdfs.map((pdf) => (
               <div
                 key={pdf.url}
-                className="flex items-start justify-between gap-3 rounded-xl border border-gray-100 p-3 hover:border-blue-200 transition-colors"
+                className="flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-2 sm:gap-3 rounded-xl border border-gray-100 p-2 sm:p-3 hover:border-blue-200 transition-colors"
               >
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-semibold text-gray-900 truncate">
                     {pdf.name}
                   </p>
-                  <p className="text-xs text-gray-500 break-all">{pdf.url}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500 break-all mt-0.5">
+                    {pdf.url}
+                  </p>
                 </div>
                 <button
                   onClick={() => onSelect(pdf)}
-                  className="px-3 py-2 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
+                  className="px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors whitespace-nowrap flex-shrink-0"
                 >
                   공유하기
                 </button>
