@@ -1098,72 +1098,73 @@ const LiveWatching: React.FC = () => {
   }, [stopStudentCamera]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="flex h-[calc(100vh-80px)]">
+    <div className="flex h-full bg-gray-50">
+      <div className="flex flex-1 overflow-hidden">
         {/* 메인 콘텐츠 영역 - 교수 레이아웃과 동일 */}
-        <div className="flex-1 bg-white m-4 rounded-lg shadow-sm">
-          <div className="h-full flex flex-col">
+        <div className="flex-1 bg-white m-2 rounded-lg shadow-sm overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden">
             {/* 강의 제목 - 교수 화면 스타일 매칭 */}
-            <div className="p-6 border-b border-gray-200">
-              <h1 className="text-2xl font-bold text-green-600">
-                {isLoading
-                  ? "로딩 중..."
-                  : lectureInfo
-                    ? `${lectureInfo.classTitle} - ${lectureInfo.lectureName}`
-                    : "강의 정보 없음"}
-              </h1>
-              {lectureInfo && !lectureInfo.liveId && (
-                <p className="text-sm text-gray-500 mt-2">
-                  현재 진행 중인 라이브 방송이 없습니다.
-                </p>
-              )}
+            <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-white via-white to-green-50">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h1 className="text-xl font-bold text-green-600 truncate">
+                  {isLoading
+                    ? "로딩 중..."
+                    : lectureInfo
+                      ? `${lectureInfo.classTitle} - ${lectureInfo.lectureName}`
+                      : "강의 정보 없음"}
+                </h1>
+                {lectureInfo && !lectureInfo.liveId && (
+                  <p className="text-xs text-gray-500">
+                    현재 진행 중인 라이브 방송이 없습니다.
+                  </p>
+                )}
+              </div>
             </div>
 
-            {/* 상단 참여자(웹캠) 스트립 */}
-            <StudentParticipantStrip
-              professorCameraRef={professorVideoRef}
-              studentVideoRef={studentVideoRef}
-              isStudentCameraOn={isStudentCameraOn}
-              remoteParticipants={remoteParticipants}
-            />
-
-            {/* 강의 콘텐츠(화면 공유 영역) - 컨트롤 제거 */}
-            <div className="relative flex-1">
-              {sharedPdf ? (
+            {/* 강의 콘텐츠(화면 공유 영역) */}
+            {sharedPdf ? (
+              <div className="relative flex-1">
                 <StudentPdfViewer
                   pdfUrl={sharedPdf.url}
                   pdfName={sharedPdf.name}
                   socket={chatSocketRef.current}
                 />
-              ) : (
-                <StudentScreenArea
-                  isLive={isLive}
-                  videoRef={videoRef}
-                  statusText={
-                    isLoading
-                      ? "로딩 중..."
-                      : !lectureInfo?.liveId
-                        ? "방송 대기 중"
-                        : webrtcStatus === "connecting"
-                          ? "연결 중..."
-                          : webrtcStatus === "connected"
-                            ? "라이브 방송 중"
-                            : "연결 오류"
-                  }
+                <StudentLiveControls
+                  isMicOn={isStudentMicOn}
+                  isCameraOn={isStudentCameraOn}
+                  onToggleMic={toggleStudentMic}
+                  onToggleCamera={toggleStudentCamera}
                 />
-              )}
-              <StudentLiveControls
-                isMicOn={isStudentMicOn}
-                isCameraOn={isStudentCameraOn}
-                onToggleMic={toggleStudentMic}
-                onToggleCamera={toggleStudentCamera}
-              />
-            </div>
+              </div>
+            ) : (
+              <StudentScreenArea
+                isLive={isLive}
+                videoRef={videoRef}
+                statusText={
+                  isLoading
+                    ? "로딩 중..."
+                    : !lectureInfo?.liveId
+                      ? "방송 대기 중"
+                      : webrtcStatus === "connecting"
+                        ? "연결 중..."
+                        : webrtcStatus === "connected"
+                          ? "라이브 방송 중"
+                          : "연결 오류"
+                }
+              >
+                <StudentLiveControls
+                  isMicOn={isStudentMicOn}
+                  isCameraOn={isStudentCameraOn}
+                  onToggleMic={toggleStudentMic}
+                  onToggleCamera={toggleStudentCamera}
+                />
+              </StudentScreenArea>
+            )}
           </div>
         </div>
 
-        {/* 우측 채팅 패널 */}
-        <div className="w-80 bg-white border-l border-gray-200">
+        {/* 우측 채팅 패널 - 반응형 처리 */}
+        <div className="hidden lg:block w-80 bg-white border-l border-gray-200">
           <div className="h-full flex flex-col">
             {/* 헤더 - 실시간 채팅 + 질문하기 버튼 */}
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">

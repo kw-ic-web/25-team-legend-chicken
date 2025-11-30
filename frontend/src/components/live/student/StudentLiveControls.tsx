@@ -15,14 +15,14 @@ const StudentLiveControls: React.FC<Props> = ({
   onToggleCamera,
 }) => {
   return (
-    <div className="absolute -bottom-8 left-0 right-0 flex justify-center pointer-events-none">
-      <div className="flex items-center space-x-3 bg-white/85 backdrop-blur-lg rounded-3xl px-5 py-3 shadow-lg border border-white/40 pointer-events-auto">
+    <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
+      <div className="flex items-center space-x-2 bg-white/90 backdrop-blur-xl rounded-3xl px-3 py-2.5 shadow-lg border border-white/30 pointer-events-auto">
         <button
           onClick={onToggleMic}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+          className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 ${
             isMicOn
               ? "bg-blue-500/10 text-blue-600"
-              : "bg-gray-100/70 text-gray-600 hover:bg-gray-200/70"
+              : "bg-gray-100/50 text-gray-600 hover:bg-gray-200/50"
           }`}
           title={isMicOn ? "마이크 끄기" : "마이크 켜기"}
         >
@@ -31,10 +31,10 @@ const StudentLiveControls: React.FC<Props> = ({
 
         <button
           onClick={onToggleCamera}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+          className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 ${
             isCameraOn
               ? "bg-blue-500/10 text-blue-600"
-              : "bg-gray-100/70 text-gray-600 hover:bg-gray-200/70"
+              : "bg-gray-100/50 text-gray-600 hover:bg-gray-200/50"
           }`}
           title={isCameraOn ? "카메라 끄기" : "카메라 켜기"}
         >
