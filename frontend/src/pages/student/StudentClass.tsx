@@ -697,84 +697,86 @@ const StudentClass: React.FC = () => {
         userType="student"
         userInfo={studentInfo}
         additionalContent={
-          <div className="p-6 border-t border-gray-200 space-y-6">
-            <div>
-              <h4 className="text-xl font-extrabold text-gray-900 leading-snug">
-                {course.title || "강좌 정보를 불러오는 중..."}
-              </h4>
-              <div className="mt-2 flex items-center space-x-4 text-gray-800">
-                <span className="text-base font-medium">
-                  {course.instructor || ""}
-                </span>
-                <span className="inline-flex items-center space-x-1 text-base">
-                  <Users className="w-4 h-4 text-gray-500" />
-                  <span>{course.participants}</span>
-                </span>
-              </div>
-              <div className="mt-6 space-y-5 text-gray-700 text-[12px]">
-                <p>
-                  {course.description ||
-                    "이미 12명 이상이 학습하고 만족한 최고의 프로그래밍 입문 강의. 프로그래밍을 전혀 접해보지 못한 사람부터 실제 활용 가능한 프로그래밍 능력까지 갈 수 있도록 도와주는 강의입니다."}
-                </p>
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center justify-between gap-2 border-t border-gray-200 pt-2 mb-3">
-                <h4 className="text-md font-semibold text-gray-900 whitespace-nowrap flex-shrink-0">
-                  최신 질문
+          <div className="flex flex-col h-full border-t border-gray-200 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div>
+                <h4 className="text-xl font-extrabold text-gray-900 leading-snug">
+                  {course.title || "강좌 정보를 불러오는 중..."}
                 </h4>
-                {weeks.length > 0 && (
-                  <select
-                    className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white flex-shrink min-w-0 max-w-full"
-                    value={selectedQuestionClassId ?? ""}
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      setSelectedQuestionClassId(
-                        Number.isNaN(value) ? null : value
-                      );
-                    }}
-                  >
-                    {weeks.map((week) => (
-                      <option key={week.week} value={week.week}>
-                        {week.title}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <div className="mt-2 flex items-center space-x-4 text-gray-800">
+                  <span className="text-base font-medium">
+                    {course.instructor || ""}
+                  </span>
+                  <span className="inline-flex items-center space-x-1 text-base">
+                    <Users className="w-4 h-4 text-gray-500" />
+                    <span>{course.participants}</span>
+                  </span>
+                </div>
+                <div className="mt-6 space-y-5 text-gray-700 text-[12px] max-h-32 overflow-y-auto pr-1">
+                  <p>
+                    {course.description ||
+                      "이미 12명 이상이 학습하고 만족한 최고의 프로그래밍 입문 강의. 프로그래밍을 전혀 접해보지 못한 사람부터 실제 활용 가능한 프로그래밍 능력까지 갈 수 있도록 도와주는 강의입니다."}
+                  </p>
+                </div>
               </div>
-              <div className="space-y-3 h-56 overflow-auto pr-1">
-                {isLatestQuestionsLoading ? (
-                  <div className="text-sm text-gray-500 py-6 text-center">
-                    질문을 불러오는 중입니다...
-                  </div>
-                ) : latestQuestionsError ? (
-                  <div className="text-sm text-red-500 py-6 text-center">
-                    {latestQuestionsError}
-                  </div>
-                ) : latestQuestions.length === 0 ? (
-                  <div className="text-sm text-gray-500 py-6 text-center">
-                    아직 질문이 없습니다.
-                  </div>
-                ) : (
-                  latestQuestions.map((item) => (
-                    <div
-                      key={item._id}
-                      className="border border-gray-200 rounded-lg p-3 bg-white/60"
+              <div>
+                <div className="flex items-center justify-between gap-2 border-t border-gray-200 pt-2 mb-3">
+                  <h4 className="text-md font-semibold text-gray-900 whitespace-nowrap flex-shrink-0">
+                    최신 질문
+                  </h4>
+                  {weeks.length > 0 && (
+                    <select
+                      className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white flex-shrink min-w-0 max-w-full"
+                      value={selectedQuestionClassId ?? ""}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        setSelectedQuestionClassId(
+                          Number.isNaN(value) ? null : value
+                        );
+                      }}
                     >
-                      <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 mb-1">
-                        <span className="truncate flex-shrink-0">
-                          {item.author?.name || "익명"}
-                        </span>
-                        <span className="whitespace-nowrap flex-shrink-0">
-                          {formatQuestionTimestamp(item.timestamp)}
-                        </span>
-                      </div>
-                      <div className="text-sm font-medium text-gray-900 break-words">
-                        Q. {item.text}
-                      </div>
+                      {weeks.map((week) => (
+                        <option key={week.week} value={week.week}>
+                          {week.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="space-y-3 h-56 overflow-auto pr-1">
+                  {isLatestQuestionsLoading ? (
+                    <div className="text-sm text-gray-500 py-6 text-center">
+                      질문을 불러오는 중입니다...
                     </div>
-                  ))
-                )}
+                  ) : latestQuestionsError ? (
+                    <div className="text-sm text-red-500 py-6 text-center">
+                      {latestQuestionsError}
+                    </div>
+                  ) : latestQuestions.length === 0 ? (
+                    <div className="text-sm text-gray-500 py-6 text-center">
+                      아직 질문이 없습니다.
+                    </div>
+                  ) : (
+                    latestQuestions.map((item) => (
+                      <div
+                        key={item._id}
+                        className="border border-gray-200 rounded-lg p-3 bg-white/60"
+                      >
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 mb-1">
+                          <span className="truncate flex-shrink-0">
+                            {item.author?.name || "익명"}
+                          </span>
+                          <span className="whitespace-nowrap flex-shrink-0">
+                            {formatQuestionTimestamp(item.timestamp)}
+                          </span>
+                        </div>
+                        <div className="text-sm font-medium text-gray-900 break-words">
+                          Q. {item.text}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
