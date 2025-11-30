@@ -17,7 +17,7 @@ export function isScreenShareTrack(track: MediaStreamTrack): boolean {
       displaySurface === "monitor" ||
       displaySurface === "window" ||
       displaySurface === "browser" ||
-      (width && height && width > 1280 && height > 720)
+      (typeof width === "number" && typeof height === "number" && width > 1280 && height > 720)
     );
   } catch {
     const label = track.label || "";

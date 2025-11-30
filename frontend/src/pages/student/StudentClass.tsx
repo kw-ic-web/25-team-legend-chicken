@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Download, ChevronDown, ChevronUp, Users } from "lucide-react";
-import { getClasses, getLectureDetail } from "../../api/student";
+import { getClasses, getLectureDetail, getClassMaterials } from "../../api/student";
 import Toast from "../../components/common/Toast";
 import { getBaseUrl, apiFetch } from "../../api/auth/client";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
@@ -433,33 +433,17 @@ const StudentClass: React.FC = () => {
     if (!course.id) return;
     setIsPdfLoadingFor(classId);
     try {
-      const token = localStorage.getItem("lecq.token");
-      if (!token) {
-        throw new Error("인증 토큰이 필요합니다.");
-      }
-      const resp = await apiFetch<{
-        lecture_id: string;
-        lecture_name: string;
-        class_id: number;
-        class_title: string;
-        pdf_count: number;
-        pdfs: string[];
-      }>(`/api/professor/lectures/${course.id}/classes/${classId}/pdf`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const resp = await getClassMaterials(course.id, classId);
 
-      const materials = resp.pdfs || [];
+      const materials = resp.materials || [];
       if (materials.length === 0) {
         setToast({ message: "자료가 없습니다.", type: "error" });
         return;
       }
 
       const firstMaterial = materials[0];
-      const resolvedUrl = resolveUrl(firstMaterial);
-      const fileName = firstMaterial.split("/").pop() || "자료";
+      const resolvedUrl = resolveUrl(firstMaterial.url);
+      const fileName = firstMaterial.originalName || (firstMaterial.url ? firstMaterial.url.split("/").pop() || "자료" : "자료");
 
       // 파일 크기 가져오기
       let fileSize = "파일";
@@ -496,29 +480,13 @@ const StudentClass: React.FC = () => {
       if (!course.id) return;
       setIsPdfLoadingFor(classId);
       try {
-        const token = localStorage.getItem("lecq.token");
-        if (!token) {
-          throw new Error("인증 토큰이 필요합니다.");
-        }
-        const resp = await apiFetch<{
-          lecture_id: string;
-          lecture_name: string;
-          class_id: number;
-          class_title: string;
-          pdf_count: number;
-          pdfs: string[];
-        }>(`/api/professor/lectures/${course.id}/classes/${classId}/pdf`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const resp = await getClassMaterials(course.id, classId);
 
-        const newItems = (resp.pdfs || [])
-          .filter((pdfUrl) => pdfUrl && typeof pdfUrl === "string")
-          .map((pdfUrl) => {
-            const url = resolveUrl(pdfUrl);
-            const name = url ? url.split("/").pop() || "자료" : "자료";
+        // materials 배열에서 정보 추출
+        const newItems = (resp.materials || [])
+          .map((material) => {
+            const url = resolveUrl(material.url);
+            const name = material.originalName || (url ? url.split("/").pop() || "자료" : "자료");
             return { name, size: "파일", url, originalName: name };
           })
           .filter((item) => item.url); // 유효한 URL만 유지
