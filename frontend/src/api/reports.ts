@@ -73,6 +73,27 @@ export interface ClassAnalysisReport {
   updatedAt?: string;
 }
 
+// ✅ KPIs 전용 API - 빠른 응답을 위한 별도 엔드포인트
+export async function getClassAnalysisKpis(
+  lectureId: string,
+  classId: number
+): Promise<ClassAnalysisKpis> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<ClassAnalysisKpis>(
+    `/api/reports/${lectureId}/classes/${classId}/kpis`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
 export async function getLatestClassAnalysisReport(
   lectureId: string,
   classId: number
