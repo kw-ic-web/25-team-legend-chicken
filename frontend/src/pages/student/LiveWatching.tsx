@@ -695,7 +695,16 @@ const LiveWatching: React.FC = () => {
     }
 
     // 메시지가 비어있거나 필수 정보가 없으면 리턴
-    if (!chatMessage.trim() || !lectureInfo) {
+    if (!chatMessage.trim() || !lectureInfo || !chatSocketRef.current) {
+      return;
+    }
+
+    // Socket.io 연결 확인
+    if (!chatSocketRef.current.connected) {
+      setToast({
+        message: "서버에 연결되지 않았습니다. 잠시 후 다시 시도해주세요.",
+        type: "error",
+      });
       return;
     }
 
@@ -710,13 +719,24 @@ const LiveWatching: React.FC = () => {
     lastMessageTimeRef.current = now;
 
     try {
-      await sendChatMessage({
+      // Socket.io를 통해 실시간 전송 (백엔드에서 DB 저장도 함께 처리)
+      chatSocketRef.current.emit("chat:send", {
+        message: messageText,
+      });
+      
+      // 메시지 입력 필드 비우기
+      setChatMessage("");
+      
+      // DB 저장을 위해 REST API도 호출 (선택적, 백엔드에서 처리하도록 변경 가능)
+      // 실시간 전송이 우선이므로 에러가 나도 무시
+      sendChatMessage({
         lecture_id: lectureInfo.lectureId,
         class_id: lectureInfo.classId,
         live_id: lectureInfo.liveId ?? null,
         text: messageText,
+      }).catch((err) => {
+        console.warn("채팅 DB 저장 실패 (실시간 전송은 성공):", err);
       });
-      setChatMessage("");
     } catch (error) {
       console.error("메시지 전송 실패:", error);
       setToast({
