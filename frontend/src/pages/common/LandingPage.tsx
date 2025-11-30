@@ -9,6 +9,9 @@ import {
   Target,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import screen1 from "../../assets/screen1.png";
+import screen2 from "../../assets/screen2.png";
+import screen3 from "../../assets/screen3.png";
 
 const LandingPage: React.FC = () => {
   const sectionRefs = useRef<HTMLDivElement[]>([]);
@@ -325,11 +328,21 @@ const LandingPage: React.FC = () => {
                     실시간 참여와 데이터 분석으로 강의가 더 스마트해집니다.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                    {Array.from({ length: 3 }).map((_, i) => (
+                    {[
+                      { src: screen1, alt: "스크린샷 1" },
+                      { src: screen2, alt: "스크린샷 2" },
+                      { src: screen3, alt: "스크린샷 3" },
+                    ].map((img, i) => (
                       <div
                         key={i}
-                        className="bg-gray-200 rounded-md h-28 md:h-36"
-                      ></div>
+                        className="bg-gray-200 rounded-md h-28 md:h-36 overflow-hidden"
+                      >
+                        <img
+                          src={img.src}
+                          alt={img.alt}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8 text-sm md:text-base text-gray-700">
