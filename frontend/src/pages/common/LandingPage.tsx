@@ -271,46 +271,62 @@ const LandingPage: React.FC = () => {
               {/* 위: 특징 4개 */}
               <div className="flex-1 flex items-center">
                 <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
                     {[
                       {
                         title: "자동 필기 요약",
                         desc: "강의 내용을 AI로 요약",
                         icon: FileText,
+                        color: "blue",
                       },
                       {
                         title: "실시간 질문·AI 답변",
                         desc: "모르는 건 바로 해결",
                         icon: MessageCircle,
+                        color: "green",
                       },
                       {
                         title: "데이터 기반 학습 분석",
                         desc: "학습 패턴 시각화",
                         icon: BarChart3,
+                        color: "purple",
                       },
                       {
                         title: "강의자 대시보드 지원",
                         desc: "진행도와 이슈 관리",
                         icon: Target,
+                        color: "orange",
                       },
                     ].map((item, idx) => {
                       const IconComponent = item.icon;
+                      const colorClasses = {
+                        blue: "bg-blue-50 border-blue-100 text-blue-600",
+                        green: "bg-green-50 border-green-100 text-green-600",
+                        purple:
+                          "bg-purple-50 border-purple-100 text-purple-600",
+                        orange:
+                          "bg-orange-50 border-orange-100 text-orange-600",
+                      };
+                      const iconBgClass =
+                        colorClasses[item.color as keyof typeof colorClasses] ||
+                        colorClasses.blue;
+
                       return (
                         <div
                           key={idx}
-                          className="flex items-start md:items-center md:flex-col gap-4 md:gap-3"
+                          className="group relative bg-white rounded-xl p-6 border border-gray-100 hover:border-gray-200 hover:shadow-lg transition-all duration-300 flex flex-col items-center text-center"
                         >
-                          <div className="shrink-0 w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mx-auto md:mx-auto">
-                            <IconComponent className="w-6 h-6" />
+                          <div
+                            className={`w-16 h-16 rounded-2xl ${iconBgClass} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-sm`}
+                          >
+                            <IconComponent className="w-8 h-8" />
                           </div>
-                          <div className="text-left md:text-center">
-                            <div className="text-base font-semibold text-gray-900 mb-2">
-                              {item.title}
-                            </div>
-                            <div className="text-sm text-gray-500 leading-relaxed">
-                              {item.desc}
-                            </div>
-                          </div>
+                          <h3 className="text-lg font-bold text-gray-900 mb-2">
+                            {item.title}
+                          </h3>
+                          <p className="text-sm text-gray-600 leading-relaxed">
+                            {item.desc}
+                          </p>
                         </div>
                       );
                     })}
@@ -335,12 +351,13 @@ const LandingPage: React.FC = () => {
                     ].map((img, i) => (
                       <div
                         key={i}
-                        className="bg-gray-200 rounded-md h-28 md:h-36 overflow-hidden"
+                        className="bg-gray-100 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-200 flex items-center justify-center"
+                        style={{ aspectRatio: "16/9", minHeight: "200px" }}
                       >
                         <img
                           src={img.src}
                           alt={img.alt}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
                       </div>
                     ))}
@@ -348,11 +365,11 @@ const LandingPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8 text-sm md:text-base text-gray-700">
                     <div>
                       <div className="font-bold mb-2 md:mb-3 text-lg">
-                        현장 참여도 실시간 확인
+                        교안 필기 자동 감지
                       </div>
                       <p className="text-gray-500 leading-relaxed">
-                        학생들의 참여도와 이해도를 대시보드에서 즉시 확인할 수
-                        있어요.
+                        AI가 교안 필기를 자동으로 감지하여 학습 집중도를
+                        향상시켜요.
                       </p>
                     </div>
                     <div>
