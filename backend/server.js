@@ -63,6 +63,10 @@ const server = http.createServer(app);
 const io = attachSocket(server, process.env.CORS_ORIGIN || "*");
 app.set("io", io);
 
-server.listen(PORT, () => {
+// 0.0.0.0으로 바인딩하여 모든 네트워크 인터페이스에서 접근 가능하게 함
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Lec-Q 서버가 ${PORT}번 포트에서 실행 중입니다.`);
+  console.log(`   로컬 접속: http://localhost:${PORT}`);
+  console.log(`   네트워크 접속: http://0.0.0.0:${PORT}`);
+  console.log(`   다른 컴퓨터에서 접근하려면 이 컴퓨터의 IP 주소를 사용하세요.`);
 });

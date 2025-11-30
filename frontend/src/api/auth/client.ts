@@ -1,11 +1,36 @@
 export const getBaseUrl = (): string => {
   const fromEnv = (import.meta as unknown as { env?: Record<string, string> })
     .env?.VITE_BACKEND_API_KEY as string | undefined;
-  const base =
-    fromEnv && fromEnv.trim().length > 0 ? fromEnv : "localhost:8080";
-  // allow http(s) prefix omitted values
-  if (base.startsWith("http://") || base.startsWith("https://")) return base;
+  
+  // 환경변수가 있으면 사용
+  if (fromEnv && fromEnv.trim().length > 0) {
+    const base = fromEnv.trim();
+    if (base.startsWith("http://") || base.startsWith("https://")) {
+      return base;
+    }
   return `http://${base}`;
+  }
+  
+  // 개발 환경: 현재 호스트의 포트 8080 사용 (다른 컴퓨터에서 접근 가능)
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    // localhost나 127.0.0.1인 경우, 환경변수나 쿼리 파라미터에서 백엔드 호스트 가져오기
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      // URL 쿼리 파라미터에서 backendHost 가져오기 (예: ?backendHost=192.168.0.100)
+      const urlParams = new URLSearchParams(window.location.search);
+      const backendHost = urlParams.get("backendHost");
+      if (backendHost) {
+        return `http://${backendHost}:8080`;
+      }
+      // 기본값: localhost (같은 컴퓨터에서 실행)
+      return "http://localhost:8080";
+    }
+    // 다른 컴퓨터에서 접속한 경우, 해당 호스트의 포트 8080 사용
+    return `http://${hostname}:8080`;
+  }
+  
+  // 기본값 (SSR 등)
+  return "http://localhost:8080";
 };
 
 // 토큰 만료 시 처리 함수

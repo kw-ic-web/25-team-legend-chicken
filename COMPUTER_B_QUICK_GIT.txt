@@ -1,0 +1,26 @@
+==========================================
+컴퓨터 B에서 Git 설정 (간단 버전)
+==========================================
+
+처음 받는 경우:
+  git clone git@github.com:kw-ic-web/25-team-legend-chicken.git
+  cd 25-team-legend-chicken
+  git checkout bhw
+
+이미 받은 경우:
+  cd 25-team-legend-chicken
+  git fetch origin
+  git checkout bhw
+  git pull origin bhw
+
+==========================================
+매일 작업 시작 전:
+==========================================
+  git pull origin bhw
+
+작업 후:
+  git add .
+  git commit -m "작업 내용"
+  git push origin bhw
+
+==========================================
