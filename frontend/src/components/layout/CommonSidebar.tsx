@@ -19,12 +19,14 @@ interface CommonSidebarProps {
     title: string;
     time: string;
     countdown: string;
+    lectureId?: string;
   }>;
   myLectures?: Array<{
     title: string;
     participants?: number;
     subtitle?: string;
     meta?: string;
+    lectureId?: string;
   }>;
   additionalContent?: React.ReactNode;
   onStartBroadcast?: () => void;
@@ -95,7 +97,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
               내 강의
             </h3>
             <div
-              className={`space-y-3 ${mergedCount > 3 ? "max-h-32 overflow-y-auto" : ""}`}
+              className={`space-y-3 ${mergedCount > 4 ? "max-h-64 overflow-y-auto pr-2" : ""}`}
             >
               {(() => {
                 // 1) 두 리스트 병합 (중복 제목 제거, 곧 다가올 강의 우선)
@@ -104,6 +106,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
                   countdown?: string;
                   time?: string;
                   participants?: number;
+                  lectureId?: string;
                 }> = [];
                 const indexByTitle = new Map<string, number>();
                 for (const up of upcomingLectures) {
@@ -112,6 +115,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
                     title: up.title,
                     countdown: up.countdown,
                     time: up.time,
+                    lectureId: up.lectureId,
                   });
                   indexByTitle.set(up.title, merged.length - 1);
                 }
@@ -121,48 +125,67 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
                     merged[idx] = {
                       ...merged[idx],
                       participants: mine.participants,
+                      lectureId: mine.lectureId || merged[idx].lectureId,
                     };
                   } else {
                     merged.push({
                       title: mine.title,
                       participants: mine.participants,
+                      lectureId: mine.lectureId,
                     });
                     indexByTitle.set(mine.title, merged.length - 1);
                   }
                 }
                 // 2) 렌더링
-                return merged.map((item, idx) => (
-                  <div key={`${item.title}-${idx}`} className="">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2 min-w-0">
-                        {(item.countdown && item.time) ||
-                        typeof item.participants !== "number" ? (
-                          <Clock className="w-4 h-4 text-gray-400" />
-                        ) : (
-                          <Users className="w-4 h-4 text-gray-400" />
-                        )}
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {item.title}
-                        </p>
-                      </div>
-                      {typeof item.participants === "number" && (
-                        <div className="flex items-center space-x-1">
-                          <Users className="w-4 h-4 text-gray-400" />
-                          <span className="text-xs text-gray-500">
-                            {item.participants}
-                          </span>
+                return merged.map((item, idx) => {
+                  const lectureId = item.lectureId;
+                  const content = (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          {(item.countdown && item.time) ||
+                          typeof item.participants !== "number" ? (
+                            <Clock className="w-4 h-4 text-gray-400" />
+                          ) : (
+                            <Users className="w-4 h-4 text-gray-400" />
+                          )}
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {item.title}
+                          </p>
                         </div>
-                      )}
+                        {typeof item.participants === "number" && (
+                          <div className="flex items-center space-x-1">
+                            <Users className="w-4 h-4 text-gray-400" />
+                            <span className="text-xs text-gray-500">
+                              {item.participants}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-gray-500 mt-0.5">
+                        <span>
+                          {item.countdown && item.time
+                            ? `${item.countdown}  ${item.time}`
+                            : ""}
+                        </span>
+                      </div>
+                    </>
+                  );
+
+                  return lectureId ? (
+                    <Link
+                      key={`${item.title}-${idx}`}
+                      to={`/professor/courses/${lectureId}`}
+                      className="block hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors cursor-pointer"
+                    >
+                      {content}
+                    </Link>
+                  ) : (
+                    <div key={`${item.title}-${idx}`} className="">
+                      {content}
                     </div>
-                    <div className="flex items-center justify-between text-xs text-gray-500 mt-0.5">
-                      <span>
-                        {item.countdown && item.time
-                          ? `${item.countdown}  ${item.time}`
-                          : ""}
-                      </span>
-                    </div>
-                  </div>
-                ));
+                  );
+                });
               })()}
             </div>
           </div>
