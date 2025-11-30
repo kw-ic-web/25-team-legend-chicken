@@ -293,7 +293,7 @@ const QuestionCard: React.FC<{
             </>
           ) : (
             <>
-              상세보기 <ChevronDown className="h-4 w-4" />
+              답변보기 <ChevronDown className="h-4 w-4" />
             </>
           )}
         </button>

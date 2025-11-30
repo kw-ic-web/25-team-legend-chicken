@@ -34,12 +34,17 @@ const ProfessorSidebar: React.FC = () => {
     profileImage: undefined as string | undefined,
   });
 
-  // 곧 다가올 강의
+  // 곧 다가올 강의 (원본 데이터 저장용)
+  const [lecturesData, setLecturesData] = useState<Lecture[]>([]);
+  
+  // 곧 다가올 강의 (실시간 계산된 데이터)
   const [upcomingLectures, setUpcomingLectures] = useState<
     Array<{
       title: string;
       time: string;
       countdown: string;
+      lectureId: string;
+      classDate: Date; // 원본 날짜 저장
     }>
   >([]);
 
@@ -108,38 +113,56 @@ const ProfessorSidebar: React.FC = () => {
             lectureId: lecture.lecture_id,
           });
 
-          // 곧 다가올 강의 찾기 (classes의 첫 번째 날짜 기준)
+          // 곧 다가올 강의 찾기 (모든 클래스 확인하여 가장 가까운 다음 강의 찾기)
           if (lecture.classes && lecture.classes.length > 0) {
-            const firstClass = lecture.classes[0];
-            if (firstClass.date) {
-              const classDate = new Date(firstClass.date);
-              if (classDate > now) {
-                const diffTime = classDate.getTime() - now.getTime();
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                if (diffDays <= 7) {
-                  // 7일 이내 강의만 표시
-                  const hours = classDate.getHours();
-                  const minutes = classDate.getMinutes();
-                  const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
-
-                  upcoming.push({
-                    title: lecture.name,
-                    time: timeStr,
-                    countdown: diffDays === 0 ? "오늘" : `D-${diffDays}`,
-                    lectureId: lecture.lecture_id,
-                  });
+            let closestClass: { date: Date; lectureId: string; title: string } | null = null;
+            
+            // 모든 클래스 중에서 가장 가까운 미래 강의 찾기
+            lecture.classes.forEach((cls) => {
+              if (cls.date) {
+                const classDate = new Date(cls.date);
+                if (classDate > now) {
+                  if (!closestClass || classDate < closestClass.date) {
+                    closestClass = {
+                      date: classDate,
+                      lectureId: lecture.lecture_id,
+                      title: lecture.name,
+                    };
+                  }
                 }
+              }
+            });
+
+            // 가장 가까운 강의가 7일 이내인 경우 추가
+            if (closestClass) {
+              // 날짜만 비교하여 정확한 일수 계산
+              const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const classDateOnly = new Date(closestClass.date.getFullYear(), closestClass.date.getMonth(), closestClass.date.getDate());
+              const diffDays = Math.ceil((classDateOnly.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
+
+              if (diffDays >= 0 && diffDays <= 7) {
+                const hours = closestClass.date.getHours();
+                const minutes = closestClass.date.getMinutes();
+                const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+
+                upcoming.push({
+                  title: closestClass.title,
+                  time: timeStr,
+                  countdown: `D-${diffDays}`,
+                  lectureId: closestClass.lectureId,
+                  classDate: closestClass.date, // 원본 날짜 저장
+                });
               }
             }
           }
         });
+        
+        // 강의 데이터 저장 (실시간 업데이트용)
+        setLecturesData(lecturesResponse.lectures);
 
         // 날짜순으로 정렬 (가까운 날짜가 먼저)
         upcoming.sort((a, b) => {
-          const aDays = parseInt(a.countdown.replace(/[^0-9]/g, "") || "999");
-          const bDays = parseInt(b.countdown.replace(/[^0-9]/g, "") || "999");
-          return aDays - bDays;
+          return a.classDate.getTime() - b.classDate.getTime();
         });
 
         setUpcomingLectures(upcoming.slice(0, 3)); // 최대 3개만 표시
@@ -164,6 +187,61 @@ const ProfessorSidebar: React.FC = () => {
       window.removeEventListener("myinfo:update", handler);
     };
   }, [fetchData]);
+
+  // 실시간 카운트다운 업데이트 (10초마다)
+  useEffect(() => {
+    if (upcomingLectures.length === 0) return;
+
+    const updateCountdown = () => {
+      const now = new Date();
+      setUpcomingLectures((prev) => {
+        const updated = prev
+          .map((lecture) => {
+            const classDate = lecture.classDate;
+            if (!classDate || classDate <= now) {
+              // 이미 지난 강의는 제외
+              return null;
+            }
+
+            // 날짜만 비교하여 정확한 일수 계산
+            const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const classDateOnly = new Date(classDate.getFullYear(), classDate.getMonth(), classDate.getDate());
+            const diffDays = Math.ceil((classDateOnly.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            // 지난 강의나 7일을 넘어가면 제외
+            if (diffDays < 0 || diffDays > 7) {
+              return null;
+            }
+
+            const hours = classDate.getHours();
+            const minutes = classDate.getMinutes();
+            const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+
+            return {
+              ...lecture,
+              countdown: `D-${diffDays}`,
+              time: timeStr,
+            };
+          })
+          .filter((lecture): lecture is NonNullable<typeof lecture> => lecture !== null)
+          .sort((a, b) => a.classDate.getTime() - b.classDate.getTime())
+          .slice(0, 3);
+        
+        return updated;
+      });
+    };
+
+    // 즉시 한 번 업데이트
+    updateCountdown();
+
+    // 10초마다 업데이트 (더 자주 업데이트하면 실시간 느낌)
+    const interval = setInterval(updateCountdown, 10000);
+
+    return () => {
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 빈 배열로 설정하여 한 번만 실행
 
   return (
     <>

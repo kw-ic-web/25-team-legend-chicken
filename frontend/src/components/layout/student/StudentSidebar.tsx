@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import CommonSidebar from "../CommonSidebar";
 import { joinLecture, getMyLectures } from "../../../api/student";
+import { getLectures, type Lecture } from "../../../api/professor";
 import { getMyInfo } from "../../../api/auth";
 import { getBaseUrl } from "../../../api/auth/client";
 import { X, BookOpen, CheckCircle, AlertCircle } from "lucide-react";
@@ -32,15 +33,27 @@ const StudentSidebar: React.FC = () => {
     }>
   >([]);
 
+  // 곧 다가올 강의
+  const [upcomingLectures, setUpcomingLectures] = useState<
+    Array<{
+      title: string;
+      time: string;
+      countdown: string;
+      lectureId: string;
+      classDate: Date;
+    }>
+  >([]);
+
   const fetchData = useCallback(async () => {
     try {
       // 학생 정보와 강의 목록을 병렬로 조회
+      // getLectures API는 학생도 사용 가능하고 classes 정보를 포함함
       const [myInfoResponse, lecturesResponse] = await Promise.all([
         getMyInfo().catch((error) => {
           console.error("내 정보 조회 실패:", error);
           return null;
         }),
-        getMyLectures().catch((error) => {
+        getLectures().catch((error) => {
           console.error("강의 목록 조회 실패:", error);
           return null;
         }),
@@ -65,15 +78,81 @@ const StudentSidebar: React.FC = () => {
 
       // 강의 목록 처리
       if (lecturesResponse?.lectures) {
-        const lecturesList = lecturesResponse.lectures.map((lecture) => ({
-          title: lecture.name,
-          subtitle: lecture.professor_name
-            ? `${lecture.professor_name} 교수님`
-            : undefined,
-          meta: lecture.schedule,
-          lectureId: lecture.lecture_id, // 링크를 위한 lectureId 추가
-        }));
-        setMyLectures(lecturesList); // 모든 강의 표시 (스크롤 가능)
+        const now = new Date();
+        const upcoming: Array<{
+          title: string;
+          time: string;
+          countdown: string;
+          lectureId: string;
+          classDate: Date;
+        }> = [];
+        const myLecturesList: Array<{
+          title: string;
+          subtitle?: string;
+          meta?: string;
+          lectureId: string;
+        }> = [];
+
+        lecturesResponse.lectures.forEach((lecture: Lecture) => {
+          // 내 강의 목록에 추가
+          myLecturesList.push({
+            title: lecture.name,
+            subtitle: lecture.professor_name
+              ? `${lecture.professor_name} 교수님`
+              : undefined,
+            meta: lecture.schedule,
+            lectureId: lecture.lecture_id,
+          });
+
+          // 곧 다가올 강의 찾기 (모든 클래스 확인하여 가장 가까운 다음 강의 찾기)
+          if (lecture.classes && lecture.classes.length > 0) {
+            let closestClass: { date: Date; lectureId: string; title: string } | null = null;
+            
+            // 모든 클래스 중에서 가장 가까운 미래 강의 찾기
+            lecture.classes.forEach((cls) => {
+              if (cls.date) {
+                const classDate = new Date(cls.date);
+                if (classDate > now) {
+                  if (!closestClass || classDate < closestClass.date) {
+                    closestClass = {
+                      date: classDate,
+                      lectureId: lecture.lecture_id,
+                      title: lecture.name,
+                    };
+                  }
+                }
+              }
+            });
+
+            // 가장 가까운 강의가 7일 이내인 경우 추가
+            if (closestClass) {
+              // 날짜만 비교하여 정확한 일수 계산
+              const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const classDateOnly = new Date(closestClass.date.getFullYear(), closestClass.date.getMonth(), closestClass.date.getDate());
+              const diffDays = Math.ceil((classDateOnly.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
+
+              if (diffDays >= 0 && diffDays <= 7) {
+                const hours = closestClass.date.getHours();
+                const minutes = closestClass.date.getMinutes();
+                const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+
+                upcoming.push({
+                  title: closestClass.title,
+                  time: timeStr,
+                  countdown: `D-${diffDays}`,
+                  lectureId: closestClass.lectureId,
+                  classDate: closestClass.date,
+                });
+              }
+            }
+          }
+        });
+        
+        // 날짜순으로 정렬 (가까운 날짜가 먼저)
+        upcoming.sort((a, b) => a.classDate.getTime() - b.classDate.getTime());
+        
+        setUpcomingLectures(upcoming.slice(0, 3)); // 최대 3개만 표시
+        setMyLectures(myLecturesList); // 모든 강의 표시 (스크롤 가능)
       }
     } catch (error) {
       console.error("데이터 로드 오류:", error);
@@ -106,6 +185,61 @@ const StudentSidebar: React.FC = () => {
       window.removeEventListener("myinfo:update", handler);
     };
   }, [fetchData]);
+
+  // 실시간 카운트다운 업데이트 (10초마다)
+  useEffect(() => {
+    if (upcomingLectures.length === 0) return;
+
+    const updateCountdown = () => {
+      const now = new Date();
+      setUpcomingLectures((prev) => {
+        const updated = prev
+          .map((lecture) => {
+            const classDate = lecture.classDate;
+            if (!classDate || classDate <= now) {
+              // 이미 지난 강의는 제외
+              return null;
+            }
+
+            // 날짜만 비교하여 정확한 일수 계산
+            const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const classDateOnly = new Date(classDate.getFullYear(), classDate.getMonth(), classDate.getDate());
+            const diffDays = Math.ceil((classDateOnly.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            // 지난 강의나 7일을 넘어가면 제외
+            if (diffDays < 0 || diffDays > 7) {
+              return null;
+            }
+
+            const hours = classDate.getHours();
+            const minutes = classDate.getMinutes();
+            const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+
+            return {
+              ...lecture,
+              countdown: `D-${diffDays}`,
+              time: timeStr,
+            };
+          })
+          .filter((lecture): lecture is NonNullable<typeof lecture> => lecture !== null)
+          .sort((a, b) => a.classDate.getTime() - b.classDate.getTime())
+          .slice(0, 3);
+        
+        return updated;
+      });
+    };
+
+    // 즉시 한 번 업데이트
+    updateCountdown();
+
+    // 10초마다 업데이트
+    const interval = setInterval(updateCountdown, 10000);
+
+    return () => {
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 빈 배열로 설정하여 한 번만 실행
 
   const handleJoinLecture = async () => {
     if (!lectureId.trim()) {
@@ -154,6 +288,7 @@ const StudentSidebar: React.FC = () => {
         userType="student"
         userInfo={studentInfo}
         myLectures={myLectures}
+        upcomingLectures={upcomingLectures}
         additionalContent={
           <div className="p-6 border-t border-gray-200">
             <button

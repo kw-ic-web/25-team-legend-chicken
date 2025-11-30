@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Users, Clock, BookOpen, Play } from "lucide-react";
 
@@ -20,6 +20,7 @@ interface CommonSidebarProps {
     time: string;
     countdown: string;
     lectureId?: string;
+    classDate?: Date;
   }>;
   myLectures?: Array<{
     title: string;
@@ -41,6 +42,17 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
   additionalContent,
   onStartBroadcast,
 }) => {
+  // 실시간 카운트다운을 위한 현재 시간 상태
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    // 1초마다 현재 시간 업데이트 (실시간 카운트다운)
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
   // 병합된 강의 개수 계산 (중복 제거 후)
   const mergedCount = React.useMemo(() => {
     const seen = new Set<string>();
@@ -199,15 +211,61 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
           {upcomingLectures && upcomingLectures.length > 0 && (
             <div className="mb-2 text-center">
               {(() => {
-                const toNum = (d: string) => {
-                  const m = d.match(/\d+/);
-                  return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
-                };
-                const sorted = [...upcomingLectures].sort((a, b) => {
+                // 실시간으로 가장 가까운 강의 계산
+                const now = currentTime;
+                const validLectures = upcomingLectures
+                  .map((lecture) => {
+                    const classDate = lecture.classDate;
+                    if (!classDate) {
+                      // classDate가 없으면 기존 countdown 사용
+                      return lecture;
+                    }
+                    
+                    if (classDate <= now) {
+                      return null; // 지난 강의는 제외
+                    }
+
+                    // 날짜만 비교하여 정확한 일수 계산
+                    const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const classDateOnly = new Date(classDate.getFullYear(), classDate.getMonth(), classDate.getDate());
+                    const diffDays = Math.ceil((classDateOnly.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays < 0 || diffDays > 7) {
+                      return null; // 지난 강의나 7일 넘어가면 제외
+                    }
+
+                    const hours = classDate.getHours();
+                    const minutes = classDate.getMinutes();
+                    const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+
+                    return {
+                      ...lecture,
+                      countdown: `D-${diffDays}`,
+                      time: timeStr,
+                      classDate: classDate,
+                    };
+                  })
+                  .filter((lecture): lecture is NonNullable<typeof lecture> => lecture !== null);
+
+                if (validLectures.length === 0) {
+                  return null;
+                }
+
+                // 날짜 순으로 정렬
+                const sorted = validLectures.sort((a, b) => {
+                  if (a.classDate && b.classDate) {
+                    return a.classDate.getTime() - b.classDate.getTime();
+                  }
+                  // fallback
+                  const toNum = (d: string) => {
+                    const m = d.match(/\d+/);
+                    return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
+                  };
                   const dn = toNum(a.countdown) - toNum(b.countdown);
                   if (dn !== 0) return dn;
                   return a.time.localeCompare(b.time);
                 });
+
                 const next = sorted[0];
                 return (
                   <>
@@ -218,7 +276,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
                       {next.countdown} · {next.time}
                     </div>
                     <div className="text-sm font-semibold text-gray-900 truncate">
-                      “{next.title}”
+                      "{next.title}"
                     </div>
                   </>
                 );
@@ -302,6 +360,85 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* 학생용 "가장 임박한 강의" 표시 */}
+      {userType === "student" && upcomingLectures && upcomingLectures.length > 0 && (
+        <div className="px-6 pt-6 pb-3 border-b border-gray-200">
+          <div className="mb-2 text-center">
+            {(() => {
+              // 실시간으로 가장 가까운 강의 계산
+              const now = currentTime;
+              const validLectures = upcomingLectures
+                .map((lecture) => {
+                  const classDate = lecture.classDate;
+                  if (!classDate) {
+                    // classDate가 없으면 기존 countdown 사용
+                    return lecture;
+                  }
+                  
+                  if (classDate <= now) {
+                    return null; // 지난 강의는 제외
+                  }
+
+                  // 날짜만 비교하여 정확한 일수 계산
+                  const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  const classDateOnly = new Date(classDate.getFullYear(), classDate.getMonth(), classDate.getDate());
+                  const diffDays = Math.ceil((classDateOnly.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
+                  
+                  if (diffDays < 0 || diffDays > 7) {
+                    return null; // 지난 강의나 7일 넘어가면 제외
+                  }
+
+                  const hours = classDate.getHours();
+                  const minutes = classDate.getMinutes();
+                  const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+
+                  return {
+                    ...lecture,
+                    countdown: `D-${diffDays}`,
+                    time: timeStr,
+                    classDate: classDate,
+                  };
+                })
+                .filter((lecture): lecture is NonNullable<typeof lecture> => lecture !== null);
+
+              if (validLectures.length === 0) {
+                return null;
+              }
+
+              // 날짜 순으로 정렬
+              const sorted = validLectures.sort((a, b) => {
+                if (a.classDate && b.classDate) {
+                  return a.classDate.getTime() - b.classDate.getTime();
+                }
+                // fallback
+                const toNum = (d: string) => {
+                  const m = d.match(/\d+/);
+                  return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
+                };
+                const dn = toNum(a.countdown) - toNum(b.countdown);
+                if (dn !== 0) return dn;
+                return a.time.localeCompare(b.time);
+              });
+
+              const next = sorted[0];
+              return (
+                <>
+                  <div className="text-[11px] text-red-700 font-semibold mb-0.5">
+                    가장 임박한 강의
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {next.countdown} · {next.time}
+                  </div>
+                  <div className="text-sm font-semibold text-gray-900 truncate">
+                    "{next.title}"
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
