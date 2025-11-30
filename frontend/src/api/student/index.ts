@@ -215,3 +215,38 @@ export async function getLiveStatus(
   );
 }
 
+export type GetClassMaterialsResponse = {
+  success: boolean;
+  lecture_id: string;
+  lecture_name: string;
+  class_id: number;
+  class_title: string;
+  pdf_count: number;
+  pdfs: string[];
+  materials: Array<{
+    fileId?: string;
+    url: string;
+    originalName: string;
+  }>;
+};
+
+export async function getClassMaterials(
+  lectureId: string,
+  classId: number
+): Promise<GetClassMaterialsResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  return apiFetch<GetClassMaterialsResponse>(
+    `/api/student/lectures/${lectureId}/classes/${classId}/materials`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
