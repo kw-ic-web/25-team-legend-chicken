@@ -71,8 +71,15 @@ router.post("/", authenticateToken, rateLimitOnePerSecond, async (req, res) => {
     // 선택: socket.io 방송 (서버에 io 세팅 시에만)
     const io = req.app.get("io");
     if (io) {
-      const room = `lec:${lecture_id}:cls:${class_id}:live:${live_id ?? "none"}`;
-      io.to(room).emit("chat:message", {
+      // Socket.io의 live:join과 동일한 룸 이름 형식 사용
+      const baseRoom = `lec:${lecture_id}:cls:${class_id}`;
+      const liveRoom =
+        live_id === null || typeof live_id === "undefined"
+          ? `${baseRoom}:live:none`
+          : `${baseRoom}:live:${live_id}`;
+      
+      // baseRoom과 liveRoom 모두에 브로드캐스트 (live:join에서 두 룸 모두 join하므로)
+      const messagePayload = {
         _id: saved._id,
         lecture_id,
         class_id: Number(class_id),
@@ -81,7 +88,15 @@ router.post("/", authenticateToken, rateLimitOnePerSecond, async (req, res) => {
         sender: saved.sender,
         timestamp: saved.timestamp.toISOString(),
         created_at: saved.created_at,
-      });
+      };
+      
+      io.to(liveRoom).emit("chat:message", messagePayload);
+      // baseRoom에도 브로드캐스트 (live_id가 없는 경우 대비)
+      if (liveRoom !== baseRoom) {
+        io.to(baseRoom).emit("chat:message", messagePayload);
+      }
+      
+      console.log("[chat] REST API message broadcast to room:", liveRoom);
     }
 
     return res.status(201).json({ message: "sent", data: saved });

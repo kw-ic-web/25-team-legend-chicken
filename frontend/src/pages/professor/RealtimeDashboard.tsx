@@ -773,8 +773,15 @@ const RealtimeDashboard: React.FC = () => {
     if (
       !chatMessage.trim() ||
       !resolvedLectureId ||
-      resolvedClassId === undefined
+      resolvedClassId === undefined ||
+      !chatSocketRef.current
     ) {
+      return;
+    }
+
+    // Socket.io 연결 확인
+    if (!chatSocketRef.current.connected) {
+      showError("서버에 연결되지 않았습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
 
@@ -789,13 +796,24 @@ const RealtimeDashboard: React.FC = () => {
     lastMessageTimeRef.current = now;
 
     try {
-      await sendChatMessage({
+      // Socket.io를 통해 실시간 전송 (백엔드에서 DB 저장도 함께 처리)
+      chatSocketRef.current.emit("chat:send", {
+        message: messageText,
+      });
+      
+      // 메시지 입력 필드 비우기
+      setChatMessage("");
+      
+      // DB 저장을 위해 REST API도 호출 (선택적, 백엔드에서 처리하도록 변경 가능)
+      // 실시간 전송이 우선이므로 에러가 나도 무시
+      sendChatMessage({
         lecture_id: resolvedLectureId,
         class_id: resolvedClassId,
         live_id: resolvedLiveId ?? null,
         text: messageText,
+      }).catch((err) => {
+        console.warn("채팅 DB 저장 실패 (실시간 전송은 성공):", err);
       });
-      setChatMessage("");
     } catch (error) {
       console.error("메시지 전송 실패:", error);
       showError(
