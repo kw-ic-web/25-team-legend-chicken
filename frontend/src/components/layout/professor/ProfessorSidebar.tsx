@@ -46,6 +46,7 @@ const ProfessorSidebar: React.FC = () => {
     Array<{
       title: string;
       participants: number;
+      lectureId: string;
     }>
   >([]);
 
@@ -82,10 +83,12 @@ const ProfessorSidebar: React.FC = () => {
           title: string;
           time: string;
           countdown: string;
+          lectureId: string;
         }> = [];
         const myLecturesList: Array<{
           title: string;
           participants: number;
+          lectureId: string;
         }> = [];
 
         lecturesResponse.lectures.forEach((lecture: Lecture) => {
@@ -93,6 +96,7 @@ const ProfessorSidebar: React.FC = () => {
           myLecturesList.push({
             title: lecture.name,
             participants: lecture.student_count,
+            lectureId: lecture.lecture_id,
           });
 
           // 곧 다가올 강의 찾기 (classes의 첫 번째 날짜 기준)
@@ -114,6 +118,7 @@ const ProfessorSidebar: React.FC = () => {
                     title: lecture.name,
                     time: timeStr,
                     countdown: diffDays === 0 ? "오늘" : `D-${diffDays}`,
+                    lectureId: lecture.lecture_id,
                   });
                 }
               }
@@ -129,7 +134,7 @@ const ProfessorSidebar: React.FC = () => {
         });
 
         setUpcomingLectures(upcoming.slice(0, 3)); // 최대 3개만 표시
-        setMyLectures(myLecturesList.slice(0, 4)); // 최대 4개만 표시
+        setMyLectures(myLecturesList); // 모든 강의 표시 (스크롤 가능)
       }
     } catch (error) {
       console.error("데이터 로드 오류:", error);
