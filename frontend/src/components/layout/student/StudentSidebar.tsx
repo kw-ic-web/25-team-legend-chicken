@@ -26,6 +26,7 @@ const StudentSidebar: React.FC = () => {
       participants?: number;
       subtitle?: string;
       meta?: string;
+      lectureId?: string;
     }>
   >([]);
 
@@ -61,8 +62,9 @@ const StudentSidebar: React.FC = () => {
             ? `${lecture.professor_name} 교수님`
             : undefined,
           meta: lecture.schedule,
+          lectureId: lecture.lecture_id, // 링크를 위한 lectureId 추가
         }));
-        setMyLectures(lecturesList.slice(0, 4)); // 최대 4개만 표시
+        setMyLectures(lecturesList); // 모든 강의 표시 (스크롤 가능)
       }
     } catch (error) {
       console.error("데이터 로드 오류:", error);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Download, ChevronDown, ChevronUp, Users } from "lucide-react";
-import { getClasses, getLectureDetail, getClassMaterials } from "../../api/student";
+import { getClasses, getLectureDetail, getClassMaterials, getMyQuestions, type MyQuestionItem } from "../../api/student";
 import Toast from "../../components/common/Toast";
 import { getBaseUrl, apiFetch } from "../../api/auth/client";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
@@ -69,12 +69,11 @@ const StudentClass: React.FC = () => {
     title: "학생",
     affiliation: "광운대학교 정보융합학부",
   });
-  // 최신 질문 (임시 데이터, 나중에 API로 교체)
-  const latestQuestions = [
-    { q: "과목에 대한 질문을 해도 되나요?", a: "네, 얼마든지요..." },
-    { q: "실습 환경은 어떻게 구성하나요?", a: "Colab을 권장합니다." },
-    { q: "과제 제출 형식이 궁금해요", a: "PDF 혹은 노트북 파일" },
-  ];
+  // 최신 질문 관련 state
+  const [latestQuestions, setLatestQuestions] = useState<MyQuestionItem[]>([]);
+  const [isLatestQuestionsLoading, setIsLatestQuestionsLoading] = useState(false);
+  const [latestQuestionsError, setLatestQuestionsError] = useState<string | null>(null);
+  const [selectedQuestionClassId, setSelectedQuestionClassId] = useState<number | null>(null);
 
   const resolveUrl = useCallback((url: string | undefined | null) => {
     if (!url || typeof url !== "string") return url || "";
@@ -296,6 +295,47 @@ const StudentClass: React.FC = () => {
       clearInterval(interval);
     };
   }, [id, weeks]);
+
+  // 선택된 클래스의 질문 조회
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLatestQuestions = async () => {
+      if (!id || !selectedQuestionClassId) return;
+      setIsLatestQuestionsLoading(true);
+      setLatestQuestionsError(null);
+      try {
+        const response = await getMyQuestions(id, selectedQuestionClassId, 200);
+        if (!isMounted) return;
+        const sorted = [...(response.questions ?? [])].sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        setLatestQuestions(sorted.slice(0, 5));
+      } catch (error) {
+        if (!isMounted) return;
+        const message =
+          error instanceof Error ? error.message : "질문을 불러오지 못했어요.";
+        setLatestQuestions([]);
+        setLatestQuestionsError(message);
+      } finally {
+        if (isMounted) {
+          setIsLatestQuestionsLoading(false);
+        }
+      }
+    };
+
+    fetchLatestQuestions();
+    return () => {
+      isMounted = false;
+    };
+  }, [id, selectedQuestionClassId]);
+
+  // weeks가 변경되면 첫 번째 클래스를 기본 선택
+  useEffect(() => {
+    if (weeks.length > 0 && selectedQuestionClassId === null) {
+      setSelectedQuestionClassId(Number(weeks[0].week));
+    }
+  }, [weeks, selectedQuestionClassId]);
 
   // 소켓 연결 및 라이브 시작 알림 리스닝
   useEffect(() => {
@@ -638,6 +678,18 @@ const StudentClass: React.FC = () => {
     setSelectedLesson(null);
   };
 
+  const formatQuestionTimestamp = (isoString?: string) => {
+    if (!isoString) return "-";
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return "-";
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mm = String(date.getMinutes()).padStart(2, "0");
+    return `${y}.${m}.${d} ${hh}:${mm}`;
+  };
+
   return (
     <div className="flex-1 flex">
       {/* 사이드바 */}
@@ -667,18 +719,62 @@ const StudentClass: React.FC = () => {
               </div>
             </div>
             <div>
-              <h4 className="text-md font-semibold text-gray-900 mb-3 border-t border-gray-200 pt-2">
-                최신 질문
-              </h4>
-              <div className="space-y-3 max-h-60 overflow-y-visible pr-1">
-                {latestQuestions.map((item, idx) => (
-                  <div key={idx} className="border border-gray-200 rounded p-3">
-                    <div className="text-sm font-medium text-gray-800">
-                      Q. {item.q}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">{item.a}</div>
+              <div className="flex items-center justify-between gap-2 border-t border-gray-200 pt-2 mb-3">
+                <h4 className="text-md font-semibold text-gray-900 whitespace-nowrap flex-shrink-0">
+                  최신 질문
+                </h4>
+                {weeks.length > 0 && (
+                  <select
+                    className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white flex-shrink min-w-0 max-w-full"
+                    value={selectedQuestionClassId ?? ""}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      setSelectedQuestionClassId(
+                        Number.isNaN(value) ? null : value
+                      );
+                    }}
+                  >
+                    {weeks.map((week) => (
+                      <option key={week.week} value={week.week}>
+                        {week.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="space-y-3 h-56 overflow-auto pr-1">
+                {isLatestQuestionsLoading ? (
+                  <div className="text-sm text-gray-500 py-6 text-center">
+                    질문을 불러오는 중입니다...
                   </div>
-                ))}
+                ) : latestQuestionsError ? (
+                  <div className="text-sm text-red-500 py-6 text-center">
+                    {latestQuestionsError}
+                  </div>
+                ) : latestQuestions.length === 0 ? (
+                  <div className="text-sm text-gray-500 py-6 text-center">
+                    아직 질문이 없습니다.
+                  </div>
+                ) : (
+                  latestQuestions.map((item) => (
+                    <div
+                      key={item._id}
+                      className="border border-gray-200 rounded-lg p-3 bg-white/60"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 mb-1">
+                        <span className="truncate flex-shrink-0">
+                          {item.author?.name || "익명"}
+                        </span>
+                        <span className="whitespace-nowrap flex-shrink-0">
+                          {formatQuestionTimestamp(item.timestamp)}
+                        </span>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900 break-words">
+                        Q. {item.text}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
