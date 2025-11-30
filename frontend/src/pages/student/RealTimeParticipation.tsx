@@ -108,7 +108,7 @@ const RealTimeParticipation: React.FC = () => {
     text: string;
     variant?: "normal" | "ai";
   }) => (
-    <div className={`bg-gray-50 rounded-lg p-4 ${variant === "ai" ? "border border-blue-200" : ""}`}>
+    <div className={`bg-white rounded-xl p-4 border border-gray-200 shadow-md ${variant === "ai" ? "border-blue-200" : ""}`}>
       <div className="flex items-center space-x-2 mb-2">
         <div className={`w-6 h-6 ${variant === "ai" ? "bg-purple-500" : "bg-blue-500"} rounded-full flex items-center justify-center`}>
           <span className="text-white text-xs font-medium">{variant === "ai" ? "AI" : "익"}</span>
@@ -122,10 +122,10 @@ const RealTimeParticipation: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="flex h-[calc(100vh-80px)]">
         {/* 메인 */}
-        <div className="flex-1 bg-white m-4 rounded-lg shadow-sm">
+        <div className="flex-1 bg-white m-4 rounded-xl shadow-md">
           <div className="h-full flex flex-col">
             <div className="p-6 border-b border-gray-200">
               <h1 className="text-2xl font-bold text-green-600">Chapter 1-1. 파이썬 & 프로그래밍 소개</h1>
@@ -185,7 +185,7 @@ const RealTimeParticipation: React.FC = () => {
                             <MessageCard name="AI 도우미" time={q.timestamp} text={q.answer} variant="ai" />
                           )}
                           {q.status === "pending" && aiTyping && (
-                            <div className="bg-gray-50 rounded-lg p-4 border border-dashed border-gray-200 text-xs text-gray-500">
+                            <div className="bg-white rounded-xl p-4 border border-dashed border-gray-200 text-xs text-gray-500 shadow-md">
                               AI가 답변을 작성 중입니다…
                             </div>
                           )}
@@ -193,7 +193,7 @@ const RealTimeParticipation: React.FC = () => {
                       ))}
                       {/* 질문은 아직 없지만 AI 타이핑만 표시해야 하는 드문 케이스 처리 */}
                       {questions.length === 0 && aiTyping && (
-                        <div className="bg-gray-50 rounded-lg p-4 border border-dashed border-gray-200 text-xs text-gray-500">
+                        <div className="bg-white rounded-xl p-4 border border-dashed border-gray-200 text-xs text-gray-500 shadow-md">
                           AI가 답변을 작성 중입니다…
                         </div>
                       )}

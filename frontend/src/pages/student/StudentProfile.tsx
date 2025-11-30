@@ -148,7 +148,7 @@ const StudentProfile: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50">
+    <div className="flex-1 overflow-y-auto bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-4xl mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">내 정보</h1>
 
@@ -187,7 +187,7 @@ const StudentProfile: React.FC = () => {
                     type="email"
                     value={email}
                     readOnly
-                    className="w-full border border-gray-200 bg-gray-100 text-gray-500 rounded-lg px-3 py-2 cursor-not-allowed"
+                    className="w-full border border-gray-200 bg-white text-gray-500 rounded-lg px-3 py-2 cursor-not-allowed"
                   />
                 </div>
                 <div className="flex flex-col space-y-2">
@@ -210,7 +210,7 @@ const StudentProfile: React.FC = () => {
                     type="text"
                     value={userType === "professor" ? "교수" : "학생"}
                     readOnly
-                    className="w-full border border-gray-200 bg-gray-100 text-gray-500 rounded-lg px-3 py-2 cursor-not-allowed"
+                    className="w-full border border-gray-200 bg-white text-gray-500 rounded-lg px-3 py-2 cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -244,7 +244,7 @@ const StudentProfile: React.FC = () => {
                 프로필 이미지
               </h2>
               <div className="flex items-center space-x-6">
-                <div className="w-24 h-24 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center overflow-hidden">
+                <div className="w-24 h-24 rounded-full bg-white border border-gray-200 flex items-center justify-center overflow-hidden">
                   {resolvedProfileImage ? (
                     <img
                       src={resolvedProfileImage}
@@ -282,7 +282,7 @@ const StudentProfile: React.FC = () => {
               <div className="flex items-center space-x-3">
                 <button
                   type="reset"
-                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition"
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 transition"
                   onClick={() => {
                     setPassword("");
                     setSelectedImage(null);

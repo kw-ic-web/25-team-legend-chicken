@@ -1098,7 +1098,7 @@ const LiveWatching: React.FC = () => {
   }, [stopStudentCamera]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="flex h-[calc(100vh-80px)]">
         {/* 메인 콘텐츠 영역 - 교수 레이아웃과 동일 */}
         <div className="flex-1 bg-white m-4 rounded-lg shadow-sm">
@@ -1225,7 +1225,7 @@ const LiveWatching: React.FC = () => {
                                 ? "bg-blue-600 text-white"
                                 : isProfessor
                                   ? "bg-green-100 text-gray-900"
-                                  : "bg-gray-100 text-gray-900"
+                                  : "bg-white text-gray-900 border border-gray-200"
                             }`}
                           >
                             <div className="flex items-center gap-2 mb-1">

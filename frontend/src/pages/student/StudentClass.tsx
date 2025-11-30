@@ -622,9 +622,9 @@ const StudentClass: React.FC = () => {
       />
 
       {/* 메인 콘텐츠 */}
-      <section className="flex-1 flex flex-col ml-80 overflow-y-auto">
+      <section className="flex-1 flex flex-col ml-80 overflow-y-auto bg-gradient-to-br from-gray-50 to-gray-100">
         {/* 헤더 */}
-        <div className="bg-gray-100 px-6 py-4 border-b border-gray-200 flex-shrink-0">
+        <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <h1 className="text-2xl font-bold text-gray-900">
@@ -636,7 +636,7 @@ const StudentClass: React.FC = () => {
 
         {/* 라이브 알림 및 입장하기 버튼 */}
         {currentLiveClass && currentLiveClass.active && (
-          <div className="px-6 py-6 bg-gray-50 border-b border-gray-200 flex-shrink-0" style={{ display: 'block', visibility: 'visible', opacity: 1, position: 'relative', zIndex: 10 }}>
+          <div className="px-6 py-6 border-b border-gray-200 flex-shrink-0" style={{ display: 'block', visibility: 'visible', opacity: 1, position: 'relative', zIndex: 10 }}>
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border-2 border-blue-200 shadow-lg">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -695,7 +695,7 @@ const StudentClass: React.FC = () => {
                 return (
                   <details
                     key={w.week}
-                    className="bg-white border border-gray-200 rounded-lg group"
+                    className="bg-white border border-gray-200 rounded-xl shadow-md group"
                     open={w.week === 1}
                     onToggle={(event) =>
                       handleToggleWeek(
@@ -747,7 +747,7 @@ const StudentClass: React.FC = () => {
                           {w.items.map((item, idx) => (
                             <div
                               key={idx}
-                              className="flex items-center justify-between p-3 border border-gray-200 rounded hover:bg-gray-50"
+                              className="flex items-center justify-between p-3 border border-gray-200 rounded hover:bg-gray-100"
                             >
                               <div className="flex items-center space-x-3 flex-1 min-w-0">
                                 <Download className="w-5 h-5 text-gray-400 flex-shrink-0" />

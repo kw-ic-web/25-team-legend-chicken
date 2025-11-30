@@ -119,9 +119,9 @@ const StudentDashboard: React.FC = () => {
   }, [lectures]);
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       {/* 탭 네비게이션과 검색바 */}
-      <div className="bg-gray-100 px-6 py-4">
+      <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           {/* 탭 네비게이션 */}
           <div className="flex space-x-1">
@@ -172,7 +172,7 @@ const StudentDashboard: React.FC = () => {
       </div>
 
       {/* 콘텐츠 헤더 */}
-      <div className="bg-white px-6 py-4">
+      <div className="px-6 py-4">
         <h2 className="text-lg font-semibold text-gray-900">콘텐츠</h2>
       </div>
 
