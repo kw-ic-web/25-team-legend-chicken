@@ -4,12 +4,14 @@ const Lecture = require("../../models/lectures");
 const { authenticateToken } = require("../../middleware/auth");
 const crypto = require("crypto");
 const { uploadThumbnail } = require("../../config/uploadImage");
+const { uploadToGridFS } = require("../../middleware/uploadToGridFS");
 const { convertClassesMaterialsToAbsolute } = require("../../utils/urlUtils");
 
 router.post(
   "/create",
   authenticateToken,
   uploadThumbnail.single("thumbnail"),
+  uploadToGridFS,
   async (req, res) => {
     try {
       const user = req.user;
@@ -38,8 +40,8 @@ router.post(
       } = req.body;
 
       let thumbnailUrl = "";
-      if (req.file) {
-        thumbnailUrl = `/uploads/images/${req.file.filename}`;
+      if (req.file && req.file.gridfsUrl) {
+        thumbnailUrl = req.file.gridfsUrl; // GridFS URL 사용
       }
 
       let parsedReferences = [];

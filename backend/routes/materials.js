@@ -13,6 +13,8 @@ const {
 const { extractTextFromImage } = require("../services/vision");
 const { toAbsoluteUrl, convertMaterialsToAbsolute } = require("../utils/urlUtils");
 const { computeSimilarity } = require("../utils/handwritingUtils");
+const { uploadToGridFS } = require("../middleware/uploadToGridFS");
+const { uploadFile } = require("../utils/gridfs");
 const path = require("path");
 const fs = require("fs-extra");
 
@@ -269,6 +271,7 @@ router.post(
   "/lectures/:lectureId/classes/:classId/materials/upload",
   authenticateToken,
   uploadPdf.single("pdf"),
+  uploadToGridFS,
   async (req, res) => {
     try {
       const { lectureId, classId } = req.params;
@@ -312,10 +315,13 @@ router.post(
         });
       }
 
-      // PDF를 페이지별로 분할
-      const originalPdfUrl = `/uploads/pdfs/${req.file.filename}`;
+      // 원본 PDF를 GridFS에 저장 (이미 uploadToGridFS 미들웨어에서 저장됨)
+      const originalPdfUrl = req.file?.gridfsUrl || `/uploads/pdfs/${req.file.filename}`;
       const originalFileName = req.file.originalname || req.file.filename;
-      const splitted = await splitPdfIntoPages(req.file.path, { lectureId, classId });
+      
+      // PDF를 페이지별로 분할 (버퍼 사용)
+      const pdfBuffer = req.file.buffer;
+      const splitted = await splitPdfIntoPages(pdfBuffer, { lectureId, classId });
 
       // materials에 원본 PDF 정보 추가
       if (!Array.isArray(lecture.classes[idx].materials)) {
@@ -341,7 +347,7 @@ router.post(
       }).sort({ page_number: -1 });
       const basePageNumber = lastPage ? lastPage.page_number : 0;
 
-      // 각 페이지를 WhiteboardPage에 저장
+      // 각 페이지를 WhiteboardPage에 저장 (GridFS에도 저장)
       const createdPages = [];
       for (let i = 0; i < splitted.length; i++) {
         const page = splitted[i];
@@ -363,13 +369,35 @@ router.post(
           text = "";
         }
 
+        // 분할된 PDF 페이지를 GridFS에 저장
+        let pdfGridfsUrl = page.pdfPath; // 기본값은 파일 시스템 경로
+        if (page.buffer) {
+          try {
+            const pdfGridfsId = await uploadFile(
+              page.buffer,
+              page.filename,
+              "application/pdf",
+              {
+                lectureId,
+                classId: String(classId),
+                pageNumber: basePageNumber + i + 1,
+                type: "split_pdf_page",
+              }
+            );
+            pdfGridfsUrl = `/api/files/${pdfGridfsId}`;
+          } catch (error) {
+            console.error(`페이지 ${i + 1} GridFS 저장 실패:`, error);
+            // GridFS 저장 실패 시 파일 시스템 경로 사용
+          }
+        }
+
         const created = await WhiteboardPage.create({
           lecture_id: lectureId,
           class_id: String(classId),
           page_number: basePageNumber + i + 1,
           image_path: imagePath,
           text: text,
-          pdf_path: page.pdfPath,
+          pdf_path: pdfGridfsUrl, // GridFS URL 사용
           status: "finalized",
         });
 
@@ -459,11 +487,34 @@ router.post(
         });
       }
 
-      // base64 이미지를 파일로 저장
+      // base64 이미지를 버퍼로 변환
       const imageBuffer = Buffer.from(image_data, "base64");
       const fileName = `${lectureId}_${classId}_p${pageNum}_${timestamp}.jpeg`;
+      
+      // OCR을 위해 임시 파일로 저장 (이미지 변환/OCR 라이브러리가 파일 경로 필요)
       const filePath = path.join(CAPTURE_DIR, fileName);
       await fs.writeFile(filePath, imageBuffer);
+      
+      // 이미지를 GridFS에 저장
+      let imageGridfsUrl = null;
+      try {
+        const imageGridfsId = await uploadFile(
+          imageBuffer,
+          fileName,
+          "image/jpeg",
+          {
+            lectureId,
+            classId: String(classId),
+            pageNumber: pageNum,
+            timestamp,
+            type: "handwriting_image",
+          }
+        );
+        imageGridfsUrl = `/api/files/${imageGridfsId}`;
+      } catch (error) {
+        console.error("필기 이미지 GridFS 저장 실패:", error);
+        // GridFS 저장 실패 시 파일 시스템 경로 사용
+      }
 
       // PDF URL이 있으면 PDF와 합치기 (향후 구현)
       let finalImagePath = filePath;
@@ -528,11 +579,14 @@ router.post(
       });
 
       // WhiteboardPage에 저장 (draft 상태로 저장, 나중에 finalized 가능)
+      // 이미지 경로: GridFS URL 우선, 없으면 파일 시스템 경로
+      const imagePath = imageGridfsUrl || `/captures/${fileName}`;
+      
       const saved = await WhiteboardPage.create({
         lecture_id: lectureId,
         class_id: String(classId),
         page_number: pageNum,
-        image_path: `/captures/${fileName}`,
+        image_path: imagePath,
         text: normalizedText,
         pdf_path: pdfPath,
         status: "draft", // 실시간 필기는 draft 상태

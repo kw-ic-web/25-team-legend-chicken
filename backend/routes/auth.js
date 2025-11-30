@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { authenticateToken } = require("../middleware/auth");
 const { uploadProfileImage } = require("../config/uploadImage");
+const { uploadToGridFS } = require("../middleware/uploadToGridFS");
 
 // 회원가입
 router.post("/register", async (req, res) => {
@@ -389,6 +390,7 @@ router.put(
   "/myinfo",
   authenticateToken,
   uploadProfileImage.single("profile_image"),
+  uploadToGridFS,
   async (req, res) => {
     try {
       const user = await User.findById(req.user._id);
@@ -432,10 +434,9 @@ router.put(
         user.password = await bcrypt.hash(password, salt);
       }
 
-      // 프로필 사진 업로드
-      if (req.file) {
-        const profileImageUrl = `/uploads/images/${req.file.filename}`;
-        user.profile_image = profileImageUrl;
+      // 프로필 사진 업로드 (GridFS)
+      if (req.file && req.file.gridfsUrl) {
+        user.profile_image = req.file.gridfsUrl; // GridFS URL 사용
       }
 
       await user.save();

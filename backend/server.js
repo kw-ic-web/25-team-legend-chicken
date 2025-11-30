@@ -21,6 +21,7 @@ const chatRouter = require("./routes/chat");
 
 const handwritingRouter = require("./routes/handwriting");
 const materialsRouter = require("./routes/materials"); // 통일된 교안 API
+const filesRouter = require("./routes/files"); // GridFS 파일 서빙
 
 const http = require("http");
 const { attachSocket } = require("./socket");
@@ -37,6 +38,14 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 connectToDatabase(process.env.MONGODB_URI);
 
+// GridFS 초기화
+const mongoose = require("mongoose");
+mongoose.connection.once("open", () => {
+  const { initGridFS } = require("./utils/gridfs");
+  initGridFS();
+  console.log("✅ GridFS가 초기화되었습니다.");
+});
+
 app.use("/api", authRouter);
 app.use("/api/student", studentRouter);
 app.use("/api/professor", professorRouter);
@@ -47,6 +56,7 @@ app.use("/api/chat", chatRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/handwriting", handwritingRouter);
 app.use("/api", materialsRouter); // 통일된 교안 API
+app.use("/api/files", filesRouter); // GridFS 파일 서빙
 
 app.get("/", (req, res) => {
   res.send("Lec-Q 서버가 실행 중입니다.");

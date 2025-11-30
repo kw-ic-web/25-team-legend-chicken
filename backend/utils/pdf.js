@@ -76,14 +76,17 @@ const toAbsolutePath = (publicPath) => {
 
 /**
  * 업로드된 PDF를 단일 페이지 PDF들로 분할 저장합니다.
- * @param {string} sourcePdfPath - 업로드된 원본 PDF의 파일 시스템 경로
+ * @param {string|Buffer} sourcePdf - 업로드된 원본 PDF의 파일 시스템 경로 또는 Buffer
  * @param {object} options
  * @param {string} options.lectureId
  * @param {string|number} options.classId
- * @returns {Promise<Array<{ pageNumber: number, pdfPath: string, filename: string }>>}
+ * @returns {Promise<Array<{ pageNumber: number, pdfPath: string, filename: string, buffer?: Buffer }>>}
  */
-async function splitPdfIntoPages(sourcePdfPath, { lectureId, classId }) {
-  const inputBytes = await fs.readFile(sourcePdfPath);
+async function splitPdfIntoPages(sourcePdf, { lectureId, classId }) {
+  // 경로 또는 버퍼 모두 처리
+  const inputBytes = Buffer.isBuffer(sourcePdf) 
+    ? sourcePdf 
+    : await fs.readFile(sourcePdf);
   const srcDoc = await PDFLib.PDFDocument.load(inputBytes);
   const totalPages = srcDoc.getPageCount();
 
@@ -105,6 +108,7 @@ async function splitPdfIntoPages(sourcePdfPath, { lectureId, classId }) {
       pageNumber: i + 1,
       pdfPath: `/${outputPath.replace(/\\/g, "/")}`,
       filename,
+      buffer: outBytes, // GridFS 저장을 위한 버퍼 추가
     });
   }
 

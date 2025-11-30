@@ -1,18 +1,7 @@
 const multer = require("multer");
 const path = require("path");
 
-// PDF 파일 저장 설정
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/pdfs/");
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
-  },
-});
-
-// 파일 필터링 (PDF만 허용)
+// PDF 파일 필터링 (PDF만 허용)
 const fileFilter = (req, file, cb) => {
   if (file.mimetype === "application/pdf") {
     cb(null, true);
@@ -20,6 +9,9 @@ const fileFilter = (req, file, cb) => {
     cb(new Error("PDF 파일만 업로드 가능합니다."), false);
   }
 };
+
+// Memory storage로 변경 (GridFS에 저장하기 위해)
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage: storage,
