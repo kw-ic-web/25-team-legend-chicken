@@ -92,13 +92,16 @@ function attachSocket(server, corsOrigin = "*") {
 
         // ─────────────────────────────────────────────
 // ─────────────────────────────────────────────
-// ✅ 실시간 채팅 (DB 저장 X, socket-only)
+// ✅ 실시간 채팅 (Socket.io + DB 저장)
 // ─────────────────────────────────────────────
-socket.on("chat:send", ({ message }) => {
+socket.on("chat:send", async ({ message }) => {
   if (!message || String(message).trim().length === 0) return;
 
   const { lecture_id, class_id, live_id, user_id, role } = socket.data || {};
-  if (!lecture_id || !class_id || !user_id) return;
+  if (!lecture_id || !class_id || !user_id) {
+    console.warn("[chat:send] Missing socket.data:", { lecture_id, class_id, user_id });
+    return;
+  }
 
   const baseRoom = `lec:${lecture_id}:cls:${class_id}`;
   const liveRoom =
@@ -106,15 +109,63 @@ socket.on("chat:send", ({ message }) => {
       ? `${baseRoom}:live:none`
       : `${baseRoom}:live:${live_id}`;
 
+  const messageText = String(message).trim();
+  
+  // 사용자 정보 가져오기
+  const User = require("../models/User");
+  let userName = "사용자";
+  let userRole = role || "student";
+  
+  try {
+    const user = await User.findById(user_id);
+    if (user) {
+      userName = user.name || "사용자";
+      userRole = user.user_type || role || "student";
+    }
+  } catch (err) {
+    console.warn("[chat:send] 사용자 정보 조회 실패:", err);
+  }
+  
+  // DB에 저장 (비동기, 에러가 나도 실시간 전송은 계속)
+  const ChatMessage = require("../models/ChatMessage");
+  ChatMessage.create({
+    lecture_id,
+    class_id: Number(class_id),
+    live_id: live_id === null ? null : Number(live_id),
+    text: messageText,
+    sender: {
+      id: String(user_id),
+      name: userName,
+      role: userRole,
+    },
+    timestamp: new Date(),
+  }).catch((err) => {
+    console.error("[chat:send] DB 저장 실패:", err);
+  });
+
+  // 실시간 브로드캐스트 (DB 저장과 독립적으로 즉시 전송)
   const payload = {
-    from: user_id,
-    role,
-    message: String(message).trim(),
-    timestamp: Date.now(),
+    _id: `temp_${Date.now()}_${socket.id}`, // 임시 ID (DB 저장 후 실제 ID로 업데이트 가능)
+    lecture_id,
+    class_id: Number(class_id),
+    live_id: live_id === null ? null : Number(live_id),
+    text: messageText,
+    sender: {
+      id: String(user_id),
+      name: userName,
+      role: userRole,
+    },
+    timestamp: new Date().toISOString(),
+    created_at: new Date().toISOString(),
   };
 
+  // liveRoom과 baseRoom 모두에 브로드캐스트
   io.to(liveRoom).emit("chat:message", payload);
-  console.log("[chat]", user_id, ":", message);
+  if (liveRoom !== baseRoom) {
+    io.to(baseRoom).emit("chat:message", payload);
+  }
+  
+  console.log("[chat:send]", user_id, ":", messageText, "->", liveRoom);
 });
 
     // ─────────────────────────────────────────────
