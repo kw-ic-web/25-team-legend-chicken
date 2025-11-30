@@ -211,6 +211,7 @@ router.get("/participate", authenticateToken, async (req, res) => {
 });
 
 // ✅ 학생이 강의 자료 조회
+// 하위 호환성을 위해 유지하되, 통일된 materials API 사용 권장
 router.get(
   "/lectures/:lectureId/classes/:classId/materials",
   authenticateToken,
@@ -270,7 +271,9 @@ router.get(
         class_title: classData.title,
         pdf_count: pdfs.length,
         pdfs: pdfs,
-        materials: materialsWithAbsoluteUrls, // 전체 정보 포함 (fileId, url, originalName)
+        materials: materialsWithAbsoluteUrls,
+        message: "이 API는 하위 호환성을 위해 유지됩니다. 통일된 /api/lectures/:lectureId/classes/:classId/materials/pages API 사용을 권장합니다.",
+        recommended_api: `/api/lectures/${lectureId}/classes/${cid}/materials/pages`
       });
     } catch (err) {
       console.error("학생 강의 자료 조회 오류:", err);

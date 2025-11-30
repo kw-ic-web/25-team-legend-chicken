@@ -243,25 +243,32 @@ export type GetClassPdfsResponse = {
   pdfs: Array<string | { url: string; originalName: string }>;
 };
 
+/**
+ * @deprecated 통일된 API인 getMaterialPages를 사용하세요.
+ * 하위 호환성을 위해 유지됩니다.
+ */
 export async function getClassPdfs(
   lectureId: string,
   classId: number
 ): Promise<GetClassPdfsResponse> {
-  const token = localStorage.getItem("lecq.token");
-  if (!token) {
-    throw new Error("인증 토큰이 필요합니다.");
-  }
-
+  // 통일된 API 사용
+  const { getMaterialPages } = await import("../materials");
+  
   try {
-    return await apiFetch<GetClassPdfsResponse>(
-      `/api/professor/lectures/${lectureId}/classes/${classId}/pdf`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const response = await getMaterialPages(lectureId, classId, "finalized");
+    
+    // 기존 응답 형식으로 변환 (하위 호환성)
+    return {
+      lecture_id: response.lecture_id,
+      lecture_name: response.lecture_name,
+      class_id: response.class_id,
+      class_title: response.class_title,
+      pdf_count: response.total_pages,
+      pdfs: response.original_materials.map((m) => ({
+        url: m.url,
+        originalName: m.originalName,
+      })),
+    };
   } catch (error) {
     // 404 에러는 PDF가 없는 경우이므로 조용히 처리
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -636,65 +643,31 @@ export type UploadPdfResponse = {
   pdf_url?: string; // 호환성을 위해 유지
 };
 
+/**
+ * @deprecated 통일된 API인 uploadMaterial을 사용하세요.
+ * 하위 호환성을 위해 유지됩니다.
+ */
 export async function uploadClassPdf(
   lectureId: string,
   classId: number,
   file: File,
   onProgress?: (progress: number) => void
 ): Promise<UploadPdfResponse> {
-  const token = localStorage.getItem("lecq.token");
-  if (!token) {
-    throw new Error("인증 토큰이 필요합니다.");
-  }
-
-  const formData = new FormData();
-  formData.append("pdf", file);
-
-  const { getBaseUrl } = await import("../auth/client");
-  const baseUrl = getBaseUrl();
+  // 통일된 API 사용
+  const { uploadMaterial } = await import("../materials");
   
-  // XMLHttpRequest를 사용하여 진행 상황 추적
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-
-    // 진행 상황 이벤트 리스너
-    if (onProgress) {
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          onProgress(progress);
-        }
-      });
-    }
-
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const response = JSON.parse(xhr.responseText);
-          resolve(response);
-        } catch (error) {
-          reject(new Error("응답 파싱 실패"));
-        }
-      } else {
-        try {
-          const error = JSON.parse(xhr.responseText);
-          reject(new Error(error.message || "PDF 업로드에 실패했습니다."));
-        } catch {
-          reject(new Error(`PDF 업로드 실패 (${xhr.status})`));
-        }
-      }
-    });
-
-    xhr.addEventListener("error", () => {
-      reject(new Error("네트워크 오류가 발생했습니다."));
-    });
-
-    xhr.addEventListener("abort", () => {
-      reject(new Error("업로드가 취소되었습니다."));
-    });
-
-    xhr.open("POST", `${baseUrl}/api/lectures/${lectureId}/classes/${classId}/whiteboard/upload-pdf`);
-    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.send(formData);
-  });
+  const response = await uploadMaterial(lectureId, classId, file, onProgress);
+  
+  // 기존 응답 형식으로 변환 (하위 호환성)
+  return {
+    success: response.success,
+    message: response.message,
+    lecture_id: response.lecture_id,
+    class_id: response.class_id,
+    total_pages: response.total_pages,
+    pages: response.pages,
+    materials_count: response.total_pages,
+    original_pdf_url: response.original_material.url,
+    pdf_url: response.original_material.url, // 호환성
+  };
 }

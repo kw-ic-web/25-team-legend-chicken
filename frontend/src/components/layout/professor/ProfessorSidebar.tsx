@@ -5,6 +5,7 @@ import CommonSidebar from "../CommonSidebar";
 import CreateClassModal from "../../modal/createClass/CreateClassModal";
 import CreateClassCompleteModal from "../../modal/createClass/CreateClassCompleteModal";
 import { getMyInfo } from "../../../api/auth";
+import { getBaseUrl } from "../../../api/auth/client";
 import {
   getLectures,
   createLecture,
@@ -30,6 +31,7 @@ const ProfessorSidebar: React.FC = () => {
     title: "강의자",
     affiliation: "광운대학교 정보융합학부", // API에 없으므로 기본값 유지
     currentLectures: 0,
+    profileImage: undefined as string | undefined,
   });
 
   // 곧 다가올 강의
@@ -67,12 +69,19 @@ const ProfessorSidebar: React.FC = () => {
 
       // 교수 정보 업데이트 (GET /api/myinfo 응답 사용)
       if (myInfoResponse?.success && myInfoResponse.user) {
+        const profileImage = myInfoResponse.user.profile_image
+          ? myInfoResponse.user.profile_image.startsWith("http")
+            ? myInfoResponse.user.profile_image
+            : `${getBaseUrl()}${myInfoResponse.user.profile_image}`
+          : undefined;
+        
         setProfessorInfo({
           id: myInfoResponse.user.id,
           name: myInfoResponse.user.name,
           title: "강의자",
           affiliation: "광운대학교 정보융합학부", // API에 없으므로 기본값 유지
           currentLectures: lecturesResponse?.lectures.length || 0,
+          profileImage: profileImage,
         });
       }
 

@@ -20,6 +20,7 @@ const reportsRouter = require("./routes/reports"); // 리포트 관련 API
 const chatRouter = require("./routes/chat");
 
 const handwritingRouter = require("./routes/handwriting");
+const materialsRouter = require("./routes/materials"); // 통일된 교안 API
 
 const http = require("http");
 const { attachSocket } = require("./socket");
@@ -45,6 +46,7 @@ app.use("/api/questions", questionsRouter);
 app.use("/api/chat", chatRouter); 
 app.use("/api/reports", reportsRouter);
 app.use("/api/handwriting", handwritingRouter);
+app.use("/api", materialsRouter); // 통일된 교안 API
 
 app.get("/", (req, res) => {
   res.send("Lec-Q 서버가 실행 중입니다.");

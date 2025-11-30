@@ -194,6 +194,8 @@ router.get(
   authenticateToken,
   async (req, res) => {
     try {
+      // 하위 호환성을 위해 유지하되, 통일된 materials API로 리다이렉트 권장
+      // 기존 클라이언트 호환성을 위해 기존 응답 형식도 지원
       const user = req.user;
       const { lectureId, classId } = req.params;
 
@@ -221,6 +223,8 @@ router.get(
         return res.status(404).json({ message: "해당 클래스를 찾을 수 없습니다." });
       }
 
+      // 통일된 materials API로 리다이렉트 (페이지별 응답)
+      // 하위 호환성을 위해 기존 형식도 반환
       const pdfsWithAbsoluteUrls = convertMaterialsToAbsolute(req, classData.materials || []);
 
       res.status(200).json({
@@ -230,7 +234,9 @@ router.get(
         class_id: parseInt(classId),
         class_title: classData.title,
         pdf_count: pdfsWithAbsoluteUrls.length,
-        pdfs: pdfsWithAbsoluteUrls, // [{ url: "...", originalName: "..." }] 형태
+        pdfs: pdfsWithAbsoluteUrls,
+        message: "이 API는 더 이상 사용되지 않습니다. /api/lectures/:lectureId/classes/:classId/materials/pages 를 사용해주세요.",
+        recommended_api: `/api/lectures/${lectureId}/classes/${classId}/materials/pages`
       });
     } catch (err) {
       console.error("PDF 목록 조회 오류:", err);
@@ -403,53 +409,17 @@ router.post(
           .json({ message: "PDF 파일을 선택해주세요." });
       }
 
-      const lecture = await Lecture.findOne({ lecture_id: lectureId });
-      if (!lecture) {
-        return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
-      }
-
-      if (lecture.professor_id.toString() !== user._id.toString()) {
-        return res
-          .status(403)
-          .json({ message: "본인의 강좌에만 PDF를 업로드할 수 있습니다." });
-      }
-
-      const classIndex = lecture.classes.findIndex(
-        (cls) => cls.id === parseInt(classId)
-      );
-      if (classIndex === -1) {
-        return res.status(404).json({ message: "해당 클래스를 찾을 수 없습니다." });
-      }
-
-      const pdfUrl = `/uploads/pdfs/${req.file.filename}`;
-      const originalFileName = req.file.originalname || req.file.filename;
-
-      if (!lecture.classes[classIndex].materials) {
-        lecture.classes[classIndex].materials = [];
-      }
-      // materials에 객체 형태로 저장 (기존 문자열과 호환)
-      lecture.classes[classIndex].materials.push({
-        url: pdfUrl,
-        originalName: originalFileName
-      });
-
-      await lecture.save();
-
-      const absolutePdfUrl = toAbsoluteUrl(req, pdfUrl);
-      const materialsWithAbsoluteUrls = convertMaterialsToAbsolute(req, lecture.classes[classIndex].materials);
-
-      res.status(200).json({
-        success: true,
-        message: "PDF가 성공적으로 업로드되었습니다.",
-        lecture_id: lecture.lecture_id,
-        lecture_name: lecture.name,
-        class_id: parseInt(classId),
-        class_title: lecture.classes[classIndex].title,
-        pdf_url: absolutePdfUrl,
-        original_pdf_url: absolutePdfUrl,
-        filename: req.file.filename,
-        original_filename: originalFileName,
-        materials: materialsWithAbsoluteUrls,
+      // 통일된 materials API로 요청 전달 (내부적으로 처리)
+      // 이 API는 하위 호환성을 위해 유지하지만, 내부적으로는 통일된 API 사용
+      req.params.lectureId = lectureId;
+      req.params.classId = classId;
+      
+      // materials 라우터의 upload 핸들러 직접 호출 (또는 재사용)
+      // 일단 기존 로직 유지하되, 통일된 materials API 사용 권장
+      return res.status(307).json({
+        success: false,
+        message: "이 API는 더 이상 사용되지 않습니다. /api/lectures/:lectureId/classes/:classId/materials/upload 를 사용해주세요.",
+        redirect_to: `/api/lectures/${lectureId}/classes/${classId}/materials/upload`
       });
     } catch (err) {
       console.error("PDF 업로드 오류:", err);

@@ -243,24 +243,51 @@ export type GetClassMaterialsResponse = {
   }>;
 };
 
+/**
+ * @deprecated 통일된 API인 getMaterialPages를 사용하세요.
+ * 하위 호환성을 위해 유지됩니다.
+ */
 export async function getClassMaterials(
   lectureId: string,
   classId: number
 ): Promise<GetClassMaterialsResponse> {
-  const token = localStorage.getItem("lecq.token");
-  if (!token) {
-    throw new Error("인증 토큰이 필요합니다.");
-  }
-
-  return apiFetch<GetClassMaterialsResponse>(
-    `/api/student/lectures/${lectureId}/classes/${classId}/materials`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+  // 통일된 API 사용
+  const { getMaterialPages } = await import("../materials");
+  
+  try {
+    const response = await getMaterialPages(lectureId, classId, "finalized");
+    
+    // 기존 응답 형식으로 변환 (하위 호환성)
+    return {
+      success: response.success,
+      lecture_id: response.lecture_id,
+      lecture_name: response.lecture_name,
+      class_id: response.class_id,
+      class_title: response.class_title,
+      pdf_count: response.total_pages,
+      pdfs: response.pages.map((page) => page.pdf_path),
+      materials: response.original_materials.map((m) => ({
+        url: m.url,
+        originalName: m.originalName,
+      })),
+    };
+  } catch (error) {
+    // 404 에러는 materials가 없는 경우이므로 조용히 처리
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("404") || errorMessage.includes("찾을 수 없습니다")) {
+      return {
+        success: true,
+        lecture_id: lectureId,
+        lecture_name: "",
+        class_id: classId,
+        class_title: "",
+        pdf_count: 0,
+        pdfs: [],
+        materials: [],
+      };
     }
-  );
+    throw error;
+  }
 }
 
 export type MyQuestionItem = {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import CommonSidebar from "../CommonSidebar";
 import { joinLecture, getMyLectures } from "../../../api/student";
 import { getMyInfo } from "../../../api/auth";
+import { getBaseUrl } from "../../../api/auth/client";
 import { X, BookOpen, CheckCircle, AlertCircle } from "lucide-react";
 
 const StudentSidebar: React.FC = () => {
@@ -17,6 +18,7 @@ const StudentSidebar: React.FC = () => {
     name: "",
     title: "학생",
     affiliation: "광운대학교 정보융합학부", // API에 없으므로 기본값 유지
+    profileImage: undefined as string | undefined,
   });
 
   // 참여 중인 강의
@@ -46,11 +48,18 @@ const StudentSidebar: React.FC = () => {
 
       // 학생 정보 업데이트
       if (myInfoResponse?.success && myInfoResponse.user) {
+        const profileImage = myInfoResponse.user.profile_image
+          ? myInfoResponse.user.profile_image.startsWith("http")
+            ? myInfoResponse.user.profile_image
+            : `${getBaseUrl()}${myInfoResponse.user.profile_image}`
+          : undefined;
+        
         setStudentInfo({
           id: myInfoResponse.user.id,
           name: myInfoResponse.user.name,
           title: "학생",
           affiliation: "광운대학교 정보융합학부", // API에 없으므로 기본값 유지
+          profileImage: profileImage,
         });
       }
 
@@ -84,6 +93,17 @@ const StudentSidebar: React.FC = () => {
     window.addEventListener("lecture:joined", handler);
     return () => {
       window.removeEventListener("lecture:joined", handler);
+    };
+  }, [fetchData]);
+
+  // 프로필 정보 업데이트 이벤트 리스너
+  useEffect(() => {
+    const handler = () => {
+      fetchData();
+    };
+    window.addEventListener("myinfo:update", handler);
+    return () => {
+      window.removeEventListener("myinfo:update", handler);
     };
   }, [fetchData]);
 
