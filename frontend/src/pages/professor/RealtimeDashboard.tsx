@@ -35,14 +35,6 @@ import {
 } from "../../api/chat";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
 
-interface Question {
-  id: number;
-  studentName: string;
-  question: string;
-  timestamp: string;
-  status: "pending" | "answered" | "dismissed";
-}
-
 type PdfItem = {
   name: string;
   url: string;
@@ -164,8 +156,6 @@ const RealtimeDashboard: React.FC = () => {
     userId: user?.id,
     localStreams,
   });
-
-  const [questions, setQuestions] = useState<Question[]>([]);
 
   // 웹캠 시작
   const startCamera = useCallback(async () => {
@@ -834,22 +824,6 @@ const RealtimeDashboard: React.FC = () => {
   ]);
 
   const closePersonnel = () => setIsPersonnelOpen(false);
-
-  const handleAnswerQuestion = (questionId: number) => {
-    setQuestions(
-      questions.map((q) =>
-        q.id === questionId ? { ...q, status: "answered" as const } : q
-      )
-    );
-  };
-
-  const handleDismissQuestion = (questionId: number) => {
-    setQuestions(
-      questions.map((q) =>
-        q.id === questionId ? { ...q, status: "dismissed" as const } : q
-      )
-    );
-  };
 
   // 채팅 메시지 조회 및 Socket.io 연결
   useEffect(() => {

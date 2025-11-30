@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import CommonSidebar from "../CommonSidebar";
 import { joinLecture } from "../../../api/student";
-import { getLectures, type Lecture, type LectureClass } from "../../../api/professor";
+import { getLectures, type Lecture } from "../../../api/professor";
 import { getMyInfo } from "../../../api/auth";
 import { getBaseUrl } from "../../../api/auth/client";
 import { X, BookOpen, CheckCircle, AlertCircle } from "lucide-react";

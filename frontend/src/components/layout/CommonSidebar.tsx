@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Users, Clock, BookOpen, Play } from "lucide-react";
+import { Users, Clock, Play } from "lucide-react";
 
 interface UserInfo {
   id?: string;

@@ -12,6 +12,12 @@ import {
   type Lecture,
 } from "../../../api/professor";
 
+type ClosestClassType = {
+  date: Date;
+  lectureId: string;
+  title: string;
+};
+
 const ProfessorSidebar: React.FC = () => {
   // 방송 시작 관련 모달 로직은 추후 필요 시 다시 연결
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -34,9 +40,6 @@ const ProfessorSidebar: React.FC = () => {
     profileImage: undefined as string | undefined,
   });
 
-  // 곧 다가올 강의 (원본 데이터 저장용)
-  const [lecturesData, setLecturesData] = useState<Lecture[]>([]);
-  
   // 곧 다가올 강의 (실시간 계산된 데이터)
   const [upcomingLectures, setUpcomingLectures] = useState<
     Array<{
@@ -98,6 +101,7 @@ const ProfessorSidebar: React.FC = () => {
           time: string;
           countdown: string;
           lectureId: string;
+          classDate: Date;
         }> = [];
         const myLecturesList: Array<{
           title: string;
@@ -115,7 +119,7 @@ const ProfessorSidebar: React.FC = () => {
 
           // 곧 다가올 강의 찾기 (모든 클래스 확인하여 가장 가까운 다음 강의 찾기)
           if (lecture.classes && lecture.classes.length > 0) {
-            let closestClass: { date: Date; lectureId: string; title: string } | null = null;
+            let closestClass: ClosestClassType | null = null;
             
             // 모든 클래스 중에서 가장 가까운 미래 강의 찾기
             lecture.classes.forEach((cls) => {
@@ -134,32 +138,31 @@ const ProfessorSidebar: React.FC = () => {
             });
 
             // 가장 가까운 강의가 7일 이내인 경우 추가
-            if (closestClass) {
+            if (closestClass !== null) {
+              // 타입 추론을 위한 명시적 타입 지정
+              const closest: ClosestClassType = closestClass;
               // 날짜만 비교하여 정확한 일수 계산
               const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const classDateOnly = new Date(closestClass.date.getFullYear(), closestClass.date.getMonth(), closestClass.date.getDate());
+              const classDateOnly = new Date(closest.date.getFullYear(), closest.date.getMonth(), closest.date.getDate());
               const diffDays = Math.ceil((classDateOnly.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
 
               if (diffDays >= 0 && diffDays <= 7) {
-                const hours = closestClass.date.getHours();
-                const minutes = closestClass.date.getMinutes();
+                const hours = closest.date.getHours();
+                const minutes = closest.date.getMinutes();
                 const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 
                 upcoming.push({
-                  title: closestClass.title,
+                  title: closest.title,
                   time: timeStr,
                   countdown: `D-${diffDays}`,
-                  lectureId: closestClass.lectureId,
-                  classDate: closestClass.date, // 원본 날짜 저장
+                  lectureId: closest.lectureId,
+                  classDate: closest.date, // 원본 날짜 저장
                 });
               }
             }
           }
         });
         
-        // 강의 데이터 저장 (실시간 업데이트용)
-        setLecturesData(lecturesResponse.lectures);
-
         // 날짜순으로 정렬 (가까운 날짜가 먼저)
         upcoming.sort((a, b) => {
           return a.classDate.getTime() - b.classDate.getTime();
