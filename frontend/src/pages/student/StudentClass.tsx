@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Download, ChevronDown, ChevronUp, Users } from "lucide-react";
-import { getClasses, getLectureDetail, getClassMaterials } from "../../api/student";
+import { getClasses, getLectureDetail, getClassMaterials, getMyQuestions, type MyQuestionItem } from "../../api/student";
 import Toast from "../../components/common/Toast";
 import { getBaseUrl, apiFetch } from "../../api/auth/client";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
@@ -69,12 +69,11 @@ const StudentClass: React.FC = () => {
     title: "학생",
     affiliation: "광운대학교 정보융합학부",
   });
-  // 최신 질문 (임시 데이터, 나중에 API로 교체)
-  const latestQuestions = [
-    { q: "과목에 대한 질문을 해도 되나요?", a: "네, 얼마든지요..." },
-    { q: "실습 환경은 어떻게 구성하나요?", a: "Colab을 권장합니다." },
-    { q: "과제 제출 형식이 궁금해요", a: "PDF 혹은 노트북 파일" },
-  ];
+  // 최신 질문 관련 state
+  const [latestQuestions, setLatestQuestions] = useState<MyQuestionItem[]>([]);
+  const [isLatestQuestionsLoading, setIsLatestQuestionsLoading] = useState(false);
+  const [latestQuestionsError, setLatestQuestionsError] = useState<string | null>(null);
+  const [selectedQuestionClassId, setSelectedQuestionClassId] = useState<number | null>(null);
 
   const resolveUrl = useCallback((url: string | undefined | null) => {
     if (!url || typeof url !== "string") return url || "";
@@ -158,6 +157,7 @@ const StudentClass: React.FC = () => {
                   active: boolean; 
                   live_id?: number | null;
                   class_id?: number;
+                  lecture_id?: string;
                 }>(
                   `/api/professor/lectures/${id}/classes/${week.week}/live/current`,
                   {
@@ -167,10 +167,12 @@ const StudentClass: React.FC = () => {
                     },
                   }
                 );
-                console.log(`Week ${week.week} live status:`, response);
+                console.log(`[StudentClass] Week ${week.week} live status:`, response);
+                const isActive = response.active === true;
+                console.log(`[StudentClass] Week ${week.week} isActive:`, isActive);
                 return { 
                   week: week.week, 
-                  active: response.active === true,
+                  active: isActive,
                   liveId: response.live_id || null,
                   classId: response.class_id || week.week,
                 };
@@ -183,36 +185,33 @@ const StudentClass: React.FC = () => {
 
           // 현재 라이브 중인 클래스 찾기
           const liveWeek = liveChecks.find((check) => check.active === true);
-          console.log("Live checks result:", liveChecks);
-          console.log("Active live week:", liveWeek);
-          console.log(
-            "Current live class state before update:",
-            currentLiveClass
-          );
+          console.log("[StudentClass] Live checks result:", liveChecks);
+          console.log("[StudentClass] Active live week:", liveWeek);
+          console.log("[StudentClass] Current live class state before update:", currentLiveClass);
 
           if (liveWeek) {
             const liveWeekData = transformedWeeks.find(
               (w) => w.week === liveWeek.week
             );
+            const weekTitle = liveWeekData?.title || `${liveWeek.week}주차`;
             const newLiveClass = {
               active: true,
               classId: liveWeek.classId || liveWeek.week,
-              weekTitle: liveWeekData?.title || `${liveWeek.week}주차`,
+              weekTitle: weekTitle,
             };
-            console.log("Setting currentLiveClass to:", JSON.stringify(newLiveClass));
+            console.log("[StudentClass] Setting currentLiveClass to:", JSON.stringify(newLiveClass));
             setCurrentLiveClass(newLiveClass);
-            console.log("Current live class set:", newLiveClass);
+            console.log("[StudentClass] ✅ Current live class set:", newLiveClass);
             
-            // 이미 시작된 라이브에 대한 알림 표시
-            setTimeout(() => {
-              setToast({
-                message: `${newLiveClass.weekTitle} 라이브가 진행 중입니다! 지금 입장하세요.`,
-                type: "success",
-              });
-            }, 100);
+            // 배너 표시 확인
+            console.log("[StudentClass] 배너 표시 조건:", {
+              currentLiveClass: newLiveClass,
+              active: newLiveClass.active,
+              shouldShow: newLiveClass && newLiveClass.active
+            });
           } else {
+            console.log("[StudentClass] No active live class found");
             setCurrentLiveClass(null);
-            console.log("No active live class found");
           }
         } else {
           console.log("No weeks to check for live status");
@@ -232,6 +231,111 @@ const StudentClass: React.FC = () => {
 
     fetchData();
   }, [id]);
+
+  // 주기적으로 라이브 상태 확인 (30초마다)
+  useEffect(() => {
+    if (!id || weeks.length === 0) return;
+
+    const checkLiveStatus = async () => {
+      try {
+        const token = localStorage.getItem("lecq.token");
+        if (!token) return;
+
+        const liveChecks = await Promise.all(
+          weeks.map(async (week) => {
+            try {
+              const response = await apiFetch<{ 
+                active: boolean; 
+                live_id?: number | null;
+                class_id?: number;
+              }>(
+                `/api/professor/lectures/${id}/classes/${week.week}/live/current`,
+                {
+                  method: "GET",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
+              return { 
+                week: week.week, 
+                active: response.active === true,
+                liveId: response.live_id || null,
+                classId: response.class_id || week.week,
+              };
+            } catch (error) {
+              return { week: week.week, active: false, liveId: null, classId: week.week };
+            }
+          })
+        );
+
+        const liveWeek = liveChecks.find((check) => check.active === true);
+        if (liveWeek) {
+          const liveWeekData = weeks.find((w) => w.week === liveWeek.week);
+          setCurrentLiveClass({
+            active: true,
+            classId: liveWeek.classId || liveWeek.week,
+            weekTitle: liveWeekData?.title || `${liveWeek.week}주차`,
+          });
+        } else {
+          setCurrentLiveClass(null);
+        }
+      } catch (error) {
+        console.error("라이브 상태 확인 오류:", error);
+      }
+    };
+
+    // 즉시 한 번 확인
+    checkLiveStatus();
+
+    // 30초마다 확인
+    const interval = setInterval(checkLiveStatus, 30000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [id, weeks]);
+
+  // 선택된 클래스의 질문 조회
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLatestQuestions = async () => {
+      if (!id || !selectedQuestionClassId) return;
+      setIsLatestQuestionsLoading(true);
+      setLatestQuestionsError(null);
+      try {
+        const response = await getMyQuestions(id, selectedQuestionClassId, 200);
+        if (!isMounted) return;
+        const sorted = [...(response.questions ?? [])].sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        setLatestQuestions(sorted.slice(0, 5));
+      } catch (error) {
+        if (!isMounted) return;
+        const message =
+          error instanceof Error ? error.message : "질문을 불러오지 못했어요.";
+        setLatestQuestions([]);
+        setLatestQuestionsError(message);
+      } finally {
+        if (isMounted) {
+          setIsLatestQuestionsLoading(false);
+        }
+      }
+    };
+
+    fetchLatestQuestions();
+    return () => {
+      isMounted = false;
+    };
+  }, [id, selectedQuestionClassId]);
+
+  // weeks가 변경되면 첫 번째 클래스를 기본 선택
+  useEffect(() => {
+    if (weeks.length > 0 && selectedQuestionClassId === null) {
+      setSelectedQuestionClassId(Number(weeks[0].week));
+    }
+  }, [weeks, selectedQuestionClassId]);
 
   // 소켓 연결 및 라이브 시작 알림 리스닝
   useEffect(() => {
@@ -574,6 +678,18 @@ const StudentClass: React.FC = () => {
     setSelectedLesson(null);
   };
 
+  const formatQuestionTimestamp = (isoString?: string) => {
+    if (!isoString) return "-";
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return "-";
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mm = String(date.getMinutes()).padStart(2, "0");
+    return `${y}.${m}.${d} ${hh}:${mm}`;
+  };
+
   return (
     <div className="flex-1 flex">
       {/* 사이드바 */}
@@ -581,40 +697,86 @@ const StudentClass: React.FC = () => {
         userType="student"
         userInfo={studentInfo}
         additionalContent={
-          <div className="p-6 border-t border-gray-200 space-y-6">
-            <div>
-              <h4 className="text-xl font-extrabold text-gray-900 leading-snug">
-                {course.title || "강좌 정보를 불러오는 중..."}
-              </h4>
-              <div className="mt-2 flex items-center space-x-4 text-gray-800">
-                <span className="text-base font-medium">
-                  {course.instructor || ""}
-                </span>
-                <span className="inline-flex items-center space-x-1 text-base">
-                  <Users className="w-4 h-4 text-gray-500" />
-                  <span>{course.participants}</span>
-                </span>
+          <div className="flex flex-col h-full border-t border-gray-200 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div>
+                <h4 className="text-xl font-extrabold text-gray-900 leading-snug">
+                  {course.title || "강좌 정보를 불러오는 중..."}
+                </h4>
+                <div className="mt-2 flex items-center space-x-4 text-gray-800">
+                  <span className="text-base font-medium">
+                    {course.instructor || ""}
+                  </span>
+                  <span className="inline-flex items-center space-x-1 text-base">
+                    <Users className="w-4 h-4 text-gray-500" />
+                    <span>{course.participants}</span>
+                  </span>
+                </div>
+                <div className="mt-6 space-y-5 text-gray-700 text-[12px] max-h-32 overflow-y-auto pr-1">
+                  <p>
+                    {course.description ||
+                      "이미 12명 이상이 학습하고 만족한 최고의 프로그래밍 입문 강의. 프로그래밍을 전혀 접해보지 못한 사람부터 실제 활용 가능한 프로그래밍 능력까지 갈 수 있도록 도와주는 강의입니다."}
+                  </p>
+                </div>
               </div>
-              <div className="mt-6 space-y-5 text-gray-700 text-[12px]">
-                <p>
-                  {course.description ||
-                    "이미 12명 이상이 학습하고 만족한 최고의 프로그래밍 입문 강의. 프로그래밍을 전혀 접해보지 못한 사람부터 실제 활용 가능한 프로그래밍 능력까지 갈 수 있도록 도와주는 강의입니다."}
-                </p>
-              </div>
-            </div>
-            <div>
-              <h4 className="text-md font-semibold text-gray-900 mb-3 border-t border-gray-200 pt-2">
-                최신 질문
-              </h4>
-              <div className="space-y-3 max-h-60 overflow-y-visible pr-1">
-                {latestQuestions.map((item, idx) => (
-                  <div key={idx} className="border border-gray-200 rounded p-3">
-                    <div className="text-sm font-medium text-gray-800">
-                      Q. {item.q}
+              <div>
+                <div className="flex items-center justify-between gap-2 border-t border-gray-200 pt-2 mb-3">
+                  <h4 className="text-md font-semibold text-gray-900 whitespace-nowrap flex-shrink-0">
+                    최신 질문
+                  </h4>
+                  {weeks.length > 0 && (
+                    <select
+                      className="text-xs border border-gray-200 rounded-md px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white flex-shrink min-w-0 max-w-full"
+                      value={selectedQuestionClassId ?? ""}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        setSelectedQuestionClassId(
+                          Number.isNaN(value) ? null : value
+                        );
+                      }}
+                    >
+                      {weeks.map((week) => (
+                        <option key={week.week} value={week.week}>
+                          {week.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="space-y-3 h-56 overflow-auto pr-1">
+                  {isLatestQuestionsLoading ? (
+                    <div className="text-sm text-gray-500 py-6 text-center">
+                      질문을 불러오는 중입니다...
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">{item.a}</div>
-                  </div>
-                ))}
+                  ) : latestQuestionsError ? (
+                    <div className="text-sm text-red-500 py-6 text-center">
+                      {latestQuestionsError}
+                    </div>
+                  ) : latestQuestions.length === 0 ? (
+                    <div className="text-sm text-gray-500 py-6 text-center">
+                      아직 질문이 없습니다.
+                    </div>
+                  ) : (
+                    latestQuestions.map((item) => (
+                      <div
+                        key={item._id}
+                        className="border border-gray-200 rounded-lg p-3 bg-white/60"
+                      >
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500 mb-1">
+                          <span className="truncate flex-shrink-0">
+                            {item.author?.name || "익명"}
+                          </span>
+                          <span className="whitespace-nowrap flex-shrink-0">
+                            {formatQuestionTimestamp(item.timestamp)}
+                          </span>
+                        </div>
+                        <div className="text-sm font-medium text-gray-900 break-words">
+                          Q. {item.text}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -622,9 +784,9 @@ const StudentClass: React.FC = () => {
       />
 
       {/* 메인 콘텐츠 */}
-      <section className="flex-1 flex flex-col ml-80 overflow-y-auto">
+      <section className="flex-1 flex flex-col ml-80 overflow-y-auto bg-gradient-to-br from-gray-50 to-gray-100">
         {/* 헤더 */}
-        <div className="bg-gray-100 px-6 py-4 border-b border-gray-200 flex-shrink-0">
+        <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <h1 className="text-2xl font-bold text-gray-900">
@@ -634,46 +796,37 @@ const StudentClass: React.FC = () => {
           </div>
         </div>
 
-        {/* 라이브 알림 및 입장하기 버튼 */}
-        {currentLiveClass && currentLiveClass.active && (
-          <div className="px-6 py-6 bg-gray-50 border-b border-gray-200 flex-shrink-0" style={{ display: 'block', visibility: 'visible', opacity: 1, position: 'relative', zIndex: 10 }}>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border-2 border-blue-200 shadow-lg">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white animate-pulse">
-                      🔴 LIVE
-                    </span>
-                    <p className="text-lg font-bold text-gray-900">
-                      현재{" "}
-                      <span className="text-blue-600 font-bold">
-                        {currentLiveClass.weekTitle}
-                      </span>
-                      <span className="text-gray-900">가 진행 중입니다.</span>
-                    </p>
-                  </div>
-                  <p className="text-sm text-gray-700 mb-2">
-                    지금 입장하면 실시간 채팅과 질문 참여가 가능합니다. 늦지 않게
-                    합류하세요!
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    입장 링크: /student/participate?lectureId={course.id}&classId={currentLiveClass.classId}
-                  </p>
-                </div>
-                <button
-                  onClick={handleEnterLecture}
-                  className="ml-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center space-x-2 flex-shrink-0 shadow-md hover:shadow-lg transform hover:scale-105"
-                >
-                  <span className="text-lg">▷</span>
-                  <span>강의 입장하기</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* 콘텐츠 */}
         <div className="flex-1 p-6 overflow-y-auto flex-shrink">
+          {/* 라이브 알림 및 입장하기 버튼 - 강의 목록 위에 표시 */}
+          {currentLiveClass && currentLiveClass.active && (
+            <div className="mb-6">
+              <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-md">
+                <div className="flex items-center justify-between gap-6">
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                      현재{" "}
+                      <span className="text-blue-600">
+                        {currentLiveClass.weekTitle}
+                      </span>
+                      가 진행 중입니다.
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      지금 입장하면 실시간 채팅과 질문 참여가 가능합니다. 늦지 않게
+                      합류하세요!
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleEnterLecture}
+                    className="px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-lg transition-colors flex items-center gap-2 flex-shrink-0"
+                  >
+                    <span className="text-lg">▶</span>
+                    <span>강의 입장하기</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-gray-500">클래스 목록을 불러오는 중...</div>
@@ -695,7 +848,7 @@ const StudentClass: React.FC = () => {
                 return (
                   <details
                     key={w.week}
-                    className="bg-white border border-gray-200 rounded-lg group"
+                    className="bg-white border border-gray-200 rounded-xl shadow-md group"
                     open={w.week === 1}
                     onToggle={(event) =>
                       handleToggleWeek(
@@ -747,7 +900,7 @@ const StudentClass: React.FC = () => {
                           {w.items.map((item, idx) => (
                             <div
                               key={idx}
-                              className="flex items-center justify-between p-3 border border-gray-200 rounded hover:bg-gray-50"
+                              className="flex items-center justify-between p-3 border border-gray-200 rounded hover:bg-gray-100"
                             >
                               <div className="flex items-center space-x-3 flex-1 min-w-0">
                                 <Download className="w-5 h-5 text-gray-400 flex-shrink-0" />

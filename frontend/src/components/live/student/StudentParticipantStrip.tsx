@@ -132,8 +132,8 @@ const StudentParticipantStrip: React.FC<Props> = ({
   };
 
   return (
-    <div className="px-6 py-4 border-b border-gray-200">
-      <div className="flex items-center space-x-3 overflow-x-auto no-scrollbar">
+    <div className="px-4 py-3 border-b border-gray-200">
+      <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar">
         {/* 교수자 카메라 */}
         <div className="flex-none w-28 h-20 rounded-lg bg-gray-900 text-white relative overflow-hidden">
           {professorCameraRef && (

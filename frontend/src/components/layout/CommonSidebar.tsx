@@ -54,7 +54,9 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       : `/student/profile${userInfo.id ? `/${userInfo.id}` : ""}`;
 
   return (
-    <div className="fixed top-20 left-0 w-80 bg-white shadow-lg h-[calc(100vh-5rem)] overflow-y-auto flex flex-col z-10">
+    <div className={`fixed top-20 left-0 w-80 bg-white shadow-lg h-[calc(100vh-5rem)] flex flex-col z-10 ${
+      userType === "student" ? "overflow-hidden" : "overflow-y-auto"
+    }`}>
       {/* 사용자 프로필 섹션 */}
       <div className="pt-10 p-6 border-b border-gray-200">
         <div className="flex items-center space-x-4 mb-4">
@@ -255,32 +257,51 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       {userType === "student" && myLectures.length > 0 && (
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">내 강의</h3>
-          <div className="space-y-3">
-            {myLectures.map((lecture, idx) => (
-              <div key={`${lecture.title}-${idx}`}>
-                <div className="flex items-start space-x-3">
-                  <BookOpen className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {lecture.title}
-                    </p>
-                    {lecture.subtitle && (
-                      <p className="text-xs text-gray-600 truncate">
-                        {lecture.subtitle}
+          <div
+            className={`space-y-3 ${myLectures.length > 4 ? "max-h-64 overflow-y-auto pr-2" : ""}`}
+          >
+            {myLectures.map((lecture, idx) => {
+              const lectureId = lecture.lectureId;
+              const content = (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <Users className="w-4 h-4 text-gray-400" />
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {lecture.title}
                       </p>
-                    )}
+                    </div>
                     {typeof lecture.participants === "number" && (
-                      <div className="flex flex-wrap items-center text-xs text-gray-500 mt-1 gap-2">
-                        <span className="flex items-center space-x-1">
-                          <Users className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{lecture.participants}</span>
+                      <div className="flex items-center space-x-1">
+                        <Users className="w-4 h-4 text-gray-400" />
+                        <span className="text-xs text-gray-500">
+                          {lecture.participants}
                         </span>
                       </div>
                     )}
                   </div>
+                  {lecture.subtitle && (
+                    <div className="flex items-center justify-between text-xs text-gray-500 mt-0.5">
+                      <span className="truncate">{lecture.subtitle}</span>
+                    </div>
+                  )}
+                </>
+              );
+
+              return lectureId ? (
+                <Link
+                  key={`${lecture.title}-${idx}`}
+                  to={`/student/courses/${lectureId}`}
+                  className="block hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors cursor-pointer"
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div key={`${lecture.title}-${idx}`} className="">
+                  {content}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -299,7 +320,13 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       )}
 
       {/* 추가 콘텐츠 */}
-      {additionalContent}
+      {userType === "student" && additionalContent ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {additionalContent}
+        </div>
+      ) : (
+        additionalContent
+      )}
     </div>
   );
 };

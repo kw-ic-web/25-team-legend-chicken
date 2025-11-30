@@ -56,7 +56,7 @@ const LiveWatching: React.FC = () => {
   const classIdParam = searchParams.get("classId");
   const classId = classIdParam ? Number(classIdParam) : null;
 
-  const [activeTab, setActiveTab] = useState<"chat" | "questions">("chat");
+  // activeTab 제거 - 채팅만 표시
   const [chatMessage, setChatMessage] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [_questions, setQuestions] = useState<ApiQuestion[]>([]);
@@ -1098,209 +1098,183 @@ const LiveWatching: React.FC = () => {
   }, [stopStudentCamera]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex h-[calc(100vh-80px)]">
+    <div className="flex h-full bg-gray-50">
+      <div className="flex flex-1 overflow-hidden">
         {/* 메인 콘텐츠 영역 - 교수 레이아웃과 동일 */}
-        <div className="flex-1 bg-white m-4 rounded-lg shadow-sm">
-          <div className="h-full flex flex-col">
+        <div className="flex-1 bg-white m-2 rounded-lg shadow-sm overflow-hidden">
+          <div className="h-full flex flex-col overflow-hidden">
             {/* 강의 제목 - 교수 화면 스타일 매칭 */}
-            <div className="p-6 border-b border-gray-200">
-              <h1 className="text-2xl font-bold text-green-600">
-                {isLoading
-                  ? "로딩 중..."
-                  : lectureInfo
-                    ? `${lectureInfo.classTitle} - ${lectureInfo.lectureName}`
-                    : "강의 정보 없음"}
-              </h1>
-              {lectureInfo && !lectureInfo.liveId && (
-                <p className="text-sm text-gray-500 mt-2">
-                  현재 진행 중인 라이브 방송이 없습니다.
-                </p>
-              )}
+            <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-white via-white to-green-50">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h1 className="text-xl font-bold text-green-600 truncate">
+                  {isLoading
+                    ? "로딩 중..."
+                    : lectureInfo
+                      ? `${lectureInfo.classTitle} - ${lectureInfo.lectureName}`
+                      : "강의 정보 없음"}
+                </h1>
+                {lectureInfo && !lectureInfo.liveId && (
+                  <p className="text-xs text-gray-500">
+                    현재 진행 중인 라이브 방송이 없습니다.
+                  </p>
+                )}
+              </div>
             </div>
 
-            {/* 상단 참여자(웹캠) 스트립 */}
-            <StudentParticipantStrip
-              professorCameraRef={professorVideoRef}
-              studentVideoRef={studentVideoRef}
-              isStudentCameraOn={isStudentCameraOn}
-              remoteParticipants={remoteParticipants}
-            />
-
-            {/* 강의 콘텐츠(화면 공유 영역) - 컨트롤 제거 */}
-            <div className="relative flex-1">
-              {sharedPdf ? (
+            {/* 강의 콘텐츠(화면 공유 영역) */}
+            {sharedPdf ? (
+              <div className="relative flex-1">
                 <StudentPdfViewer
                   pdfUrl={sharedPdf.url}
                   pdfName={sharedPdf.name}
                   socket={chatSocketRef.current}
                 />
-              ) : (
-                <StudentScreenArea
-                  isLive={isLive}
-                  videoRef={videoRef}
-                  statusText={
-                    isLoading
-                      ? "로딩 중..."
-                      : !lectureInfo?.liveId
-                        ? "방송 대기 중"
-                        : webrtcStatus === "connecting"
-                          ? "연결 중..."
-                          : webrtcStatus === "connected"
-                            ? "라이브 방송 중"
-                            : "연결 오류"
-                  }
+                <StudentLiveControls
+                  isMicOn={isStudentMicOn}
+                  isCameraOn={isStudentCameraOn}
+                  onToggleMic={toggleStudentMic}
+                  onToggleCamera={toggleStudentCamera}
                 />
-              )}
-              <StudentLiveControls
-                isMicOn={isStudentMicOn}
-                isCameraOn={isStudentCameraOn}
-                onToggleMic={toggleStudentMic}
-                onToggleCamera={toggleStudentCamera}
-              />
-            </div>
+              </div>
+            ) : (
+              <StudentScreenArea
+                isLive={isLive}
+                videoRef={videoRef}
+                statusText={
+                  isLoading
+                    ? "로딩 중..."
+                    : !lectureInfo?.liveId
+                      ? "방송 대기 중"
+                      : webrtcStatus === "connecting"
+                        ? "연결 중..."
+                        : webrtcStatus === "connected"
+                          ? "라이브 방송 중"
+                          : "연결 오류"
+                }
+              >
+                <StudentLiveControls
+                  isMicOn={isStudentMicOn}
+                  isCameraOn={isStudentCameraOn}
+                  onToggleMic={toggleStudentMic}
+                  onToggleCamera={toggleStudentCamera}
+                />
+              </StudentScreenArea>
+            )}
           </div>
         </div>
 
-        {/* 우측 채팅/질문 패널 - 교수 마크업을 복제(버튼 제거) */}
-        <div className="w-80 bg-white border-l border-gray-200">
+        {/* 우측 채팅 패널 - 반응형 처리 */}
+        <div className="hidden lg:block w-80 bg-white border-l border-gray-200">
           <div className="h-full flex flex-col">
-            {/* 탭 헤더 */}
-            <div className="flex border-b border-gray-200">
+            {/* 헤더 - 실시간 채팅 + 질문하기 버튼 */}
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <h3 className="text-sm font-medium text-gray-900">실시간 채팅</h3>
               <button
-                onClick={() => setActiveTab("chat")}
-                className={`flex-1 py-3 px-4 text-sm font-medium ${
-                  activeTab === "chat"
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
+                onClick={handleOpenLessonQuestionModal}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
               >
-                실시간 채팅
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab("questions");
-                  handleOpenLessonQuestionModal();
-                }}
-                className={`flex-1 py-3 px-4 text-sm font-medium ${
-                  activeTab === "questions"
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                질문
+                질문하기
               </button>
             </div>
 
-            {/* 탭 콘텐츠 */}
+            {/* 채팅 메시지 영역 */}
             <div className="flex-1 overflow-y-auto" ref={chatContainerRef}>
-              {activeTab === "questions" ? (
-                <div className="p-4">
+              <div className="p-4 space-y-3">
+                {chatMessages.length === 0 ? (
                   <div className="text-center text-gray-500 text-sm py-8">
-                    질문이 없습니다. 교안 및 질문 보기 모달에서 질문을
-                    확인하세요.
+                    채팅 메시지가 없습니다.
                   </div>
-                </div>
-              ) : (
-                <div className="p-4 space-y-3">
-                  {chatMessages.length === 0 ? (
-                    <div className="text-center text-gray-500 text-sm py-8">
-                      채팅 메시지가 없습니다.
-                    </div>
-                  ) : (
-                    chatMessages.map((msg) => {
-                      const isProfessor = msg.sender.role === "professor";
-                      const isOwnMessage = msg.sender.id === user?.id;
-                      const time = new Date(msg.timestamp || msg.created_at);
-                      const timeStr = `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}`;
+                ) : (
+                  chatMessages.map((msg) => {
+                    const isProfessor = msg.sender.role === "professor";
+                    const isOwnMessage = msg.sender.id === user?.id;
+                    const time = new Date(msg.timestamp || msg.created_at);
+                    const timeStr = `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}`;
 
-                      return (
+                    return (
+                      <div
+                        key={msg._id}
+                        className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                      >
                         <div
-                          key={msg._id}
-                          className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                          className={`max-w-[80%] rounded-lg p-2 ${
+                            isOwnMessage
+                              ? "bg-blue-600 text-white"
+                              : isProfessor
+                                ? "bg-green-100 text-gray-900"
+                                : "bg-white text-gray-900 border border-gray-200"
+                          }`}
                         >
-                          <div
-                            className={`max-w-[80%] rounded-lg p-2 ${
-                              isOwnMessage
-                                ? "bg-blue-600 text-white"
-                                : isProfessor
-                                  ? "bg-green-100 text-gray-900"
-                                  : "bg-gray-100 text-gray-900"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 mb-1">
-                              <span
-                                className={`text-xs font-medium ${
-                                  isOwnMessage
-                                    ? "text-blue-100"
-                                    : isProfessor
-                                      ? "text-green-700"
-                                      : "text-gray-600"
-                                }`}
-                              >
-                                {isOwnMessage
-                                  ? "나"
+                          <div className="flex items-center gap-2 mb-1">
+                            <span
+                              className={`text-xs font-medium ${
+                                isOwnMessage
+                                  ? "text-blue-100"
                                   : isProfessor
-                                    ? "교수자"
-                                    : msg.sender.name}
-                              </span>
-                              <span
-                                className={`text-[10px] ${
-                                  isOwnMessage
-                                    ? "text-blue-200"
-                                    : "text-gray-500"
-                                }`}
-                              >
-                                {timeStr}
-                              </span>
-                            </div>
-                            <p className="text-sm break-words">{msg.text}</p>
+                                    ? "text-green-700"
+                                    : "text-gray-600"
+                              }`}
+                            >
+                              {isOwnMessage
+                                ? "나"
+                                : isProfessor
+                                  ? "교수자"
+                                  : msg.sender.name}
+                            </span>
+                            <span
+                              className={`text-[10px] ${
+                                isOwnMessage
+                                  ? "text-blue-200"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              {timeStr}
+                            </span>
                           </div>
+                          <p className="text-sm break-words">{msg.text}</p>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             {/* 하단 입력 영역 */}
-            {activeTab === "chat" && (
-              <div className="border-t border-gray-200 p-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={chatMessage}
-                    onChange={(e) => setChatMessage(e.target.value)}
-                    placeholder="채팅 입력 (Enter)"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:opacity-50"
-                    disabled={isSendingMessage}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (!isSendingMessage) {
-                          handleSendChatMessage();
-                        }
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={(e) => {
+            <div className="border-t border-gray-200 p-4">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  placeholder="채팅 입력 (Enter)"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:opacity-50"
+                  disabled={isSendingMessage}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       e.stopPropagation();
                       if (!isSendingMessage) {
                         handleSendChatMessage();
                       }
-                    }}
-                    disabled={isSendingMessage}
-                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
+                    }
+                  }}
+                />
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!isSendingMessage) {
+                      handleSendChatMessage();
+                    }
+                  }}
+                  disabled={isSendingMessage}
+                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>

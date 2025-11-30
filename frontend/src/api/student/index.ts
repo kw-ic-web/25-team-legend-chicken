@@ -144,6 +144,10 @@ export async function getClasses(
   return getProfessorClasses(lectureId);
 }
 
+/**
+ * 학생 라이브 참여 정보 조회 응답 타입
+ * GET /api/student/participate
+ */
 export type ParticipateResponse = {
   lecture_id: string;
   lecture_name: string;
@@ -151,10 +155,19 @@ export type ParticipateResponse = {
   class_title: string;
   is_live_active: boolean;
   live_id: number | null;
-  started_at: string | null;
-  live_path: string | null;
+  started_at: string | null; // ISO 8601 형식 (예: "2025-11-18T09:14:18.468Z")
+  live_path: string | null; // 라이브 참여 경로 (예: "/student/participate?lectureId=LEC-32AEBA14&classId=1")
 };
 
+/**
+ * 학생이 특정 강좌의 특정 클래스에 참여하기 위한 라이브 방송 정보를 조회합니다.
+ * 현재 활성 라이브 상태, 라이브 ID, 시작 시간, 입장 경로 등을 반환합니다.
+ * 
+ * @param lectureId - 강좌 ID (필수)
+ * @param classId - 클래스 ID (필수)
+ * @returns 라이브 참여 정보
+ * @throws {Error} 인증 토큰이 없거나 API 호출 실패 시
+ */
 export async function getParticipateInfo(
   lectureId: string,
   classId: number
@@ -248,5 +261,70 @@ export async function getClassMaterials(
       },
     }
   );
+}
+
+export type MyQuestionItem = {
+  _id: string;
+  lecture_id: string;
+  lecture_name: string | null;
+  class_id: number;
+  page: number;
+  section?: string | null;
+  position: {
+    x: number;
+    y: number;
+  };
+  timestamp: string;
+  type: string;
+  author: {
+    id: string;
+    name: string;
+  };
+  text: string;
+  answer: string | null;
+  upvote_count: number;
+  metadata: Record<string, unknown>;
+  live_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GetMyQuestionsResponse = {
+  student_id: string;
+  student_name: string;
+  total_count: number;
+  questions: MyQuestionItem[];
+};
+
+export async function getMyQuestions(
+  lectureId?: string,
+  classId?: number,
+  limit?: number
+): Promise<GetMyQuestionsResponse> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const queryParams = new URLSearchParams();
+  if (lectureId) {
+    queryParams.set("lectureId", lectureId);
+  }
+  if (classId !== undefined) {
+    queryParams.set("classId", String(classId));
+  }
+  if (limit !== undefined) {
+    queryParams.set("limit", String(limit));
+  }
+
+  const queryString = queryParams.toString();
+  const url = `/api/student/my-questions${queryString ? `?${queryString}` : ""}`;
+
+  return apiFetch<GetMyQuestionsResponse>(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
 
