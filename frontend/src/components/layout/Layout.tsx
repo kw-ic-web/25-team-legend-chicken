@@ -21,10 +21,13 @@ const Layout: React.FC = () => {
   const shouldShowSidebar =
     !isRealtimeDashboard && !isStudentClass && !isStudentParticipate;
 
+  // student/courses 페이지는 자체 사이드바를 가지고 있고 스크롤이 필요함
+  const shouldAllowScroll = isStudentClass;
+
   return (
     <div
       className={`h-screen bg-gray-50 flex flex-col ${
-        shouldShowSidebar ? "" : "overflow-hidden"
+        shouldShowSidebar ? "" : shouldAllowScroll ? "" : "overflow-hidden"
       }`}
     >
       {/* 헤더 */}
@@ -34,7 +37,7 @@ const Layout: React.FC = () => {
       {/* 메인 레이아웃 */}
       <div
         className={`flex flex-1 pt-20 ${
-          shouldShowSidebar ? "overflow-auto" : "overflow-hidden"
+          shouldShowSidebar ? "overflow-auto" : shouldAllowScroll ? "overflow-auto" : "overflow-hidden"
         }`}
       >
         {/* 사이드바 */}
@@ -48,7 +51,7 @@ const Layout: React.FC = () => {
         {/* 메인 콘텐츠 */}
         <main
           className={`flex-1 flex flex-col ${
-            shouldShowSidebar ? "overflow-auto" : "overflow-hidden"
+            shouldShowSidebar ? "overflow-auto" : shouldAllowScroll ? "overflow-auto" : "overflow-hidden"
           } ${
             shouldShowSidebar && (isStudentRoute || isProfessorRoute)
               ? "ml-80"
