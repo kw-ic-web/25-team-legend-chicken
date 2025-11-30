@@ -158,6 +158,7 @@ const StudentClass: React.FC = () => {
                   active: boolean; 
                   live_id?: number | null;
                   class_id?: number;
+                  lecture_id?: string;
                 }>(
                   `/api/professor/lectures/${id}/classes/${week.week}/live/current`,
                   {
@@ -167,10 +168,12 @@ const StudentClass: React.FC = () => {
                     },
                   }
                 );
-                console.log(`Week ${week.week} live status:`, response);
+                console.log(`[StudentClass] Week ${week.week} live status:`, response);
+                const isActive = response.active === true;
+                console.log(`[StudentClass] Week ${week.week} isActive:`, isActive);
                 return { 
                   week: week.week, 
-                  active: response.active === true,
+                  active: isActive,
                   liveId: response.live_id || null,
                   classId: response.class_id || week.week,
                 };
@@ -183,36 +186,33 @@ const StudentClass: React.FC = () => {
 
           // 현재 라이브 중인 클래스 찾기
           const liveWeek = liveChecks.find((check) => check.active === true);
-          console.log("Live checks result:", liveChecks);
-          console.log("Active live week:", liveWeek);
-          console.log(
-            "Current live class state before update:",
-            currentLiveClass
-          );
+          console.log("[StudentClass] Live checks result:", liveChecks);
+          console.log("[StudentClass] Active live week:", liveWeek);
+          console.log("[StudentClass] Current live class state before update:", currentLiveClass);
 
           if (liveWeek) {
             const liveWeekData = transformedWeeks.find(
               (w) => w.week === liveWeek.week
             );
+            const weekTitle = liveWeekData?.title || `${liveWeek.week}주차`;
             const newLiveClass = {
               active: true,
               classId: liveWeek.classId || liveWeek.week,
-              weekTitle: liveWeekData?.title || `${liveWeek.week}주차`,
+              weekTitle: weekTitle,
             };
-            console.log("Setting currentLiveClass to:", JSON.stringify(newLiveClass));
+            console.log("[StudentClass] Setting currentLiveClass to:", JSON.stringify(newLiveClass));
             setCurrentLiveClass(newLiveClass);
-            console.log("Current live class set:", newLiveClass);
+            console.log("[StudentClass] ✅ Current live class set:", newLiveClass);
             
-            // 이미 시작된 라이브에 대한 알림 표시
-            setTimeout(() => {
-              setToast({
-                message: `${newLiveClass.weekTitle} 라이브가 진행 중입니다! 지금 입장하세요.`,
-                type: "success",
-              });
-            }, 100);
+            // 배너 표시 확인
+            console.log("[StudentClass] 배너 표시 조건:", {
+              currentLiveClass: newLiveClass,
+              active: newLiveClass.active,
+              shouldShow: newLiveClass && newLiveClass.active
+            });
           } else {
+            console.log("[StudentClass] No active live class found");
             setCurrentLiveClass(null);
-            console.log("No active live class found");
           }
         } else {
           console.log("No weeks to check for live status");
@@ -232,6 +232,70 @@ const StudentClass: React.FC = () => {
 
     fetchData();
   }, [id]);
+
+  // 주기적으로 라이브 상태 확인 (30초마다)
+  useEffect(() => {
+    if (!id || weeks.length === 0) return;
+
+    const checkLiveStatus = async () => {
+      try {
+        const token = localStorage.getItem("lecq.token");
+        if (!token) return;
+
+        const liveChecks = await Promise.all(
+          weeks.map(async (week) => {
+            try {
+              const response = await apiFetch<{ 
+                active: boolean; 
+                live_id?: number | null;
+                class_id?: number;
+              }>(
+                `/api/professor/lectures/${id}/classes/${week.week}/live/current`,
+                {
+                  method: "GET",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
+              return { 
+                week: week.week, 
+                active: response.active === true,
+                liveId: response.live_id || null,
+                classId: response.class_id || week.week,
+              };
+            } catch (error) {
+              return { week: week.week, active: false, liveId: null, classId: week.week };
+            }
+          })
+        );
+
+        const liveWeek = liveChecks.find((check) => check.active === true);
+        if (liveWeek) {
+          const liveWeekData = weeks.find((w) => w.week === liveWeek.week);
+          setCurrentLiveClass({
+            active: true,
+            classId: liveWeek.classId || liveWeek.week,
+            weekTitle: liveWeekData?.title || `${liveWeek.week}주차`,
+          });
+        } else {
+          setCurrentLiveClass(null);
+        }
+      } catch (error) {
+        console.error("라이브 상태 확인 오류:", error);
+      }
+    };
+
+    // 즉시 한 번 확인
+    checkLiveStatus();
+
+    // 30초마다 확인
+    const interval = setInterval(checkLiveStatus, 30000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [id, weeks]);
 
   // 소켓 연결 및 라이브 시작 알림 리스닝
   useEffect(() => {
@@ -634,46 +698,37 @@ const StudentClass: React.FC = () => {
           </div>
         </div>
 
-        {/* 라이브 알림 및 입장하기 버튼 */}
-        {currentLiveClass && currentLiveClass.active && (
-          <div className="px-6 py-6 border-b border-gray-200 flex-shrink-0" style={{ display: 'block', visibility: 'visible', opacity: 1, position: 'relative', zIndex: 10 }}>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border-2 border-blue-200 shadow-lg">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white animate-pulse">
-                      🔴 LIVE
-                    </span>
-                    <p className="text-lg font-bold text-gray-900">
-                      현재{" "}
-                      <span className="text-blue-600 font-bold">
-                        {currentLiveClass.weekTitle}
-                      </span>
-                      <span className="text-gray-900">가 진행 중입니다.</span>
-                    </p>
-                  </div>
-                  <p className="text-sm text-gray-700 mb-2">
-                    지금 입장하면 실시간 채팅과 질문 참여가 가능합니다. 늦지 않게
-                    합류하세요!
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    입장 링크: /student/participate?lectureId={course.id}&classId={currentLiveClass.classId}
-                  </p>
-                </div>
-                <button
-                  onClick={handleEnterLecture}
-                  className="ml-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center space-x-2 flex-shrink-0 shadow-md hover:shadow-lg transform hover:scale-105"
-                >
-                  <span className="text-lg">▷</span>
-                  <span>강의 입장하기</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* 콘텐츠 */}
         <div className="flex-1 p-6 overflow-y-auto flex-shrink">
+          {/* 라이브 알림 및 입장하기 버튼 - 강의 목록 위에 표시 */}
+          {currentLiveClass && currentLiveClass.active && (
+            <div className="mb-6">
+              <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-md">
+                <div className="flex items-center justify-between gap-6">
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                      현재{" "}
+                      <span className="text-blue-600">
+                        {currentLiveClass.weekTitle}
+                      </span>
+                      가 진행 중입니다.
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      지금 입장하면 실시간 채팅과 질문 참여가 가능합니다. 늦지 않게
+                      합류하세요!
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleEnterLecture}
+                    className="px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-lg transition-colors flex items-center gap-2 flex-shrink-0"
+                  >
+                    <span className="text-lg">▶</span>
+                    <span>강의 입장하기</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-gray-500">클래스 목록을 불러오는 중...</div>
