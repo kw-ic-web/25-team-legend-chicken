@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Download, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { getClasses, getLectureDetail, getClassMaterials, getMyQuestions, type MyQuestionItem } from "../../api/student";
+import { getMaterialPages } from "../../api/materials";
 import Toast from "../../components/common/Toast";
 import { getBaseUrl, apiFetch } from "../../api/auth/client";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
@@ -9,6 +10,7 @@ import CommonSidebar from "../../components/layout/CommonSidebar";
 import { getMyInfo } from "../../api/auth";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "../../contexts/AuthContext";
+import type { WhiteboardPage } from "../../api/professor";
 
 const StudentClass: React.FC = () => {
   const { id } = useParams();
@@ -47,6 +49,10 @@ const StudentClass: React.FC = () => {
     title: string;
     fileName: string;
     fileSize: string;
+    url?: string;
+    lectureId?: string;
+    classId?: number;
+    pages?: WhiteboardPage[];
   } | null>(null);
   const [currentLiveClass, setCurrentLiveClass] = useState<{
     active: boolean;
@@ -537,22 +543,57 @@ const StudentClass: React.FC = () => {
     if (!course.id) return;
     setIsPdfLoadingFor(classId);
     try {
-      const resp = await getClassMaterials(course.id, classId);
+      // 통일된 materials API 사용 (페이지별 교안 조회)
+      const pagesResponse = await getMaterialPages(course.id, classId, "finalized");
+      
+      // 페이지별 교안이 있으면 사용, 없으면 원본 materials 확인
+      let materialUrl: string | undefined;
+      let materialName: string | undefined;
+      let pages: WhiteboardPage[] | undefined;
 
-      const materials = resp.materials || [];
-      if (materials.length === 0) {
-        setToast({ message: "자료가 없습니다.", type: "error" });
-        return;
+      if (pagesResponse.pages && pagesResponse.pages.length > 0) {
+        // 페이지별 교안이 있는 경우
+        pages = pagesResponse.pages.map(page => ({
+          page_number: page.page_number,
+          image_path: page.image_path,
+          pdf_path: page.pdf_path,
+          text: page.text,
+          status: page.status,
+        }));
+        
+        // 첫 번째 페이지의 PDF 경로 사용 (페이지별 PDF가 있으면 사용)
+        const firstPage = pagesResponse.pages[0];
+        if (firstPage.pdf_path) {
+          materialUrl = firstPage.pdf_path.startsWith("http")
+            ? firstPage.pdf_path
+            : `${getBaseUrl()}${firstPage.pdf_path}`;
+        } else if (firstPage.image_path) {
+          // PDF가 없으면 이미지 경로 사용
+          materialUrl = firstPage.image_path.startsWith("http")
+            ? firstPage.image_path
+            : `${getBaseUrl()}${firstPage.image_path}`;
+        }
+        materialName = `교안 (${pagesResponse.total_pages}페이지)`;
+      }
+      
+      // 페이지별 교안이 없고 원본 PDF가 있는 경우
+      if (!materialUrl && pagesResponse.original_materials && pagesResponse.original_materials.length > 0) {
+        const firstMaterial = pagesResponse.original_materials[0];
+        materialUrl = firstMaterial.url.startsWith("http")
+          ? firstMaterial.url
+          : `${getBaseUrl()}${firstMaterial.url}`;
+        materialName = firstMaterial.originalName || "강의 자료";
       }
 
-      const firstMaterial = materials[0];
-      const resolvedUrl = resolveUrl(firstMaterial.url);
-      const fileName = firstMaterial.originalName || (firstMaterial.url ? firstMaterial.url.split("/").pop() || "자료" : "자료");
+      if (!materialUrl) {
+        setToast({ message: "교안이 없습니다.", type: "error" });
+        return;
+      }
 
       // 파일 크기 가져오기
       let fileSize = "파일";
       try {
-        const headResponse = await fetch(resolvedUrl, { method: "HEAD" });
+        const headResponse = await fetch(materialUrl, { method: "HEAD" });
         const contentLength = headResponse.headers.get("content-length");
         if (contentLength) {
           fileSize = `[ ${formatFileSize(Number(contentLength))} ]`;
@@ -562,17 +603,21 @@ const StudentClass: React.FC = () => {
       }
 
       setSelectedLesson({
-        title: resp.class_title || defaultTitle,
-        fileName,
+        title: pagesResponse.class_title || defaultTitle,
+        fileName: materialName || "강의 자료",
         fileSize,
+        url: materialUrl,
+        lectureId: course.id,
+        classId: classId,
+        pages: pages,
       });
       setIsLessonQuestionModalOpen(true);
     } catch (error) {
-      console.error("클래스 정보 조회 실패:", error);
+      console.error("교안 조회 실패:", error);
       const message =
         error instanceof Error
           ? error.message
-          : "클래스 정보를 불러오는 중 오류가 발생했습니다.";
+          : "교안을 불러오는 중 오류가 발생했습니다.";
       setToast({ message, type: "error" });
     } finally {
       setIsPdfLoadingFor(null);
@@ -965,6 +1010,10 @@ const StudentClass: React.FC = () => {
           lessonTitle={selectedLesson.title}
           fileName={selectedLesson.fileName}
           fileSize={selectedLesson.fileSize}
+          pdfUrl={selectedLesson.url}
+          lectureId={selectedLesson.lectureId}
+          classId={selectedLesson.classId}
+          pages={selectedLesson.pages}
           questions={[]}
         />
       )}

@@ -212,8 +212,18 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
   };
 
   const handleCreateQuestion = async () => {
-    if (!lectureId || !classId || !newQuestionText.trim() || !userInfo) {
+    if (!newQuestionText.trim()) {
       showToast("질문 내용을 입력해주세요.", "error");
+      return;
+    }
+    
+    if (!lectureId || !classId) {
+      showToast("강좌 정보를 찾을 수 없습니다.", "error");
+      return;
+    }
+    
+    if (!userInfo) {
+      showToast("사용자 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.", "error");
       return;
     }
 

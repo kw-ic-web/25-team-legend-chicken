@@ -13,7 +13,7 @@ import type {
   DifficultyFeedback,
   StatsData,
 } from "../../components/professor/analysis/class/types";
-import { getLatestClassAnalysisReport } from "../../api/reports";
+import { getLatestClassAnalysisReport, getClassAnalysisKpis } from "../../api/reports";
 import { getClasses, getClassPdfs } from "../../api/professor";
 import WeekFilter from "../../components/professor/analysis/class/WeekFilter";
 import { getBaseUrl } from "../../api/auth/client";
@@ -195,6 +195,50 @@ const ClassAnalysis: React.FC = () => {
     };
   }, [lectureId, parsedClassId, setSearchParams]);
 
+  // ✅ KPIs 먼저 빠르게 로드
+  useEffect(() => {
+    if (!lectureId || selectedClassId == null) {
+      if (lectureId && !selectedClassId) {
+        setReportError("classId 쿼리 파라미터가 필요합니다.");
+      }
+      return;
+    }
+
+    let active = true;
+    setReportError(null);
+
+    (async () => {
+      try {
+        // KPIs 먼저 빠르게 로드
+        const kpis = await getClassAnalysisKpis(lectureId, selectedClassId);
+        if (!active) return;
+
+        const participation = kpis.participationRate ?? 0;
+        const participationPercent =
+          participation <= 1
+            ? Math.round(participation * 100)
+            : Math.round(participation);
+
+        const nextStats: StatsData = {
+          totalQuestions: kpis.totalQuestions ?? 0,
+          totalUpvotes: kpis.totalCurious ?? 0,
+          participationRate: participationPercent,
+          mostDifficultConcept: kpis.hardestConcept ?? "분석 중",
+        };
+        setStats(nextStats);
+      } catch (error) {
+        if (!active) return;
+        console.error("KPIs 로드 오류:", error);
+        // KPIs 로드 실패는 치명적이지 않으므로 계속 진행
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [lectureId, selectedClassId]);
+
+  // ✅ 나머지 리포트 데이터는 별도로 로드 (병렬 처리)
   useEffect(() => {
     console.log("[ClassAnalysis] effect guard", {
       lectureId,
@@ -224,6 +268,7 @@ const ClassAnalysis: React.FC = () => {
         });
         if (!active) return;
 
+        // 리포트에서 KPIs 업데이트 (hardestConcept 등 상세 정보)
         const kpis = report.kpis ?? {};
         const participation = kpis.participationRate ?? 0;
         const participationPercent =

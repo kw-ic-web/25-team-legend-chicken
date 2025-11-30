@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { Send } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import { getBaseUrl } from "../../api/auth/client";
-import StudentParticipantStrip from "../../components/live/student/StudentParticipantStrip";
 import StudentScreenArea from "../../components/live/student/StudentScreenArea";
 import StudentLiveControls from "../../components/live/student/StudentLiveControls";
 import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";

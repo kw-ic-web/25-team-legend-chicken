@@ -29,6 +29,8 @@ tags:
     description: 지금 연결해야하는 API
   - name: Chat
     description: 실시간 채팅 API
+  - name: Materials
+    description: 통일된 교안(PDF/Material) 관리 API
 
 components:
   securitySchemes:
@@ -2946,6 +2948,514 @@ paths:
           description: 메시지를 찾을 수 없음
         '403':
           description: 해당 강좌에 접근할 수 없습니다.
+        '500':
+          description: 서버 오류
+
+  # ==================== 통일된 교안(Materials) API ====================
+  /api/lectures/{lectureId}/classes/{classId}/materials/pages:
+    get:
+      tags: [Materials]
+      summary: 페이지별 교안 조회
+      description: >
+        통일된 교안 조회 API입니다. 페이지별로 나누어진 교안을 조회합니다.
+        교수자와 학생 모두 사용할 수 있습니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [finalized, draft]
+            default: finalized
+          description: 페이지 상태 필터
+      responses:
+        '200':
+          description: 교안 페이지 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  lecture_id:
+                    type: string
+                    example: LEC-A2787F9D
+                  lecture_name:
+                    type: string
+                    example: 파이썬 프로그래밍
+                  class_id:
+                    type: number
+                    example: 1
+                  class_title:
+                    type: string
+                    example: 파이썬 기초
+                  total_pages:
+                    type: number
+                    example: 10
+                  pages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        page_number:
+                          type: number
+                          example: 1
+                        image_path:
+                          type: string
+                          example: http://localhost:8080/uploads/whiteboard/page1.png
+                        pdf_path:
+                          type: string
+                          example: http://localhost:8080/uploads/pdfs/whiteboard/page1.pdf
+                        text:
+                          type: string
+                          example: "OCR로 추출된 텍스트..."
+                        status:
+                          type: string
+                          enum: [draft, finalized]
+                          example: finalized
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                  original_materials:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        url:
+                          type: string
+                        originalName:
+                          type: string
+        '403':
+          description: 해당 강좌에 접근할 수 없습니다.
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+        '500':
+          description: 서버 오류
+
+  /api/lectures/{lectureId}/classes/{classId}/materials/pages/{pageNumber}:
+    get:
+      tags: [Materials]
+      summary: 특정 페이지의 교안 조회
+      description: 특정 페이지 번호의 교안을 조회합니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+        - name: pageNumber
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 페이지 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  lecture_id:
+                    type: string
+                  class_id:
+                    type: number
+                  page:
+                    type: object
+                    properties:
+                      page_number:
+                        type: number
+                      image_path:
+                        type: string
+                      pdf_path:
+                        type: string
+                      text:
+                        type: string
+                      status:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+        '404':
+          description: 페이지를 찾을 수 없음
+        '500':
+          description: 서버 오류
+
+  /api/lectures/{lectureId}/classes/{classId}/materials/upload:
+    post:
+      tags: [Materials]
+      summary: PDF 업로드 및 자동 페이지 분할
+      description: >
+        PDF 파일을 업로드하고 자동으로 페이지별로 분할하여 저장합니다.
+        각 페이지는 OCR을 통해 텍스트를 추출하고 WhiteboardPage에 저장됩니다.
+        교수자만 사용할 수 있습니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [pdf]
+              properties:
+                pdf:
+                  type: string
+                  format: binary
+                  description: PDF 파일
+      responses:
+        '201':
+          description: PDF 업로드 및 페이지 분할 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: PDF가 업로드되고 페이지별로 분할 저장되었습니다.
+                  lecture_id:
+                    type: string
+                  class_name:
+                    type: string
+                  class_id:
+                    type: number
+                  class_title:
+                    type: string
+                  total_pages:
+                    type: number
+                    example: 10
+                  pages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        page_number:
+                          type: number
+                        image_path:
+                          type: string
+                        pdf_path:
+                          type: string
+                        text:
+                          type: string
+                        status:
+                          type: string
+                  original_material:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                      originalName:
+                        type: string
+        '400':
+          description: PDF 파일이 없습니다.
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '404':
+          description: 강좌 또는 클래스를 찾을 수 없음
+        '500':
+          description: 서버 오류
+
+  /api/lectures/{lectureId}/classes/{classId}/materials/pages/{pageNumber}/handwriting:
+    get:
+      tags: [Materials]
+      summary: 특정 페이지의 필기 내역 조회
+      description: >
+        특정 페이지의 필기 내역을 조회합니다. 강의 중간에 저장된 필기(draft)도 포함됩니다.
+        필기 히스토리를 시간순으로 확인할 수 있습니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+        - name: pageNumber
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 필기 내역 조회 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  lecture_id:
+                    type: string
+                  class_id:
+                    type: number
+                  page_number:
+                    type: number
+                  current_page:
+                    type: object
+                    nullable: true
+                    properties:
+                      page_number:
+                        type: number
+                      image_path:
+                        type: string
+                      pdf_path:
+                        type: string
+                      text:
+                        type: string
+                      status:
+                        type: string
+                      updatedAt:
+                        type: string
+                        format: date-time
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        page_number:
+                          type: number
+                        image_path:
+                          type: string
+                        pdf_path:
+                          type: string
+                        text:
+                          type: string
+                        text_length:
+                          type: number
+                        status:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                  total_versions:
+                    type: number
+                    example: 5
+        '404':
+          description: 페이지를 찾을 수 없음
+        '500':
+          description: 서버 오류
+
+    post:
+      tags: [Materials]
+      summary: 페이지별 실시간 필기 저장 및 필기량 증가 확인
+      description: >
+        페이지별로 실시간 필기를 저장합니다. 필기량이 증가했는지 확인하고,
+        증가한 경우에만 저장합니다. 교수자만 사용할 수 있습니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+        - name: pageNumber
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [image_data, timestamp]
+              properties:
+                image_data:
+                  type: string
+                  format: base64
+                  description: 필기 이미지 (base64)
+                timestamp:
+                  type: number
+                  description: 타임스탬프
+                  example: 1704067200000
+                pdf_url:
+                  type: string
+                  description: PDF URL (선택사항)
+      responses:
+        '201':
+          description: 필기 저장 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 필기가 저장되었습니다.
+                  page_number:
+                    type: number
+                  is_writing_increased:
+                    type: boolean
+                  previous_text_length:
+                    type: number
+                  current_text_length:
+                    type: number
+                  similarity:
+                    type: number
+                  saved_page:
+                    type: object
+                    properties:
+                      page_number:
+                        type: number
+                      image_path:
+                        type: string
+                      pdf_path:
+                        type: string
+                      text_length:
+                        type: number
+                      status:
+                        type: string
+        '200':
+          description: 필기량이 증가하지 않아 저장하지 않음
+        '400':
+          description: 잘못된 요청
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '500':
+          description: 서버 오류
+
+  /api/lectures/{lectureId}/classes/{classId}/materials/pages/{pageNumber}/finalize:
+    put:
+      tags: [Materials]
+      summary: 페이지의 draft 필기를 finalized로 변경
+      description: >
+        실시간 필기(draft)를 finalized 상태로 변경합니다.
+        강의 종료 시 사용합니다. 교수자만 사용할 수 있습니다.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lectureId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: LEC-A2787F9D
+        - name: classId
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+        - name: pageNumber
+          in: path
+          required: true
+          schema:
+            type: number
+          example: 1
+      responses:
+        '200':
+          description: 필기 최종화 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 필기가 최종화되었습니다.
+                  page_number:
+                    type: number
+                  page:
+                    type: object
+                    properties:
+                      page_number:
+                        type: number
+                      image_path:
+                        type: string
+                      pdf_path:
+                        type: string
+                      text:
+                        type: string
+                      status:
+                        type: string
+                      updatedAt:
+                        type: string
+                        format: date-time
+        '403':
+          description: 권한 없음 (교수만 가능)
+        '404':
+          description: 최종화할 draft 필기가 없습니다.
         '500':
           description: 서버 오류
 

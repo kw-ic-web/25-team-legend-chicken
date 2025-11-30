@@ -120,6 +120,7 @@ const LecturePersonnelModal: React.FC<LecturePersonnelModalProps> = ({
       <LinkShareModal
         isOpen={showLinkShareModal}
         onClose={() => setShowLinkShareModal(false)}
+        lectureId={lectureId}
         onSwitchToId={handleSwitchToId}
       />
 

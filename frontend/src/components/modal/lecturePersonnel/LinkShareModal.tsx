@@ -1,27 +1,65 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Copy, X } from "lucide-react";
 import Modal from "../../common/Modal";
 import Toast from "../../common/Toast";
+import { getMembers } from "../../../api/professor";
+import { getBaseUrl } from "../../../api/auth/client";
 
 interface LinkShareModalProps {
   isOpen: boolean;
   onClose: () => void;
+  lectureId: string;
   onSwitchToId?: () => void;
 }
 
 const LinkShareModal: React.FC<LinkShareModalProps> = ({
   isOpen,
   onClose,
+  lectureId,
   onSwitchToId,
 }) => {
   const [activeTab, setActiveTab] = useState<"link" | "id">("link");
-  const [inviteLink] = useState(
-    "https://lec-q.com/class/WS1234sdkasjdlkjsakdjksalj"
-  );
+  const [inviteLink, setInviteLink] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  // 초대 링크 가져오기
+  useEffect(() => {
+    if (isOpen && lectureId) {
+      const fetchInviteLink = async () => {
+        setIsLoading(true);
+        try {
+          const response = await getMembers(lectureId);
+          let link = response.invite_link;
+          
+          // 링크가 상대 경로인 경우 전체 URL로 변환
+          if (link && !link.startsWith("http")) {
+            const baseUrl = getBaseUrl();
+            if (link.startsWith("/")) {
+              link = `${baseUrl}${link}`;
+            } else {
+              link = `${baseUrl}/${link}`;
+            }
+          }
+          
+          setInviteLink(link || "");
+        } catch (error) {
+          console.error("초대 링크 가져오기 실패:", error);
+          setToast({
+            message: "초대 링크를 가져오는데 실패했습니다.",
+            type: "error",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchInviteLink();
+    }
+  }, [isOpen, lectureId]);
 
   const handleCopyLink = async () => {
     try {
@@ -89,16 +127,27 @@ const LinkShareModal: React.FC<LinkShareModalProps> = ({
               </div>
 
               <div className="space-y-3">
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                  <div className="text-sm text-gray-600 break-all">
-                    {inviteLink}
+                {isLoading ? (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="text-sm text-gray-500">링크를 불러오는 중...</div>
                   </div>
-                </div>
+                ) : inviteLink ? (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="text-sm text-gray-600 break-all">
+                      {inviteLink}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="text-sm text-gray-500">링크를 불러올 수 없습니다.</div>
+                  </div>
+                )}
 
                 <div className="flex justify-end">
                   <button
                     onClick={handleCopyLink}
-                    className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors duration-200"
+                    disabled={!inviteLink || isLoading}
+                    className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Copy className="w-4 h-4" />
                     <span>URL 복사</span>

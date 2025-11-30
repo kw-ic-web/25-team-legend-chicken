@@ -136,6 +136,54 @@ function buildLeaderboard(questions) {
   return { topAskers, topVoters };
 }
 
+// ✅ KPIs 전용 엔드포인트 - 빠른 응답을 위해 GPT 호출 제외
+router.get(
+  "/:lectureId/classes/:classId/kpis",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { lectureId, classId } = req.params;
+      const lecture = await Lecture.findOne({ lecture_id: lectureId });
+      if (!lecture) return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+      
+      const isProfessor =
+        req.user.user_type === "professor" && String(lecture.professor_id) === String(req.user._id);
+      const isStudent =
+        req.user.user_type === "student" &&
+        (lecture.student_id_list || []).some((id) => String(id) === String(req.user._id));
+      if (!isProfessor && !isStudent) return res.status(403).json({ message: "권한이 없습니다." });
+
+      const cid = Number(classId);
+      const { ok, code, msg } = await verifyProfessorOwnership(req.user, lectureId);
+      if (!ok) return res.status(code).json({ message: msg });
+
+      // 질문 데이터 조회
+      const questions = await Question.find({ lecture_id: lectureId, class_id: cid })
+        .select('lecture_id class_id author upvote_count')
+        .lean();
+
+      // 빠른 KPIs 계산 (GPT 호출 제외)
+      const totalQuestions = questions.length;
+      const totalCurious = questions.reduce((a, q) => a + Number(q.upvote_count || 0), 0);
+      const uniqueAuthors = new Set(questions.map((q) => String(q.author?.id || ""))).size;
+      const denom = Math.max(lecture.student_id_list?.length || 0, 1);
+      const participationRate = uniqueAuthors / denom;
+
+      // hardestConcept는 나중에 계산하거나 "분석 중"으로 표시
+      const hardestConcept = "분석 중";
+
+      return res.json({
+        totalQuestions,
+        totalCurious,
+        participationRate,
+        hardestConcept,
+      });
+    } catch (err) {
+      console.error("KPIs 조회 오류:", err);
+      return res.status(500).json({ message: "서버 오류가 발생했습니다." });
+    }
+  }
+);
 
 router.get(
   "/:lectureId/classes/:classId/analysis/latest",

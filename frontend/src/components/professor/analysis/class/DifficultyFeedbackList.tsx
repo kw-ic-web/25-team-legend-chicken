@@ -19,7 +19,7 @@ const DifficultyFeedbackList: React.FC<DifficultyFeedbackListProps> = ({
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900">
-              너우 어려워요 Top1
+              너무 어려워요 Top3
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
               학생들이 가장 어려워하는 부분
