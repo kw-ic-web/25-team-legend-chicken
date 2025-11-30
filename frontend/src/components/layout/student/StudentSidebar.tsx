@@ -1,17 +1,39 @@
 import React, { useState, useEffect, useCallback } from "react";
 import CommonSidebar from "../CommonSidebar";
-import { joinLecture, getMyLectures } from "../../../api/student";
-import { getLectures, type Lecture } from "../../../api/professor";
+import { joinLecture } from "../../../api/student";
+import { getLectures, type Lecture, type LectureClass } from "../../../api/professor";
 import { getMyInfo } from "../../../api/auth";
 import { getBaseUrl } from "../../../api/auth/client";
 import { X, BookOpen, CheckCircle, AlertCircle } from "lucide-react";
 
 const StudentSidebar: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [lectureId, setLectureId] = useState("");
+  const [lectureLink, setLectureLink] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // 링크에서 lectureId 추출하는 함수
+  const extractLectureIdFromLink = (link: string): string | null => {
+    if (!link || !link.trim()) return null;
+    
+    const trimmedLink = link.trim();
+    
+    // 링크에서 lectureId 추출
+    // 형식: /join-lecture/{lectureId} 또는 http://.../join-lecture/{lectureId}
+    const match = trimmedLink.match(/\/join-lecture\/([^/?]+)/);
+    if (match && match[1]) {
+      return match[1];
+    }
+    
+    // 만약 링크 형식이 아닌 경우 (직접 ID를 입력한 경우도 허용)
+    // LEC-로 시작하는 경우 ID로 간주
+    if (trimmedLink.startsWith("LEC-")) {
+      return trimmedLink;
+    }
+    
+    return null;
+  };
 
   // 학생 정보
   const [studentInfo, setStudentInfo] = useState({
@@ -106,10 +128,15 @@ const StudentSidebar: React.FC = () => {
 
           // 곧 다가올 강의 찾기 (모든 클래스 확인하여 가장 가까운 다음 강의 찾기)
           if (lecture.classes && lecture.classes.length > 0) {
-            let closestClass: { date: Date; lectureId: string; title: string } | null = null;
+            interface ClosestClassType {
+              date: Date;
+              lectureId: string;
+              title: string;
+            }
+            let closestClass: ClosestClassType | null = null;
             
             // 모든 클래스 중에서 가장 가까운 미래 강의 찾기
-            lecture.classes.forEach((cls) => {
+            for (const cls of lecture.classes) {
               if (cls.date) {
                 const classDate = new Date(cls.date);
                 if (classDate > now) {
@@ -122,7 +149,7 @@ const StudentSidebar: React.FC = () => {
                   }
                 }
               }
-            });
+            }
 
             // 가장 가까운 강의가 7일 이내인 경우 추가
             if (closestClass) {
@@ -242,8 +269,15 @@ const StudentSidebar: React.FC = () => {
   }, []); // 빈 배열로 설정하여 한 번만 실행
 
   const handleJoinLecture = async () => {
-    if (!lectureId.trim()) {
-      setErrorMessage("강좌 ID를 입력해주세요.");
+    if (!lectureLink.trim()) {
+      setErrorMessage("초대 링크를 입력해주세요.");
+      return;
+    }
+
+    // 링크에서 lectureId 추출
+    const extractedLectureId = extractLectureIdFromLink(lectureLink.trim());
+    if (!extractedLectureId) {
+      setErrorMessage("올바른 초대 링크 형식이 아닙니다. 링크를 다시 확인해주세요.");
       return;
     }
 
@@ -252,11 +286,11 @@ const StudentSidebar: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      const response = await joinLecture(lectureId.trim());
+      const response = await joinLecture(extractedLectureId);
       setSuccessMessage(
         `강좌에 성공적으로 참가했습니다!\n강좌명: ${response.lecture.name}\n현재 인원: ${response.current_count}/${response.max_count}`
       );
-      setLectureId("");
+      setLectureLink("");
       // 3초 후 모달 닫기
       setTimeout(() => {
         setIsModalOpen(false);
@@ -277,7 +311,7 @@ const StudentSidebar: React.FC = () => {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setLectureId("");
+    setLectureLink("");
     setErrorMessage(null);
     setSuccessMessage(null);
   };
@@ -323,17 +357,17 @@ const StudentSidebar: React.FC = () => {
             <div className="p-6">
               <div className="mb-4">
                 <label
-                  htmlFor="lectureId"
+                  htmlFor="lectureLink"
                   className="block text-sm font-medium text-gray-700 mb-2"
                 >
-                  강좌 ID
+                  초대 링크
                 </label>
                 <input
-                  id="lectureId"
+                  id="lectureLink"
                   type="text"
-                  value={lectureId}
-                  onChange={(e) => setLectureId(e.target.value)}
-                  placeholder="예: LEC-D1897635"
+                  value={lectureLink}
+                  onChange={(e) => setLectureLink(e.target.value)}
+                  placeholder="예: http://localhost:7777/join-lecture/LEC-02A609ED"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   disabled={isLoading}
                   onKeyPress={(e) => {
@@ -343,7 +377,7 @@ const StudentSidebar: React.FC = () => {
                   }}
                 />
                 <p className="mt-2 text-xs text-gray-500">
-                  교수님으로부터 받은 강좌 ID를 입력해주세요.
+                  교수님으로부터 받은 초대 링크를 입력해주세요.
                 </p>
               </div>
 
@@ -381,7 +415,7 @@ const StudentSidebar: React.FC = () => {
               </button>
               <button
                 onClick={handleJoinLecture}
-                disabled={isLoading || !lectureId.trim()}
+                disabled={isLoading || !lectureLink.trim()}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2"
               >
                 {isLoading ? (

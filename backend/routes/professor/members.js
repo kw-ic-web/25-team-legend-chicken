@@ -34,7 +34,7 @@ router.get(
         user_type: "student",
       }).select("name email phone");
 
-      const inviteLink = `${process.env.FRONTEND_URL || "http://localhost:3000"}/join-lecture/${lectureId}`;
+      const inviteLink = `${process.env.FRONTEND_URL || "http://localhost:7777"}/join-lecture/${lectureId}`;
 
       res.status(200).json({
         lecture_id: lecture.lecture_id,
