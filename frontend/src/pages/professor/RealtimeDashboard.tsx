@@ -70,7 +70,6 @@ const RealtimeDashboard: React.FC = () => {
   const { showToast: showGlobalToast } = useToast();
   const [isMicOn, setIsMicOn] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chat" | "questions">("questions");
   const [chatMessage, setChatMessage] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isSharing, setIsSharing] = useState(false);
@@ -1182,151 +1181,78 @@ const RealtimeDashboard: React.FC = () => {
         {/* 우측 채팅/질문 패널 */}
         <div className="w-80 bg-white border-l border-gray-200">
           <div className="h-full flex flex-col">
-            {/* 탭 헤더 */}
-            <div className="flex border-b border-gray-200">
+            {/* 헤더 - 실시간 채팅 + 질문하기 버튼 */}
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <h3 className="text-sm font-medium text-gray-900">실시간 채팅</h3>
               <button
-                onClick={() => setActiveTab("chat")}
-                className={`flex-1 py-3 px-4 text-sm font-medium ${
-                  activeTab === "chat"
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
+                onClick={() => handleOpenLessonQuestionModal()}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
               >
-                실시간 채팅
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab("questions");
-                  handleOpenLessonQuestionModal();
-                }}
-                className={`flex-1 py-3 px-4 text-sm font-medium ${
-                  activeTab === "questions"
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                질문
+                질문하기
               </button>
             </div>
 
-            {/* 탭 콘텐츠 */}
+            {/* 채팅 메시지 영역 */}
             <div className="flex-1 overflow-y-auto" ref={chatContainerRef}>
-              {activeTab === "questions" ? (
-                <div className="p-4">
-                  {questions.length === 0 ? (
-                    <div className="text-center text-gray-500 text-sm py-8">
-                      질문이 없습니다. 교안 및 질문 보기 모달에서 질문을
-                      확인하세요.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {questions
-                        .filter((q) => q.status === "pending")
-                        .map((question) => (
-                          <div
-                            key={question.id}
-                            className="bg-gray-50 rounded-lg p-4"
-                          >
-                            <div className="flex items-center space-x-2 mb-2">
-                              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                                <span className="text-white text-xs font-medium">
-                                  익
-                                </span>
-                              </div>
-                              <span className="text-sm font-medium text-gray-900">
-                                {question.studentName}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {question.timestamp}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-700 mb-3">
-                              {question.question}
-                            </p>
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() =>
-                                  handleAnswerQuestion(question.id)
-                                }
-                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                              >
-                                답변하기
-                              </button>
-                              <button
-                                onClick={() =>
-                                  handleDismissQuestion(question.id)
-                                }
-                                className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
-                              >
-                                답변 생략
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="p-4 space-y-3">
-                  {chatMessages.length === 0 ? (
-                    <div className="text-center text-gray-500 text-sm py-8">
-                      채팅 메시지가 없습니다.
-                    </div>
-                  ) : (
-                    chatMessages.map((msg) => {
-                      const isProfessor = msg.sender.role === "professor";
-                      const isOwnMessage = msg.sender.id === user?.id;
-                      const time = new Date(msg.timestamp || msg.created_at);
-                      const timeStr = `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}`;
+              <div className="p-4 space-y-3">
+                {chatMessages.length === 0 ? (
+                  <div className="text-center text-gray-500 text-sm py-8">
+                    채팅 메시지가 없습니다.
+                  </div>
+                ) : (
+                  chatMessages.map((msg) => {
+                    const isProfessor = msg.sender.role === "professor";
+                    const isOwnMessage = msg.sender.id === user?.id;
+                    const time = new Date(msg.timestamp || msg.created_at);
+                    const timeStr = `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}`;
 
-                      return (
+                    return (
+                      <div
+                        key={msg._id}
+                        className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                      >
                         <div
-                          key={msg._id}
-                          className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                          className={`max-w-[80%] rounded-lg p-2 ${
+                            isOwnMessage
+                              ? "bg-blue-600 text-white"
+                              : isProfessor
+                                ? "bg-green-100 text-gray-900"
+                                : "bg-gray-100 text-gray-900"
+                          }`}
                         >
-                          <div
-                            className={`max-w-[80%] rounded-lg p-2 ${
-                              isOwnMessage
-                                ? "bg-blue-600 text-white"
-                                : isProfessor
-                                  ? "bg-green-100 text-gray-900"
-                                  : "bg-gray-100 text-gray-900"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 mb-1">
-                              <span
-                                className={`text-xs font-medium ${
-                                  isOwnMessage
-                                    ? "text-blue-100"
-                                    : isProfessor
-                                      ? "text-green-700"
-                                      : "text-gray-600"
-                                }`}
-                              >
-                                {isOwnMessage
-                                  ? "나"
+                          <div className="flex items-center gap-2 mb-1">
+                            <span
+                              className={`text-xs font-medium ${
+                                isOwnMessage
+                                  ? "text-blue-100"
                                   : isProfessor
-                                    ? "교수자"
-                                    : msg.sender.name}
-                              </span>
-                              <span
-                                className={`text-[10px] ${
-                                  isOwnMessage
-                                    ? "text-blue-200"
-                                    : "text-gray-500"
-                                }`}
-                              >
-                                {timeStr}
-                              </span>
-                            </div>
-                            <p className="text-sm break-words">{msg.text}</p>
+                                    ? "text-green-700"
+                                    : "text-gray-600"
+                              }`}
+                            >
+                              {isOwnMessage
+                                ? "나"
+                                : isProfessor
+                                  ? "교수자"
+                                  : msg.sender.name}
+                            </span>
+                            <span
+                              className={`text-[10px] ${
+                                isOwnMessage
+                                  ? "text-blue-200"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              {timeStr}
+                            </span>
                           </div>
+                          <p className="text-sm break-words">{msg.text}</p>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             {/* 하단 입력 영역 */}
