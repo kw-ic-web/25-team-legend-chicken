@@ -210,6 +210,75 @@ router.get("/participate", authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ 학생이 강의 자료 조회
+router.get(
+  "/lectures/:lectureId/classes/:classId/materials",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const { lectureId, classId } = req.params;
+
+      // 학생 권한 확인
+      if (user.user_type !== "student") {
+        return res
+          .status(403)
+          .json({ message: "학생만 접근할 수 있습니다." });
+      }
+
+      // 강좌 조회
+      const lecture = await Lecture.findOne({ lecture_id: lectureId });
+      if (!lecture) {
+        return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+      }
+
+      // 학생이 해당 강좌에 등록되어 있는지 확인
+      if (!lecture.student_id_list.includes(user._id)) {
+        return res.status(403).json({
+          message: "해당 강좌에 등록되어 있지 않습니다.",
+        });
+      }
+
+      const cid = Number(classId);
+      if (!Number.isFinite(cid)) {
+        return res.status(400).json({ message: "classId는 숫자여야 합니다." });
+      }
+
+      // 클래스 조회
+      const classData = lecture.classes.find((c) => Number(c.id) === cid);
+      if (!classData) {
+        return res.status(404).json({ message: "해당 클래스를 찾을 수 없습니다." });
+      }
+
+      // materials 정규화 및 URL 변환
+      const { toAbsoluteUrl, convertMaterialsToAbsolute } = require("../utils/urlUtils");
+      const materialsWithAbsoluteUrls = convertMaterialsToAbsolute(req, classData.materials || []);
+
+      // 응답 형식: url 또는 fileId 기반
+      const pdfs = materialsWithAbsoluteUrls.map((material) => {
+        if (material.fileId) {
+          return toAbsoluteUrl(req, `/api/files/${material.fileId}`);
+        }
+        return material.url || "";
+      }).filter((url) => url && url.trim() !== "");
+
+      return res.status(200).json({
+        success: true,
+        lecture_id: lecture.lecture_id,
+        lecture_name: lecture.name,
+        class_id: cid,
+        class_title: classData.title,
+        pdf_count: pdfs.length,
+        pdfs: pdfs,
+        materials: materialsWithAbsoluteUrls, // 전체 정보 포함 (fileId, url, originalName)
+      });
+    } catch (err) {
+      console.error("학생 강의 자료 조회 오류:", err);
+      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+    }
+  }
+);
+
 // ✅ 학생이 본인이 작성한 질문 목록 조회
 router.get("/my-questions", authenticateToken, async (req, res) => {
   try {
