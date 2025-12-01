@@ -1,14 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import {
-  Users,
-  BookOpen,
-  Code,
-  Database,
-  Globe,
-  Brain,
-  Calculator,
-} from "lucide-react";
+import { Users, BookOpenText } from "lucide-react";
 
 interface LectureCardProps {
   id: number | string;
@@ -29,7 +21,6 @@ const LectureCard: React.FC<LectureCardProps> = ({
   participants,
   status,
   newQuestions = 0,
-  subject = "Python",
   image,
   userType = "professor",
 }) => {
@@ -77,34 +68,8 @@ const LectureCard: React.FC<LectureCardProps> = ({
   };
 
   const getSubjectIcon = () => {
-    const iconMap: { [key: string]: React.ReactNode } = {
-      Python: (
-        <div className="w-16 h-16 flex items-center justify-center">
-          <svg
-            viewBox="0 0 24 24"
-            className="w-12 h-12"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
-              fill="#3776ab"
-            />
-            <path
-              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
-              fill="#ffd43b"
-            />
-          </svg>
-        </div>
-      ),
-      Web: <Globe className="w-8 h-8 text-blue-600" />,
-      Database: <Database className="w-8 h-8 text-green-600" />,
-      ML: <Brain className="w-8 h-8 text-purple-600" />,
-      Algorithm: <Calculator className="w-8 h-8 text-orange-600" />,
-      SE: <Code className="w-8 h-8 text-red-600" />,
-    };
-
-    return iconMap[subject] || <BookOpen className="w-8 h-8 text-blue-600" />;
+    // 현재는 과목 구분 없이 공통 강의 아이콘만 사용
+    return <BookOpenText className="w-8 h-8 text-black-600" />;
   };
 
   const linkPath =
@@ -137,27 +102,12 @@ const LectureCard: React.FC<LectureCardProps> = ({
             )}
           </>
         ) : (
-          <>
-            {/* 그리드 패턴 배경 */}
-            <div className="absolute inset-0 opacity-10">
-              <div
-                className="w-full h-full"
-                style={{
-                  backgroundImage: `radial-gradient(circle, #000 1px, transparent 1px)`,
-                  backgroundSize: "20px 20px",
-                }}
-              />
+          // 이미지가 없으면 간단하게 강의 아이콘만 표시
+          <div className="relative z-10 flex items-center justify-center">
+            <div className="w-16 h-16 flex items-center justify-center">
+              {getSubjectIcon()}
             </div>
-            {/* 강의 아이콘 */}
-            <div className="relative z-10 flex flex-col items-center space-y-3">
-              <div className="w-16 h-16 flex items-center justify-center">
-                {getSubjectIcon()}
-              </div>
-              <div className="text-center">
-                <h3 className="text-lg font-bold text-gray-900">{subject}</h3>
-              </div>
-            </div>
-          </>
+          </div>
         )}
         {/* 상태 태그 */}
         {getStatusTag()}
