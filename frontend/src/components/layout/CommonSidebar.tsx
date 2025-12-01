@@ -62,11 +62,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       : `/student/profile${userInfo.id ? `/${userInfo.id}` : ""}`;
 
   return (
-    <div
-      className={`fixed top-20 left-0 w-80 bg-white shadow-lg h-[calc(100vh-5rem)] flex flex-col z-10 ${
-        userType === "student" ? "overflow-hidden" : "overflow-y-auto"
-      }`}
-    >
+    <div className="fixed top-20 left-0 w-80 bg-white shadow-lg h-[calc(100vh-5rem)] flex flex-col z-10 overflow-y-auto">
       {/* 사용자 프로필 섹션 */}
       <div className="pt-6 pb-4 px-4 md:pt-10 md:px-6 md:pb-6 border-b border-gray-200">
         <div className="flex items-center space-x-3 md:space-x-4 mb-3 md:mb-4">
@@ -215,11 +211,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
           <h3 className="text-xs md:text-sm font-semibold text-gray-900 mb-3 md:mb-4">
             내 강의
           </h3>
-          <div
-            className={`space-y-3 ${
-              myLectures.length > 4 ? "max-h-64 overflow-y-auto pr-2" : ""
-            }`}
-          >
+          <div className="space-y-3 max-h-40 overflow-y-auto pr-2">
             {myLectures.map((lecture, idx) => {
               const lectureId = lecture.lectureId;
               const content = (
