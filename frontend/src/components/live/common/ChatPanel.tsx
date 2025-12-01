@@ -36,7 +36,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             </div>
           ) : (
             messages.map((msg) => {
-              const isProfessor = msg.sender.role === "professor";
+              const isProfessor =
+                msg.sender.role === "professor" ||
+                msg.sender.role === "assistant";
               const isOwnMessage = msg.sender.id === currentUserId;
               const timeStr = formatTime(msg.timestamp || msg.created_at);
 
@@ -124,4 +126,3 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     </>
   );
 };
-

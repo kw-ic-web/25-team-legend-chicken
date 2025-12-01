@@ -15,6 +15,16 @@ export interface QuestionMetadata {
   source?: string;
   device?: string;
   language?: string;
+  /**
+   * 답변 작성자 구분: "ai" | "professor"
+   * - AI 자동 답변: "ai"
+   * - 교수자 직접 답변: "professor"
+   */
+  answer_by?: "ai" | "professor";
+  /** AI가 생성한 답변(원본) */
+  ai_answer?: string | null;
+  /** 교수자가 직접 작성한 답변 */
+  professor_answer?: string | null;
   [key: string]: unknown;
 }
 
@@ -157,4 +167,3 @@ export async function upvoteQuestion(
     }
   );
 }
-

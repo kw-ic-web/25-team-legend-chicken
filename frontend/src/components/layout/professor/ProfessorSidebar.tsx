@@ -125,7 +125,7 @@ const ProfessorSidebar: React.FC = () => {
             lecture.classes.forEach((cls) => {
               if (cls.date) {
                 const classDate = new Date(cls.date);
-                if (classDate > now) {
+              if (classDate > now) {
                   if (!closestClass || classDate < closestClass.date) {
                     closestClass = {
                       date: classDate,
@@ -149,20 +149,20 @@ const ProfessorSidebar: React.FC = () => {
               if (diffDays >= 0 && diffDays <= 7) {
                 const hours = closest.date.getHours();
                 const minutes = closest.date.getMinutes();
-                const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+                  const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 
-                upcoming.push({
+                  upcoming.push({
                   title: closest.title,
-                  time: timeStr,
+                    time: timeStr,
                   countdown: `D-${diffDays}`,
                   lectureId: closest.lectureId,
                   classDate: closest.date, // 원본 날짜 저장
-                });
+                  });
               }
             }
           }
         });
-        
+
         // 날짜순으로 정렬 (가까운 날짜가 먼저)
         upcoming.sort((a, b) => {
           return a.classDate.getTime() - b.classDate.getTime();

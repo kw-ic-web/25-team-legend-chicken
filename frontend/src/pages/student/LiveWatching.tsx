@@ -1176,7 +1176,9 @@ const LiveWatching: React.FC = () => {
                   </div>
                 ) : (
                   chatMessages.map((msg) => {
-                    const isProfessor = msg.sender.role === "professor";
+                    const isProfessor =
+                      msg.sender.role === "professor" ||
+                      msg.sender.role === "assistant";
                     const isOwnMessage = msg.sender.id === user?.id;
                     const time = new Date(msg.timestamp || msg.created_at);
                     const timeStr = `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}`;
