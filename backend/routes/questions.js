@@ -48,9 +48,7 @@ router.post("/", authenticateToken, async (req, res) => {
     } = req.body;
 
     if (!lecture_id || !class_id || !page || !position || !text) {
-      return res
-        .status(400)
-        .json({ message: "필수 필드가 누락되었습니다." });
+      return res.status(400).json({ message: "필수 필드가 누락되었습니다." });
     }
 
     const access = await canAccess(user, lecture_id);
@@ -218,9 +216,7 @@ router.post("/:id/answer", authenticateToken, async (req, res) => {
     const { answer } = req.body;
 
     if (!answer || typeof answer !== "string" || !answer.trim()) {
-      return res
-        .status(400)
-        .json({ message: "답변 내용이 필요합니다." });
+      return res.status(400).json({ message: "답변 내용이 필요합니다." });
     }
 
     const q = await Question.findById(questionId);
@@ -238,7 +234,18 @@ router.post("/:id/answer", authenticateToken, async (req, res) => {
     //   return res.status(403).json({ message: "교수자만 답변을 추가할 수 있습니다." });
     // }
 
-    q.answer = answer.trim();
+    const trimmed = answer.trim();
+    if (!q.metadata) q.metadata = {};
+
+    // 이전에 AI가 답변했던 경우, 그 내용을 ai_answer로 백업
+    if (!q.metadata.ai_answer && q.answer && q.metadata.answer_by === "ai") {
+      q.metadata.ai_answer = q.answer;
+    }
+
+    q.answer = trimmed;
+    q.metadata.answer_by = "professor";
+    // 교수자 답변은 별도 필드에 보존
+    q.metadata.professor_answer = trimmed;
     await q.save();
 
     const io = req.app.get("io");
@@ -262,7 +269,6 @@ router.post("/:id/answer", authenticateToken, async (req, res) => {
       .json({ message: "서버 오류가 발생했습니다.", error: err.message });
   }
 });
-
 
 router.get(
   "/lectures/:lectureId/classes/:classId",
@@ -303,62 +309,66 @@ router.get(
   }
 );
 
-router.get(
-  "/lectures/:lectureId",
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const user = req.user;
-      const { lectureId } = req.params;
-      const { page, limit = 50 } = req.query;
+router.get("/lectures/:lectureId", authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const { lectureId } = req.params;
+    const { page, limit = 50 } = req.query;
 
-      const access = await canAccess(user, lectureId);
-      if (!access.ok) {
-        return res.status(access.code).json({ message: access.msg });
-      }
-
-      const filter = {
-        lecture_id: lectureId,
-      };
-      if (page) filter.page = Number(page);
-
-      const allQuestions = await Question.find(filter)
-        .sort({ createdAt: -1, created_at: -1 })
-        .limit(Math.min(Number(limit) || 50, 200));
-
-      const topQuestions = await Question.find(filter)
-        .sort({ "metadata.likes": -1, createdAt: -1 })
-        .limit(5)
-        .lean();
-
-      return res.json({
-        lecture_id: lectureId,
-        count: allQuestions.length,
-        questions: allQuestions,
-        top_questions_by_upvote: topQuestions.map((q) => ({
-          _id: q._id,
-          text: q.text,
-          author: q.author,
-          upvotes: q.metadata?.likes || 0,
-          class_id: q.class_id,
-          page: q.page,
-          created_at: q.created_at || q.createdAt,
-        })),
-      });
-    } catch (err) {
-      console.error("강좌 질문 조회 오류:", err);
-      return res
-        .status(500)
-        .json({ message: "서버 오류가 발생했습니다.", error: err.message });
+    const access = await canAccess(user, lectureId);
+    if (!access.ok) {
+      return res.status(access.code).json({ message: access.msg });
     }
-  }
-);
 
-async function generateGPTAnswer(questionId, lectureId, classId, questionText, io = null) {
+    const filter = {
+      lecture_id: lectureId,
+    };
+    if (page) filter.page = Number(page);
+
+    const allQuestions = await Question.find(filter)
+      .sort({ createdAt: -1, created_at: -1 })
+      .limit(Math.min(Number(limit) || 50, 200));
+
+    const topQuestions = await Question.find(filter)
+      .sort({ "metadata.likes": -1, createdAt: -1 })
+      .limit(5)
+      .lean();
+
+    return res.json({
+      lecture_id: lectureId,
+      count: allQuestions.length,
+      questions: allQuestions,
+      top_questions_by_upvote: topQuestions.map((q) => ({
+        _id: q._id,
+        text: q.text,
+        author: q.author,
+        upvotes: q.metadata?.likes || 0,
+        class_id: q.class_id,
+        page: q.page,
+        created_at: q.created_at || q.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error("강좌 질문 조회 오류:", err);
+    return res
+      .status(500)
+      .json({ message: "서버 오류가 발생했습니다.", error: err.message });
+  }
+});
+
+async function generateGPTAnswer(
+  questionId,
+  lectureId,
+  classId,
+  questionText,
+  io = null
+) {
   try {
     const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_API;
     if (!apiKey) {
-      console.warn("OpenAI API 키가 설정되지 않아 GPT 답변을 생성할 수 없습니다.");
+      console.warn(
+        "OpenAI API 키가 설정되지 않아 GPT 답변을 생성할 수 없습니다."
+      );
       return;
     }
 
@@ -397,7 +407,8 @@ ${questionText}
       messages: [
         {
           role: "system",
-          content: "교안 내용을 기반으로 질문에 대해 간결하고 명확하게 답변합니다. 한두 문장으로 핵심만 답변합니다.",
+          content:
+            "교안 내용을 기반으로 질문에 대해 간결하고 명확하게 답변합니다. 한두 문장으로 핵심만 답변합니다.",
         },
         {
           role: "user",
@@ -413,7 +424,12 @@ ${questionText}
     if (answer) {
       const updatedQuestion = await Question.findByIdAndUpdate(
         questionId,
-        { answer },
+        {
+          // 기본 answer 필드에는 여전히 최신 답변을 넣어 둔다 (하위 호환)
+          answer,
+          "metadata.answer_by": "ai",
+          "metadata.ai_answer": answer,
+        },
         { new: true }
       );
 
