@@ -11,6 +11,15 @@ async function uploadToGridFS(req, res, next) {
       return next();
     }
 
+    // 파일 정보 로깅 (디버깅용)
+    console.log("GridFS 업로드 시작:", {
+      fieldname: req.file.fieldname,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      hasBuffer: !!req.file.buffer,
+    });
+
     // GridFS에 파일 저장
     const fileId = await uploadFile(
       req.file.buffer,
@@ -29,6 +38,11 @@ async function uploadToGridFS(req, res, next) {
     // 기존 경로 정보는 유지 (하위 호환성)
     // 파일 ID로 대체된 URL
     req.file.path = `/api/files/${fileId}`;
+
+    console.log("GridFS 업로드 완료:", {
+      fileId,
+      gridfsUrl: req.file.gridfsUrl,
+    });
 
     next();
   } catch (error) {

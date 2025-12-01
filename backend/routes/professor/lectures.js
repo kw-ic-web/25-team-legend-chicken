@@ -40,8 +40,17 @@ router.post(
       } = req.body;
 
       let thumbnailUrl = "";
-      if (req.file && req.file.gridfsUrl) {
-        thumbnailUrl = req.file.gridfsUrl; // GridFS URL 사용
+      if (req.file) {
+        // GridFS에 저장된 썸네일 URL 사용
+        if (req.file.gridfsUrl) {
+          thumbnailUrl = req.file.gridfsUrl;
+        } else {
+          // gridfsUrl이 없으면 에러 (GridFS 업로드 실패)
+          console.error("썸네일 GridFS 업로드 실패:", req.file);
+          return res.status(500).json({ 
+            message: "썸네일 업로드 중 오류가 발생했습니다." 
+          });
+        }
       }
 
       let parsedReferences = [];
@@ -151,8 +160,14 @@ router.get(
           return classResponse;
         });
 
+        // 로컬에 저장된 썸네일 경로 필터링 (GridFS만 사용)
+        const lectureObj = lecture.toObject();
+        if (lectureObj.thumbnail && lectureObj.thumbnail.startsWith("/uploads/images/thumbnail-")) {
+          lectureObj.thumbnail = ""; // 로컬 경로는 빈 문자열로 처리
+        }
+
         return {
-          ...lecture.toObject(),
+          ...lectureObj,
           classes: convertClassesMaterialsToAbsolute(req, formattedClasses),
         };
       });
