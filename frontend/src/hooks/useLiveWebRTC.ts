@@ -40,10 +40,23 @@ type WebRTCSignalPayload = {
   meta?: Record<string, unknown>;
 };
 
+// WebRTC ICE 서버 설정
+// - STUN: 공인 IP/포트 후보 수집
+// - TURN: 서로 다른 NAT/방화벽 환경에서도 강제로 릴레이 경로 확보
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun2.l.google.com:19302" },
+  // 배포 서버에 설치한 TURN 서버 주소 (예: coturn)
+  // 실제 username/credential, 포트는 서버 설정과 반드시 맞춰야 합니다.
+  {
+    urls: [
+      "turn:team05-api.kwweb.org:20591?transport=udp",
+      "turn:team05-api.kwweb.org:20591?transport=tcp",
+    ],
+    username: "lecqturn",
+    credential: "lecqturn-pass",
+  },
 ];
 
 const toNumberOrNull = (value?: number | string | null): number | null => {
@@ -102,7 +115,7 @@ export function useLiveWebRTC({
       "[WebRTC] updateRemoteParticipants: remoteStreamRef entries:",
       entries.length
     );
-    
+
     entries.forEach(([id, streams]) => {
       const meta = metadataRef.current.get(id);
       console.log(
@@ -115,9 +128,9 @@ export function useLiveWebRTC({
       );
       // 각 스트림을 별도의 participant로 추가
       streams.forEach((stream) => {
-        const activeTracks = stream.getTracks().filter(
-          (t) => t.readyState === "live" && t.enabled
-        );
+        const activeTracks = stream
+          .getTracks()
+          .filter((t) => t.readyState === "live" && t.enabled);
         if (activeTracks.length > 0) {
           console.log(
             "[WebRTC] updateRemoteParticipants: 활성 스트림 추가:",
@@ -371,10 +384,10 @@ export function useLiveWebRTC({
           remoteStreamRef.current.get(remoteSocketId) || [];
         // 중복 스트림 체크 (stream ID로)
         const streamId = stream.id;
-        const activeTracks = stream.getTracks().filter(
-          (t) => t.readyState === "live" && t.enabled
-        );
-        
+        const activeTracks = stream
+          .getTracks()
+          .filter((t) => t.readyState === "live" && t.enabled);
+
         if (activeTracks.length === 0) {
           console.log("[WebRTC] ontrack: 스트림에 활성 트랙 없음, 무시");
           return;
