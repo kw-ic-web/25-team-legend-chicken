@@ -23,6 +23,12 @@ const handwritingRouter = require("./routes/handwriting");
 const materialsRouter = require("./routes/materials"); // 통일된 교안 API
 const filesRouter = require("./routes/files"); // GridFS 파일 서빙
 
+// 라우터 로드 확인
+console.log("📦 라우터 로드 확인:");
+console.log("  - materialsRouter:", materialsRouter ? "✅ 로드됨" : "❌ 로드 실패");
+console.log("  - chatRouter:", chatRouter ? "✅ 로드됨" : "❌ 로드 실패");
+console.log("  - filesRouter:", filesRouter ? "✅ 로드됨" : "❌ 로드 실패");
+
 const http = require("http");
 const { attachSocket } = require("./socket");
 
@@ -46,22 +52,26 @@ mongoose.connection.once("open", () => {
   console.log("✅ GridFS가 초기화되었습니다.");
 });
 
+// 라우터 등록 (구체적인 경로를 먼저 등록)
 app.use("/api", authRouter);
 app.use("/api/student", studentRouter);
 app.use("/api/professor", professorRouter);
-app.use("/api", lecturesRouter);
-app.use("/api", whiteboardRouter);
 app.use("/api/questions", questionsRouter); 
 app.use("/api/chat", chatRouter); 
 app.use("/api/reports", reportsRouter);
 app.use("/api/handwriting", handwritingRouter);
-app.use("/api", materialsRouter); // 통일된 교안 API
 app.use("/api/files", filesRouter); // GridFS 파일 서빙
+
+// materials 라우터를 lectures 라우터보다 먼저 등록 (더 구체적인 경로)
+app.use("/api", materialsRouter); // 통일된 교안 API - /api/lectures/:lectureId/classes/:classId/materials/*
+app.use("/api", lecturesRouter); // 강의 공통 API
+app.use("/api", whiteboardRouter); // 화이트보드 스냅샷 API
 
 // 라우터 등록 확인 로그
 console.log("✅ 라우터 등록 완료:");
 console.log("  - /api/chat");
 console.log("  - /api/lectures/:lectureId/classes/:classId/materials/pages");
+console.log("  - /api/lectures/:lectureId/classes/:classId/materials/upload");
 console.log("  - /api/files/:fileId");
 
 app.get("/", (req, res) => {
