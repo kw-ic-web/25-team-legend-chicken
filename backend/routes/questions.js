@@ -380,29 +380,58 @@ async function generateGPTAnswer(
     const fs = require("fs-extra");
 
     // 질문이 생성된 특정 페이지를 우선적으로 찾기
-    let targetPage = null;
+    // materials API를 통해 최신 정보 조회 (GridFS URL 포함)
+    const Lecture = require("../models/lectures");
+    const lecture = await Lecture.findOne({ lecture_id: lectureId });
+    if (!lecture) {
+      console.warn(`[GPT 답변] 강좌를 찾을 수 없습니다: ${lectureId}`);
+      return;
+    }
+    
+    const classData = lecture.classes.find(c => String(c.id) === String(classId));
+    if (!classData) {
+      console.warn(`[GPT 답변] 클래스를 찾을 수 없습니다: ${classId}`);
+      return;
+    }
+
+    // WhiteboardPage에서 페이지별 교안 조회 (materials API와 동일한 방식)
+    // GridFS URL을 우선적으로 찾기 위해 먼저 GridFS URL이 있는 페이지를 조회
+    const filter = {
+      lecture_id: lectureId,
+      class_id: String(classId),
+      status: "finalized",
+    };
+    
+    // 특정 페이지가 있으면 해당 페이지만 조회
+    let whiteboardPages;
     if (questionPage !== null && questionPage !== undefined) {
-      targetPage = await WhiteboardPage.findOne({
-        lecture_id: lectureId,
-        class_id: String(classId),
-        page_number: Number(questionPage),
-        status: "finalized",
+      filter.page_number = Number(questionPage);
+      
+      // 먼저 GridFS URL을 가진 페이지 찾기
+      const pageWithGridFS = await WhiteboardPage.findOne({
+        ...filter,
+        pdf_path: { $regex: "^/api/files/" } // GridFS URL로 시작
       })
         .select("text page_number pdf_path _id")
         .lean();
-    }
-
-    // 특정 페이지가 없으면 모든 페이지 조회
-    const whiteboardPages = targetPage 
-      ? [targetPage]
-      : await WhiteboardPage.find({
-          lecture_id: lectureId,
-          class_id: String(classId),
-          status: "finalized",
-        })
+      
+      if (pageWithGridFS) {
+        // GridFS URL을 가진 페이지가 있으면 사용
+        whiteboardPages = [pageWithGridFS];
+      } else {
+        // 없으면 일반 조회
+        whiteboardPages = await WhiteboardPage.find(filter)
           .sort({ page_number: 1 })
           .select("text page_number pdf_path _id")
           .lean();
+      }
+    } else {
+      // 모든 페이지 조회 (GridFS URL 우선)
+      whiteboardPages = await WhiteboardPage.find(filter)
+        .sort({ page_number: 1 })
+        .select("text page_number pdf_path _id")
+        .lean();
+    }
 
     // 각 페이지의 텍스트를 수집 (비어있으면 PDF에서 추출)
     const pageTexts = [];
@@ -445,13 +474,62 @@ async function generateGPTAnswer(
               continue;
             }
           } else {
-            // 로컬 파일 경로
+            // 로컬 파일 경로인 경우 - 파일이 없으면 GridFS에서 찾기
             pdfAbsolutePath = toAbsolutePath(page.pdf_path);
             
             // 파일 존재 확인
             if (!fs.existsSync(pdfAbsolutePath)) {
-              console.warn(`[GPT 답변] PDF 파일을 찾을 수 없습니다: ${pdfAbsolutePath}`);
-              continue;
+              // 로컬 파일이 없으면 해당 페이지의 GridFS URL 찾기
+              console.warn(`[GPT 답변] 로컬 PDF 파일을 찾을 수 없습니다: ${pdfAbsolutePath}`);
+              console.log(`[GPT 답변] 해당 페이지의 GridFS URL을 찾는 중...`);
+              
+              try {
+                // 해당 페이지 번호의 다른 WhiteboardPage에서 GridFS URL 찾기
+                const pageWithGridFS = await WhiteboardPage.findOne({
+                  lecture_id: lectureId,
+                  class_id: String(classId),
+                  page_number: page.page_number,
+                  status: "finalized",
+                  pdf_path: { $regex: "^/api/files/" } // GridFS URL로 시작
+                })
+                  .select("pdf_path")
+                  .lean();
+                
+                if (pageWithGridFS && pageWithGridFS.pdf_path) {
+                  // GridFS URL 발견 - GridFS에서 다운로드
+                  isGridFS = true;
+                  const fileId = pageWithGridFS.pdf_path.replace("/api/files/", "");
+                  const { downloadFile } = require("../utils/gridfs");
+                  const nodeFs = require("fs");
+                  
+                  const { stream, metadata } = await downloadFile(fileId);
+                  const tempPdfPath = path.join(require("os").tmpdir(), `gpt-extract-${fileId}-${Date.now()}.pdf`);
+                  const writeStream = nodeFs.createWriteStream(tempPdfPath);
+                  
+                  await new Promise((resolve, reject) => {
+                    stream.pipe(writeStream);
+                    stream.on("error", reject);
+                    writeStream.on("finish", resolve);
+                    writeStream.on("error", reject);
+                  });
+                  
+                  pdfAbsolutePath = tempPdfPath;
+                  console.log(`[GPT 답변] GridFS에서 PDF 다운로드 완료: ${tempPdfPath}`);
+                  
+                  // 현재 페이지의 pdf_path를 GridFS URL로 업데이트 (다음 번에는 바로 사용)
+                  await WhiteboardPage.updateOne(
+                    { _id: page._id },
+                    { $set: { pdf_path: pageWithGridFS.pdf_path } }
+                  );
+                } else {
+                  // GridFS URL이 없으면 로컬 파일 경로는 건너뛰기
+                  console.warn(`[GPT 답변] 해당 페이지의 GridFS URL을 찾을 수 없습니다. 로컬 파일도 없어 건너뜁니다.`);
+                  continue;
+                }
+              } catch (gridfsError) {
+                console.error(`[GPT 답변] GridFS에서 PDF 찾기 실패:`, gridfsError.message || gridfsError);
+                continue;
+              }
             }
           }
           
