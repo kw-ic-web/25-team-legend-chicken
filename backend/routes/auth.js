@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const User = require("../models/user");
+// Linux 환경에서는 파일 시스템이 대소문자를 구분하므로
+// 모델 파일명(`User.js`)과 동일하게 대문자 U를 사용해야 한다.
+const User = require("../models/User");
 const RefreshToken = require("../models/RefreshToken");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -128,7 +130,7 @@ router.post("/login", async (req, res) => {
 
     // Refresh Token 생성 (랜덤 문자열)
     const refreshTokenValue = crypto.randomBytes(64).toString("hex");
-    
+
     // Refresh Token 만료 시간 (7일)
     const refreshTokenExpiresAt = new Date();
     refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + 7);
@@ -325,7 +327,9 @@ router.post("/logout", authenticateToken, async (req, res) => {
     if (token) {
       const { addToBlacklist } = require("../middleware/auth");
       addToBlacklist(token);
-      console.log("Access token 블랙리스트에 추가됨:", { email: req.user.email });
+      console.log("Access token 블랙리스트에 추가됨:", {
+        email: req.user.email,
+      });
     }
 
     // Refresh Token 삭제
@@ -337,7 +341,7 @@ router.post("/logout", authenticateToken, async (req, res) => {
       await RefreshToken.deleteMany({ user_id: req.user._id });
       console.log("모든 refresh token 삭제됨:", { email: req.user.email });
     }
-    
+
     console.log("로그아웃 요청:", { email: req.user.email });
 
     return res.json({
@@ -413,7 +417,10 @@ router.put(
       // 이메일 수정
       if (email !== undefined && email !== user.email) {
         const existingUser = await User.findOne({ email });
-        if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+        if (
+          existingUser &&
+          existingUser._id.toString() !== user._id.toString()
+        ) {
           return res.status(400).json({
             success: false,
             message: "이미 사용 중인 이메일입니다.",
