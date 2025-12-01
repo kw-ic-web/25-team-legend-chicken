@@ -2,11 +2,16 @@
 const { Server } = require("socket.io");
 
 function attachSocket(server, corsOrigin = "*") {
+  const corsConfig = corsOrigin === "*" 
+    ? { origin: true, credentials: true } // 모든 origin 허용
+    : { origin: corsOrigin, credentials: true };
+  
+  console.log("[Socket.io] CORS 설정:", corsConfig);
+  
   const io = new Server(server, {
-    cors: {
-      origin: corsOrigin,
-      credentials: true,
-    },
+    cors: corsConfig,
+    transports: ["websocket", "polling"], // WebSocket과 polling 모두 지원
+    allowEIO3: true, // Socket.io v3 클라이언트 호환성
   });
 
   io.on("connection", (socket) => {

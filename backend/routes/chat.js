@@ -110,8 +110,15 @@ router.post("/", authenticateToken, rateLimitOnePerSecond, async (req, res) => {
 // GET /api/chat?lecture_id=...&class_id=...&live_id=...?&limit=50&before=ISO&since=ISO
 router.get("/", authenticateToken, async (req, res) => {
   try {
+    console.log("[chat] GET 요청:", {
+      method: req.method,
+      path: req.path,
+      query: req.query,
+      user: req.user?._id,
+    });
     const { lecture_id, class_id, live_id, limit = 50, before, since } = req.query || {};
     if (!lecture_id || !class_id) {
+      console.error("[chat] 필수 파라미터 누락:", { lecture_id, class_id });
       return res.status(422).json({ message: "lecture_id, class_id는 필수입니다." });
     }
 

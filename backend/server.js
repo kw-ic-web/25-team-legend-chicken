@@ -58,12 +58,28 @@ app.use("/api/handwriting", handwritingRouter);
 app.use("/api", materialsRouter); // 통일된 교안 API
 app.use("/api/files", filesRouter); // GridFS 파일 서빙
 
+// 라우터 등록 확인 로그
+console.log("✅ 라우터 등록 완료:");
+console.log("  - /api/chat");
+console.log("  - /api/lectures/:lectureId/classes/:classId/materials/pages");
+console.log("  - /api/files/:fileId");
+
 app.get("/", (req, res) => {
   res.send("Lec-Q 서버가 실행 중입니다.");
 });
 
 app.use((req, res, next) => {
-  res.status(404).send({ error: "요청하신 페이지를 찾을 수 없습니다." });
+  console.error(`[404] 요청 경로를 찾을 수 없습니다: ${req.method} ${req.originalUrl}`);
+  console.error(`[404] 요청 헤더:`, {
+    host: req.headers.host,
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+  });
+  res.status(404).json({ 
+    error: "요청하신 페이지를 찾을 수 없습니다.",
+    method: req.method,
+    path: req.originalUrl,
+  });
 });
 
 app.use((err, req, res, next) => {
