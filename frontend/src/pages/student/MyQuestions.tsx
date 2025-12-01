@@ -20,7 +20,8 @@ interface Question {
   question: string;
   timestamp: string; // 포맷팅된 타임스탬프 (표시용) e.g. "2024-01-15 14:30"
   rawTimestamp: string; // 원본 타임스탬프 (정렬용) e.g. "2025-11-12T03:33:49.974Z"
-  status: "pending" | "answered" | "rejected";
+  // 백엔드에 별도 상태 플래그는 없고, answer 유무로만 상태 판별
+  status: "pending" | "answered";
   answer?: string;
 }
 
@@ -41,14 +42,7 @@ const statusMeta: Record<
     className:
       "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:ring-emerald-800",
   },
-  rejected: {
-    label: "거부됨",
-    icon: <XCircle className="h-4 w-4" />,
-    className:
-      "bg-rose-50 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:ring-rose-800",
-  },
 };
-
 
 // ---------------- Helpers ----------------
 const formatTimestamp = (dateString: string): string => {
@@ -103,7 +97,9 @@ const MyQuestions: React.FC = () => {
         const response = await getMyQuestions(undefined, undefined, 200);
         if (!active) return;
 
-        const mappedQuestions = response.questions.map(mapApiQuestionToComponent);
+        const mappedQuestions = response.questions.map(
+          mapApiQuestionToComponent
+        );
         setQuestions(mappedQuestions);
         setTotalCount(response.total_count);
       } catch (error) {
@@ -144,11 +140,11 @@ const MyQuestions: React.FC = () => {
       try {
         const dateA = new Date(a.rawTimestamp).getTime();
         const dateB = new Date(b.rawTimestamp).getTime();
-        
+
         if (isNaN(dateA) || isNaN(dateB)) {
           return 0; // 파싱 실패 시 원본 순서 유지
         }
-        
+
         return sort === "newest" ? dateB - dateA : dateA - dateB;
       } catch {
         return 0;
@@ -170,7 +166,8 @@ const MyQuestions: React.FC = () => {
               총 <span className="font-medium">{totalCount}</span>개 질문
               {filtered.length !== totalCount && (
                 <span className="ml-1">
-                  (필터링: <span className="font-medium">{filtered.length}</span>개)
+                  (필터링:{" "}
+                  <span className="font-medium">{filtered.length}</span>개)
                 </span>
               )}
             </p>
@@ -198,7 +195,6 @@ const MyQuestions: React.FC = () => {
                   <option value="all">전체 상태</option>
                   <option value="pending">대기중</option>
                   <option value="answered">답변완료</option>
-                  <option value="rejected">거부됨</option>
                 </select>
                 <Filter className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -269,9 +265,7 @@ const QuestionCard: React.FC<{
               {meta.label}
             </span>
             <span className="text-xs text-gray-400">•</span>
-            <time className="text-xs text-gray-500">
-              {data.timestamp}
-            </time>
+            <time className="text-xs text-gray-500">{data.timestamp}</time>
           </div>
 
           <h3 className="mt-2 text-base font-semibold text-gray-900">
@@ -303,12 +297,12 @@ const QuestionCard: React.FC<{
       <div
         className={`overflow-hidden transition-all duration-200 ${expanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"}`}
       >
-        <div className={`rounded-xl bg-white p-4 text-sm text-gray-700 border border-gray-200 ${expanded ? "mt-4" : "mt-0"}`}>
+        <div
+          className={`rounded-xl bg-white p-4 text-sm text-gray-700 border border-gray-200 ${expanded ? "mt-4" : "mt-0"}`}
+        >
           {data.status === "answered" && data.answer ? (
             <div>
-              <div className="text-[13px] font-medium text-gray-500">
-                답변
-              </div>
+              <div className="text-[13px] font-medium text-gray-500">답변</div>
               <p className="mt-1 leading-relaxed">{data.answer}</p>
             </div>
           ) : data.status === "pending" ? (
@@ -323,7 +317,7 @@ const QuestionCard: React.FC<{
 };
 
 const EmptyState: React.FC = () => (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 p-10 text-center bg-white shadow-md">
+  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 p-10 text-center bg-white shadow-md">
     <div className="grid place-items-center rounded-full bg-white p-4 border border-gray-200">
       <Search className="h-6 w-6 text-gray-400" />
     </div>
@@ -331,7 +325,8 @@ const EmptyState: React.FC = () => (
       질문 내역이 없습니다
     </h3>
     <p className="mt-1 max-w-md text-sm text-gray-500">
-      아직 등록된 질문이 없어요. 페이지 상단의 입력 폼 또는 강의 상세 페이지에서 새로운 질문을 남겨보세요.
+      아직 등록된 질문이 없어요. 페이지 상단의 입력 폼 또는 강의 상세 페이지에서
+      새로운 질문을 남겨보세요.
     </p>
   </div>
 );
