@@ -1108,7 +1108,6 @@ const ProfessorClass: React.FC = () => {
           currentLectures: lectureCount,
           profileImage: myInfo?.profile_image,
         }}
-        showBroadcastControls={false}
         additionalContent={
           <div className="p-6 border-t border-gray-200 space-y-6">
             <div>
