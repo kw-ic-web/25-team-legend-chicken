@@ -316,19 +316,41 @@ router.post(
       }
 
       // 원본 PDF를 GridFS에 저장 (이미 uploadToGridFS 미들웨어에서 저장됨)
-      const originalPdfUrl = req.file?.gridfsUrl || `/uploads/pdfs/${req.file.filename}`;
-      const originalFileName = req.file.originalname || req.file.filename;
+      if (!req.file?.gridfsUrl) {
+        console.error("[materials] GridFS URL이 설정되지 않았습니다. req.file:", {
+          hasFile: !!req.file,
+          gridfsId: req.file?.gridfsId,
+          gridfsUrl: req.file?.gridfsUrl,
+          filename: req.file?.filename,
+          originalname: req.file?.originalname,
+        });
+        return res.status(500).json({
+          success: false,
+          message: "PDF 파일을 GridFS에 저장하는데 실패했습니다.",
+        });
+      }
+      
+      const originalPdfUrl = req.file.gridfsUrl; // GridFS URL만 사용
+      const originalFileName = req.file.originalname || req.file.filename || "uploaded.pdf";
+      
+      console.log("[materials] PDF 업로드 시작:", {
+        lectureId,
+        classId,
+        originalFileName,
+        gridfsUrl: originalPdfUrl,
+        gridfsId: req.file.gridfsId,
+      });
       
       // PDF를 페이지별로 분할 (버퍼 사용)
       const pdfBuffer = req.file.buffer;
       const splitted = await splitPdfIntoPages(pdfBuffer, { lectureId, classId });
 
-      // materials에 원본 PDF 정보 추가
+      // materials에 원본 PDF 정보 추가 (GridFS URL 사용)
       if (!Array.isArray(lecture.classes[idx].materials)) {
         lecture.classes[idx].materials = [];
       }
       const materialObj = {
-        url: originalPdfUrl,
+        url: originalPdfUrl, // GridFS URL
         originalName: originalFileName
       };
       const exists = lecture.classes[idx].materials.some(m => {
@@ -337,8 +359,12 @@ router.post(
       });
       if (!exists) {
         lecture.classes[idx].materials.push(materialObj);
+        console.log("[materials] materials 배열에 추가:", materialObj);
+      } else {
+        console.log("[materials] 중복 PDF 무시:", originalPdfUrl);
       }
       await lecture.save();
+      console.log("[materials] Lecture 저장 완료");
 
       // 기존 페이지 번호 확인
       const lastPage = await WhiteboardPage.findOne({
