@@ -867,7 +867,8 @@ const RealtimeDashboard: React.FC = () => {
     chatSocketRef.current = socket;
 
     // 라이브 룸 입장
-    socket.on("connect", () => {
+    const handleConnect = () => {
+      console.log("[RealtimeDashboard] Socket connected:", socket.id);
       socket.emit("live:join", {
         lecture_id: resolvedLectureId,
         class_id: resolvedClassId,
@@ -875,10 +876,19 @@ const RealtimeDashboard: React.FC = () => {
         role: "professor",
         user_id: user?.id,
       });
+    };
+
+    socket.on("connect", handleConnect);
+
+    // 재연결 시 룸 재입장
+    socket.on("reconnect", () => {
+      console.log("[RealtimeDashboard] Socket reconnected, rejoining room");
+      handleConnect();
     });
 
     // 실시간 메시지 수신
     const handleChatMessage = (message: ChatMessage) => {
+      console.log("[RealtimeDashboard] Received chat message:", message);
       setChatMessages((prev) => {
         // 중복 방지
         if (prev.some((m) => m._id === message._id)) {
@@ -898,6 +908,8 @@ const RealtimeDashboard: React.FC = () => {
     socket.on("chat:message", handleChatMessage);
 
     return () => {
+      socket.off("connect", handleConnect);
+      socket.off("reconnect", handleConnect);
       socket.off("chat:message", handleChatMessage);
       socket.disconnect();
       chatSocketRef.current = null;

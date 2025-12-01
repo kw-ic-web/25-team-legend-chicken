@@ -967,6 +967,7 @@ const LiveWatching: React.FC = () => {
 
     // 실시간 메시지 수신
     const handleChatMessage = (message: ChatMessage) => {
+      console.log("[LiveWatching] Received chat message:", message);
       setChatMessages((prev) => {
         // 중복 방지
         if (prev.some((m) => m._id === message._id)) {

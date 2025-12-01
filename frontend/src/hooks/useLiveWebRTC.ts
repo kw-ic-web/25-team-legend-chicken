@@ -97,7 +97,13 @@ export function useLiveWebRTC({
 
   const updateRemoteParticipants = useCallback(() => {
     const participants: RemoteParticipant[] = [];
-    Array.from(remoteStreamRef.current.entries()).forEach(([id, streams]) => {
+    const entries = Array.from(remoteStreamRef.current.entries());
+    console.log(
+      "[WebRTC] updateRemoteParticipants: remoteStreamRef entries:",
+      entries.length
+    );
+    
+    entries.forEach(([id, streams]) => {
       const meta = metadataRef.current.get(id);
       console.log(
         "[WebRTC] updateRemoteParticipants: socketId:",
@@ -109,17 +115,40 @@ export function useLiveWebRTC({
       );
       // 각 스트림을 별도의 participant로 추가
       streams.forEach((stream) => {
-        participants.push({
-          socketId: id,
-          stream,
-          role: meta?.role,
-          userId: meta?.userId,
-        });
+        const activeTracks = stream.getTracks().filter(
+          (t) => t.readyState === "live" && t.enabled
+        );
+        if (activeTracks.length > 0) {
+          console.log(
+            "[WebRTC] updateRemoteParticipants: 활성 스트림 추가:",
+            stream.id,
+            "활성 트랙 수:",
+            activeTracks.length
+          );
+          participants.push({
+            socketId: id,
+            stream,
+            role: meta?.role,
+            userId: meta?.userId,
+          });
+        } else {
+          console.log(
+            "[WebRTC] updateRemoteParticipants: 활성 트랙 없는 스트림 무시:",
+            stream.id
+          );
+        }
       });
     });
     console.log(
       "[WebRTC] updateRemoteParticipants: 총 participants 수:",
-      participants.length
+      participants.length,
+      "상세:",
+      participants.map((p) => ({
+        socketId: p.socketId,
+        role: p.role,
+        streamId: p.stream.id,
+        tracks: p.stream.getTracks().length,
+      }))
     );
     setRemoteParticipants(participants);
   }, []);
@@ -272,52 +301,30 @@ export function useLiveWebRTC({
           track: event.track,
           trackKind: event.track.kind,
           trackLabel: event.track.label,
+          trackId: event.track.id,
+          trackState: event.track.readyState,
         });
 
         const [stream] = event.streams;
         if (!stream) {
           console.warn(
-            "[WebRTC] ontrack: no stream in event, using track only"
+            "[WebRTC] ontrack: no stream in event, creating stream from track"
           );
-          // stream이 없으면 track만 처리
+          // stream이 없으면 track으로 새 stream 생성
           const track = event.track;
-          if (track) {
-            // 트랙 종료 시 스트림 정리
-            const cleanupRemoteStreams = () => {
-              const existing =
-                remoteStreamRef.current.get(remoteSocketId) || [];
-              const aliveStreams = existing.filter((s) =>
-                s.getTracks().some((t) => t.readyState === "live" && t.enabled)
-              );
-              if (aliveStreams.length === 0) {
-                remoteStreamRef.current.delete(remoteSocketId);
-                metadataRef.current.delete(remoteSocketId);
-                makingOfferRef.current.delete(remoteSocketId);
-              } else {
-                remoteStreamRef.current.set(remoteSocketId, aliveStreams);
-              }
-              updateRemoteParticipants();
-            };
-            track.addEventListener("ended", cleanupRemoteStreams);
-
-            // 기존 stream에 track 추가
+          if (track && track.readyState === "live") {
+            const newStream = new MediaStream([track]);
             const existingStreams =
               remoteStreamRef.current.get(remoteSocketId) || [];
-            const primaryStream = existingStreams[0];
-            if (primaryStream) {
-              primaryStream.addTrack(track);
-              console.log(
-                "[WebRTC] ontrack: added track to existing stream",
-                remoteSocketId
-              );
-              updateRemoteParticipants();
-            } else {
-              // 새 stream 생성
-              const newStream = new MediaStream([track]);
-              remoteStreamRef.current.set(remoteSocketId, [newStream]);
+            // 중복 체크
+            if (!existingStreams.some((s) => s.id === newStream.id)) {
+              existingStreams.push(newStream);
+              remoteStreamRef.current.set(remoteSocketId, existingStreams);
               console.log(
                 "[WebRTC] ontrack: created new stream from track",
-                remoteSocketId
+                remoteSocketId,
+                "streamId:",
+                newStream.id
               );
               updateRemoteParticipants();
             }
@@ -364,19 +371,35 @@ export function useLiveWebRTC({
           remoteStreamRef.current.get(remoteSocketId) || [];
         // 중복 스트림 체크 (stream ID로)
         const streamId = stream.id;
+        const hasActiveTracks = stream.getTracks().some(
+          (t) => t.readyState === "live" && t.enabled
+        );
+        
+        if (!hasActiveTracks) {
+          console.log("[WebRTC] ontrack: 스트림에 활성 트랙 없음, 무시");
+          return;
+        }
+
         if (!existingStreams.some((s) => s.id === streamId)) {
           console.log(
             "[WebRTC] ontrack: 새 스트림 추가:",
             streamId,
             "기존 스트림 수:",
-            existingStreams.length
+            existingStreams.length,
+            "트랙 수:",
+            stream.getTracks().length
           );
           existingStreams.push(stream);
           remoteStreamRef.current.set(remoteSocketId, existingStreams);
+          console.log(
+            "[WebRTC] ontrack: 스트림 추가 후 remoteStreamRef 크기:",
+            remoteStreamRef.current.size,
+            "metadata:",
+            metadataRef.current.get(remoteSocketId)
+          );
           updateRemoteParticipants();
           console.log(
-            "[WebRTC] ontrack: 스트림 추가 후 metadata:",
-            metadataRef.current.get(remoteSocketId)
+            "[WebRTC] ontrack: updateRemoteParticipants 호출 완료"
           );
         } else {
           console.log("[WebRTC] ontrack: 중복 스트림 무시:", streamId);
@@ -549,7 +572,10 @@ export function useLiveWebRTC({
         });
         console.log("[WebRTC] handleOffer: answer sent");
         setStatus("connected");
-        updateRemoteParticipants();
+        // answer 전송 후 잠시 대기 후 participants 업데이트 (ontrack 이벤트 대기)
+        setTimeout(() => {
+          updateRemoteParticipants();
+        }, 500);
       } catch (offerError) {
         console.error("[WebRTC] handle offer error", offerError);
         if (
@@ -616,7 +642,10 @@ export function useLiveWebRTC({
 
         await peer.setRemoteDescription(new RTCSessionDescription(sdp));
         setStatus("connected");
-        updateRemoteParticipants();
+        // answer 수신 후 잠시 대기 후 participants 업데이트 (ontrack 이벤트 대기)
+        setTimeout(() => {
+          updateRemoteParticipants();
+        }, 500);
       } catch (answerError) {
         console.error("[WebRTC] handle answer error", answerError);
         if (
