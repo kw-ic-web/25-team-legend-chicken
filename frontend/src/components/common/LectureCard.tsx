@@ -26,22 +26,42 @@ const LectureCard: React.FC<LectureCardProps> = ({
 }) => {
   const [imageError, setImageError] = React.useState(false);
   const [imageLoaded, setImageLoaded] = React.useState(false);
+  const [retryCount, setRetryCount] = React.useState(0);
 
   // 이미지 prop이 변경되면 상태 리셋
   React.useEffect(() => {
     setImageError(false);
     setImageLoaded(false);
+    setRetryCount(0);
   }, [image]);
 
   const handleImageError = () => {
-    setImageError(true);
-    setImageLoaded(false);
+    // 썸네일이 막 업로드된 직후에는 파일이 아직 준비되지 않았을 수 있으므로
+    // 동일 URL에 대해 몇 번까지는 자동 재시도 (캐시 무효화 쿼리 추가)
+    if (image && retryCount < 3) {
+      setTimeout(() => {
+        setRetryCount((prev) => prev + 1);
+      }, 500);
+    } else {
+      setImageError(true);
+      setImageLoaded(false);
+    }
   };
 
   const handleImageLoad = () => {
     setImageLoaded(true);
     setImageError(false);
   };
+
+  // 캐시 무효화를 위한 쿼리 파라미터 추가 (재시도 시에만)
+  const resolvedImageSrc =
+    image && !imageError
+      ? `${image}${
+          retryCount > 0
+            ? `${image.includes("?") ? "&" : "?"}v=${retryCount}`
+            : ""
+        }`
+      : undefined;
   const getStatusTag = () => {
     switch (status) {
       case "broadcasting":
@@ -84,10 +104,10 @@ const LectureCard: React.FC<LectureCardProps> = ({
     >
       {/* 상단 섹션 - 강의 이미지 영역 */}
       <div className="relative h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
-        {image && !imageError ? (
+        {resolvedImageSrc ? (
           <>
             <img
-              src={image}
+              src={resolvedImageSrc}
               alt={title}
               className={`absolute inset-0 w-full h-full object-cover ${
                 imageLoaded ? "opacity-100" : "opacity-0"
