@@ -77,11 +77,20 @@ router.get("/my-lectures", authenticateToken, async (req, res) => {
       "lecture_id name schedule professor_name professor_email professor_phone lecture_description thumbnail"
     );
 
+    // 로컬에 저장된 썸네일 경로 필터링 (GridFS만 사용)
+    const filteredLectures = lectures.map(lecture => {
+      const lectureObj = lecture.toObject();
+      if (lectureObj.thumbnail && lectureObj.thumbnail.startsWith("/uploads/images/thumbnail-")) {
+        lectureObj.thumbnail = ""; // 로컬 경로는 빈 문자열로 처리
+      }
+      return lectureObj;
+    });
+
     res.status(200).json({
       student_name: user.name,
       student_email: user.email,
-      lecture_count: lectures.length,
-      lectures: lectures,
+      lecture_count: filteredLectures.length,
+      lectures: filteredLectures,
     });
   } catch (err) {
     console.error("수강 강좌 조회 오류:", err);
