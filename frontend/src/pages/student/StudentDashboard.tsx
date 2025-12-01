@@ -143,7 +143,7 @@ const StudentDashboard: React.FC = () => {
           statusMap.set(lecture.id, lectureStatus);
         } catch (error) {
           console.error(`강좌 ${lecture.id} 라이브 상태 확인 오류:`, error);
-          statusMap.set(lecture.id, false);
+          statusMap.set(lecture.id, "scheduled");
         }
       });
 
