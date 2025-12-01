@@ -3,8 +3,17 @@ function toAbsoluteUrl(req, path) {
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
   }
-  const protocol = req.protocol || 'http';
-  const host = req.get('host') || 'localhost:8080';
+  // Reverse proxy 환경에서 X-Forwarded-Proto 헤더 확인
+  // 또는 환경 변수로 강제 설정
+  let protocol = req.protocol || 'http';
+  const forwardedProto = req.get('x-forwarded-proto');
+  if (forwardedProto) {
+    protocol = forwardedProto.split(',')[0].trim(); // 첫 번째 프로토콜 사용
+  } else if (process.env.FORCE_HTTPS === 'true' || process.env.NODE_ENV === 'production') {
+    // 프로덕션 환경에서는 기본적으로 HTTPS 사용
+    protocol = 'https';
+  }
+  const host = req.get('host') || req.get('x-forwarded-host') || 'localhost:8080';
   return `${protocol}://${host}${path.startsWith('/') ? path : '/' + path}`;
 }
 

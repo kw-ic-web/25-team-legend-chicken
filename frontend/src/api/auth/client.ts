@@ -5,7 +5,24 @@ export const getBaseUrl = (): string => {
     fromEnv && fromEnv.trim().length > 0 ? fromEnv : "localhost:8080";
   // allow http(s) prefix omitted values
   if (base.startsWith("http://") || base.startsWith("https://")) return base;
+  // 프로덕션 환경에서는 HTTPS 사용 (현재 페이지가 HTTPS인 경우)
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    return `https://${base}`;
+  }
   return `http://${base}`;
+};
+
+/**
+ * URL이 HTTP인 경우 현재 페이지 프로토콜에 맞춰 HTTPS로 변환
+ */
+export const ensureHttps = (url: string): string => {
+  if (!url) return url;
+  if (typeof window === "undefined") return url;
+  // 현재 페이지가 HTTPS인 경우 HTTP URL을 HTTPS로 변환
+  if (window.location.protocol === "https:" && url.startsWith("http://")) {
+    return url.replace("http://", "https://");
+  }
+  return url;
 };
 
 // 토큰 만료 시 처리 함수

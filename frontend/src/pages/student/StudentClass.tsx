@@ -562,26 +562,34 @@ const StudentClass: React.FC = () => {
         }));
         
         // 첫 번째 페이지의 PDF 경로 사용 (페이지별 PDF가 있으면 사용)
+        const { ensureHttps } = await import("../../api/auth/client");
         const firstPage = pagesResponse.pages[0];
         if (firstPage.pdf_path) {
-          materialUrl = firstPage.pdf_path.startsWith("http")
-            ? firstPage.pdf_path
-            : `${getBaseUrl()}${firstPage.pdf_path}`;
+          materialUrl = ensureHttps(
+            firstPage.pdf_path.startsWith("http")
+              ? firstPage.pdf_path
+              : `${getBaseUrl()}${firstPage.pdf_path}`
+          );
         } else if (firstPage.image_path) {
           // PDF가 없으면 이미지 경로 사용
-          materialUrl = firstPage.image_path.startsWith("http")
-            ? firstPage.image_path
-            : `${getBaseUrl()}${firstPage.image_path}`;
+          materialUrl = ensureHttps(
+            firstPage.image_path.startsWith("http")
+              ? firstPage.image_path
+              : `${getBaseUrl()}${firstPage.image_path}`
+          );
         }
         materialName = `교안 (${pagesResponse.total_pages}페이지)`;
       }
       
       // 페이지별 교안이 없고 원본 PDF가 있는 경우
       if (!materialUrl && pagesResponse.original_materials && pagesResponse.original_materials.length > 0) {
+        const { ensureHttps } = await import("../../api/auth/client");
         const firstMaterial = pagesResponse.original_materials[0];
-        materialUrl = firstMaterial.url.startsWith("http")
-          ? firstMaterial.url
-          : `${getBaseUrl()}${firstMaterial.url}`;
+        materialUrl = ensureHttps(
+          firstMaterial.url.startsWith("http")
+            ? firstMaterial.url
+            : `${getBaseUrl()}${firstMaterial.url}`
+        );
         materialName = firstMaterial.originalName || "강의 자료";
       }
 
