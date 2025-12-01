@@ -104,7 +104,8 @@ router.post("/", authenticateToken, async (req, res) => {
       io.to(room).emit("question:new", q.toObject());
     }
 
-    generateGPTAnswer(q._id, lecture_id, class_id, text, io).catch((err) => {
+    // 질문이 생성된 페이지 번호를 전달
+    generateGPTAnswer(q._id, lecture_id, class_id, text, page, io).catch((err) => {
       console.error("GPT 답변 생성 오류:", err);
     });
 
@@ -361,6 +362,7 @@ async function generateGPTAnswer(
   lectureId,
   classId,
   questionText,
+  questionPage = null,
   io = null
 ) {
   try {
@@ -375,15 +377,32 @@ async function generateGPTAnswer(
     const { extractTextFromImage } = require("../services/vision");
     const { convertPdfPageToImage, toAbsolutePath } = require("../utils/pdf");
     const path = require("path");
+    const fs = require("fs-extra");
 
-    const whiteboardPages = await WhiteboardPage.find({
-      lecture_id: lectureId,
-      class_id: String(classId),
-      status: "finalized",
-    })
-      .sort({ page_number: 1 })
-      .select("text page_number pdf_path")
-      .lean();
+    // 질문이 생성된 특정 페이지를 우선적으로 찾기
+    let targetPage = null;
+    if (questionPage !== null && questionPage !== undefined) {
+      targetPage = await WhiteboardPage.findOne({
+        lecture_id: lectureId,
+        class_id: String(classId),
+        page_number: Number(questionPage),
+        status: "finalized",
+      })
+        .select("text page_number pdf_path _id")
+        .lean();
+    }
+
+    // 특정 페이지가 없으면 모든 페이지 조회
+    const whiteboardPages = targetPage 
+      ? [targetPage]
+      : await WhiteboardPage.find({
+          lecture_id: lectureId,
+          class_id: String(classId),
+          status: "finalized",
+        })
+          .sort({ page_number: 1 })
+          .select("text page_number pdf_path _id")
+          .lean();
 
     // 각 페이지의 텍스트를 수집 (비어있으면 PDF에서 추출)
     const pageTexts = [];
@@ -395,8 +414,46 @@ async function generateGPTAnswer(
         try {
           console.log(`[GPT 답변] 페이지 ${page.page_number}의 텍스트가 비어있어 PDF에서 추출 시도: ${page.pdf_path}`);
           
-          // PDF 경로를 절대 경로로 변환
-          const pdfAbsolutePath = toAbsolutePath(page.pdf_path);
+          let pdfAbsolutePath = null;
+          let isGridFS = false;
+          
+          // GridFS URL인지 확인 (/api/files/로 시작)
+          if (page.pdf_path.startsWith("/api/files/")) {
+            isGridFS = true;
+            const fileId = page.pdf_path.replace("/api/files/", "");
+            const { downloadFile } = require("../utils/gridfs");
+            const nodeFs = require("fs");
+            
+            try {
+              const { stream, metadata } = await downloadFile(fileId);
+              
+              // GridFS에서 PDF를 임시 파일로 저장
+              const tempPdfPath = path.join(require("os").tmpdir(), `gpt-extract-${fileId}-${Date.now()}.pdf`);
+              const writeStream = nodeFs.createWriteStream(tempPdfPath);
+              
+              await new Promise((resolve, reject) => {
+                stream.pipe(writeStream);
+                stream.on("error", reject);
+                writeStream.on("finish", resolve);
+                writeStream.on("error", reject);
+              });
+              
+              pdfAbsolutePath = tempPdfPath;
+              console.log(`[GPT 답변] GridFS에서 PDF 다운로드 완료: ${tempPdfPath}`);
+            } catch (gridfsError) {
+              console.error(`[GPT 답변] GridFS 다운로드 실패:`, gridfsError.message || gridfsError);
+              continue;
+            }
+          } else {
+            // 로컬 파일 경로
+            pdfAbsolutePath = toAbsolutePath(page.pdf_path);
+            
+            // 파일 존재 확인
+            if (!fs.existsSync(pdfAbsolutePath)) {
+              console.warn(`[GPT 답변] PDF 파일을 찾을 수 없습니다: ${pdfAbsolutePath}`);
+              continue;
+            }
+          }
           
           // PDF를 이미지로 변환
           const imagePath = await convertPdfPageToImage(pdfAbsolutePath);
@@ -412,17 +469,22 @@ async function generateGPTAnswer(
               { $set: { text: pageText } }
             );
             console.log(`[GPT 답변] 페이지 ${page.page_number}의 텍스트 추출 완료 (${pageText.length}자)`);
+          } else {
+            console.warn(`[GPT 답변] 페이지 ${page.page_number}에서 텍스트를 추출하지 못했습니다.`);
           }
           
-          // 임시 이미지 파일 정리
+          // 임시 파일 정리
           try {
-            const fs = require("fs-extra");
             await fs.remove(imagePath);
+            if (isGridFS && pdfAbsolutePath) {
+              await fs.remove(pdfAbsolutePath);
+            }
           } catch (cleanupError) {
             // 정리 실패는 무시
           }
         } catch (extractError) {
           console.error(`[GPT 답변] 페이지 ${page.page_number}의 텍스트 추출 실패:`, extractError.message || extractError);
+          console.error(`[GPT 답변] 스택 트레이스:`, extractError.stack);
           // 추출 실패해도 계속 진행
         }
       }
