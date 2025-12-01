@@ -282,6 +282,24 @@ export function useLiveWebRTC({
           // stream이 없으면 track만 처리
           const track = event.track;
           if (track) {
+            // 트랙 종료 시 스트림 정리
+            const cleanupRemoteStreams = () => {
+              const existing =
+                remoteStreamRef.current.get(remoteSocketId) || [];
+              const aliveStreams = existing.filter((s) =>
+                s.getTracks().some((t) => t.readyState === "live" && t.enabled)
+              );
+              if (aliveStreams.length === 0) {
+                remoteStreamRef.current.delete(remoteSocketId);
+                metadataRef.current.delete(remoteSocketId);
+                makingOfferRef.current.delete(remoteSocketId);
+              } else {
+                remoteStreamRef.current.set(remoteSocketId, aliveStreams);
+              }
+              updateRemoteParticipants();
+            };
+            track.addEventListener("ended", cleanupRemoteStreams);
+
             // 기존 stream에 track 추가
             const existingStreams =
               remoteStreamRef.current.get(remoteSocketId) || [];
@@ -321,6 +339,25 @@ export function useLiveWebRTC({
           ":",
           metadataRef.current.get(remoteSocketId)
         );
+
+        // 트랙 종료 시 스트림 정리
+        const cleanupRemoteStreams = () => {
+          const existing = remoteStreamRef.current.get(remoteSocketId) || [];
+          const aliveStreams = existing.filter((s) =>
+            s.getTracks().some((t) => t.readyState === "live" && t.enabled)
+          );
+          if (aliveStreams.length === 0) {
+            remoteStreamRef.current.delete(remoteSocketId);
+            metadataRef.current.delete(remoteSocketId);
+            makingOfferRef.current.delete(remoteSocketId);
+          } else {
+            remoteStreamRef.current.set(remoteSocketId, aliveStreams);
+          }
+          updateRemoteParticipants();
+        };
+        stream.getTracks().forEach((t) => {
+          t.addEventListener("ended", cleanupRemoteStreams);
+        });
 
         // 여러 스트림 저장 (카메라와 화면 공유를 모두 저장)
         const existingStreams =
