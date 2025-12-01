@@ -115,9 +115,19 @@ const LoginPage: React.FC = () => {
         }
       }, 800);
     } catch (error) {
-      const message =
+      const rawMessage =
         (error as Error)?.message || "로그인 중 오류가 발생했습니다.";
-      setToast({ message, type: "error" });
+
+      let friendlyMessage = rawMessage;
+      if (rawMessage.includes("존재하지 않는 이메일")) {
+        friendlyMessage = "등록되지 않은 아이디입니다.";
+      } else if (rawMessage.includes("비밀번호가 일치하지 않습니다")) {
+        friendlyMessage = "비밀번호가 올바르지 않습니다.";
+      } else if (rawMessage.includes("이메일과 비밀번호를 입력해주세요")) {
+        friendlyMessage = "아이디와 비밀번호를 모두 입력해 주세요.";
+      }
+
+      setToast({ message: friendlyMessage, type: "error" });
     }
   };
 
