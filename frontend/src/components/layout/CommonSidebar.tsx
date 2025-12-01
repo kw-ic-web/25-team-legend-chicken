@@ -68,9 +68,9 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       }`}
     >
       {/* 사용자 프로필 섹션 */}
-      <div className="pt-10 p-6 border-b border-gray-200">
-        <div className="flex items-center space-x-4 mb-4">
-          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+      <div className="pt-6 pb-4 px-4 md:pt-10 md:px-6 md:pb-6 border-b border-gray-200">
+        <div className="flex items-center space-x-3 md:space-x-4 mb-3 md:mb-4">
+          <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
             {userInfo.profileImage ? (
               <img
                 src={userInfo.profileImage}
@@ -81,12 +81,18 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
               <Users className="w-8 h-8 text-gray-600" />
             )}
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">{userInfo.name}</h2>
-            <p className="text-sm text-gray-600">{userInfo.title}</p>
-            <p className="text-xs text-gray-500">{userInfo.affiliation}</p>
+          <div className="min-w-0">
+            <h2 className="text-base md:text-lg font-bold text-gray-900 truncate">
+              {userInfo.name}
+            </h2>
+            <p className="text-xs md:text-sm text-gray-600 truncate">
+              {userInfo.title}
+            </p>
+            <p className="text-[10px] md:text-xs text-gray-500 truncate">
+              {userInfo.affiliation}
+            </p>
             {userInfo.currentLectures && (
-              <p className="text-xs text-gray-500">
+              <p className="text-[10px] md:text-xs text-gray-500">
                 현재 진행 강의: {userInfo.currentLectures}개
               </p>
             )}
@@ -95,7 +101,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
         {/* 내 정보 버튼 */}
         <Link
           to={profilePath}
-          className="w-full bg-[#1F3A93] hover:bg-[#1b327f] text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200 block text-center"
+          className="w-full bg-[#1F3A93] hover:bg-[#1b327f] text-white font-medium py-1.5 md:py-2 px-4 md:px-6 rounded-lg transition-colors duration-200 block text-center text-sm md:text-base"
         >
           내 정보
         </Link>
@@ -104,8 +110,8 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       {/* 내 강의 + 곧 다가올 강의 병합 섹션 (교수만) */}
       {userType === "professor" &&
         (upcomingLectures.length > 0 || myLectures.length > 0) && (
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">
+          <div className="px-4 py-4 md:p-6 border-b border-gray-200">
+            <h3 className="text-xs md:text-sm font-semibold text-gray-900 mb-3 md:mb-4">
               내 강의
             </h3>
             <div
@@ -205,10 +211,14 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
 
       {/* 학생 내 강의 섹션 */}
       {userType === "student" && myLectures.length > 0 && (
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">내 강의</h3>
+        <div className="px-4 py-4 md:p-6 border-b border-gray-200">
+          <h3 className="text-xs md:text-sm font-semibold text-gray-900 mb-3 md:mb-4">
+            내 강의
+          </h3>
           <div
-            className={`space-y-3 ${myLectures.length > 4 ? "max-h-64 overflow-y-auto pr-2" : ""}`}
+            className={`space-y-3 ${
+              myLectures.length > 4 ? "max-h-64 overflow-y-auto pr-2" : ""
+            }`}
           >
             {myLectures.map((lecture, idx) => {
               const lectureId = lecture.lectureId;
@@ -260,7 +270,7 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       {userType === "student" &&
         upcomingLectures &&
         upcomingLectures.length > 0 && (
-          <div className="px-6 pt-6 pb-3 border-b border-gray-200">
+          <div className="px-4 pt-4 pb-3 md:px-6 md:pt-6 border-b border-gray-200">
             <div className="mb-2 text-center">
               {(() => {
                 // 실시간으로 가장 가까운 강의 계산
@@ -353,12 +363,12 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
 
       {/* 학생용 액션 버튼들 */}
       {userType === "student" && (
-        <div className="p-6 space-y-3">
+        <div className="px-4 py-4 md:p-6 space-y-3">
           <Link
             to="/student/questions"
-            className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
+            className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-3 md:py-3 md:px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 text-sm md:text-base"
           >
-            <Clock className="w-5 h-5" />
+            <Clock className="w-4 h-4 md:w-5 md:h-5" />
             <span>내 질문 보기</span>
           </Link>
         </div>
