@@ -372,21 +372,81 @@ async function generateGPTAnswer(
       return;
     }
 
+    const { extractTextFromImage } = require("../services/vision");
+    const { convertPdfPageToImage, toAbsolutePath } = require("../utils/pdf");
+    const path = require("path");
+
     const whiteboardPages = await WhiteboardPage.find({
       lecture_id: lectureId,
       class_id: String(classId),
       status: "finalized",
     })
       .sort({ page_number: 1 })
-      .select("text page_number")
+      .select("text page_number pdf_path")
       .lean();
 
-    const lectureText = whiteboardPages
-      .map((page) => `[페이지 ${page.page_number}]\n${page.text || ""}`)
-      .join("\n\n");
+    // 각 페이지의 텍스트를 수집 (비어있으면 PDF에서 추출)
+    const pageTexts = [];
+    for (const page of whiteboardPages) {
+      let pageText = page.text || "";
+      
+      // 텍스트가 비어있고 PDF 경로가 있으면 Vision API로 추출
+      if (!pageText.trim() && page.pdf_path) {
+        try {
+          console.log(`[GPT 답변] 페이지 ${page.page_number}의 텍스트가 비어있어 PDF에서 추출 시도: ${page.pdf_path}`);
+          
+          // PDF 경로를 절대 경로로 변환
+          const pdfAbsolutePath = toAbsolutePath(page.pdf_path);
+          
+          // PDF를 이미지로 변환
+          const imagePath = await convertPdfPageToImage(pdfAbsolutePath);
+          
+          // Vision API로 텍스트 추출
+          const { text: extractedText } = await extractTextFromImage(imagePath);
+          pageText = extractedText || "";
+          
+          // 추출된 텍스트를 WhiteboardPage에 저장 (다음 번에는 재사용)
+          if (pageText.trim()) {
+            await WhiteboardPage.updateOne(
+              { _id: page._id },
+              { $set: { text: pageText } }
+            );
+            console.log(`[GPT 답변] 페이지 ${page.page_number}의 텍스트 추출 완료 (${pageText.length}자)`);
+          }
+          
+          // 임시 이미지 파일 정리
+          try {
+            const fs = require("fs-extra");
+            await fs.remove(imagePath);
+          } catch (cleanupError) {
+            // 정리 실패는 무시
+          }
+        } catch (extractError) {
+          console.error(`[GPT 답변] 페이지 ${page.page_number}의 텍스트 추출 실패:`, extractError.message || extractError);
+          // 추출 실패해도 계속 진행
+        }
+      }
+      
+      if (pageText.trim()) {
+        pageTexts.push(`[페이지 ${page.page_number}]\n${pageText}`);
+      }
+    }
+
+    const lectureText = pageTexts.join("\n\n");
 
     if (!lectureText.trim()) {
       console.log("교안 텍스트가 없어 GPT 답변을 생성하지 않습니다.");
+      // 텍스트가 없을 때 기본 답변 제공
+      const defaultAnswer = "교안 내용이 제공되지 않아 질문에 대한 답변을 드릴 수 없습니다. 교안의 구체적인 내용을 알려주시면 도움을 드리겠습니다.";
+      await Question.findByIdAndUpdate(
+        questionId,
+        {
+          answer: defaultAnswer,
+          "metadata.answer_by": "ai",
+          "metadata.ai_answer": defaultAnswer,
+        },
+        { new: true }
+      );
       return;
     }
 
