@@ -258,9 +258,9 @@ const ProfessorSidebar: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsCreateOpen(true)}
-              className="w-full border-2 border-[#3A6EFF] text-[#3A6EFF] font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2 hover:bg-[#3A6EFF] hover:text-white"
+              className="inline-flex items-center justify-center space-x-1 rounded-md border border-[#3A6EFF] text-[#1F3A93] font-medium text-xs px-3 py-1.5 bg-white hover:bg-[#3A6EFF] hover:text-white transition-colors duration-150 shadow-sm"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-3 h-3" />
               <span>새로운 강좌 만들기</span>
             </button>
           </div>

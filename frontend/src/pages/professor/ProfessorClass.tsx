@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  Play,
   Users,
   Download,
   ChevronDown,
@@ -776,19 +775,6 @@ const ProfessorClass: React.FC = () => {
     };
   }, [course.id, selectedQuestionClassId]);
 
-  const handleStartBroadcast = () => {
-    if (weeks.length === 0) {
-      setToast({
-        message: "시작할 클래스를 찾을 수 없습니다.",
-        type: "error",
-      });
-      return;
-    }
-    const firstWeek = weeks[0];
-    setTargetClass({ id: Number(firstWeek.week), title: firstWeek.title });
-    setIsModalOpen(true);
-  };
-
   const handleClose = () => {
     setIsModalOpen(false);
     setTargetClass(null);
@@ -1204,15 +1190,6 @@ const ProfessorClass: React.FC = () => {
                   ))
                 )}
               </div>
-            </div>
-            <div className="pt-2">
-              <button
-                onClick={handleStartBroadcast}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-              >
-                <Play className="w-5 h-5" />
-                <span>실시간 방송 시작하기</span>
-              </button>
             </div>
           </div>
         }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Users, Clock, Play } from "lucide-react";
+import { Users, Clock } from "lucide-react";
 
 interface UserInfo {
   id?: string;
@@ -14,7 +14,6 @@ interface UserInfo {
 interface CommonSidebarProps {
   userType: "student" | "professor";
   userInfo: UserInfo;
-  showBroadcastControls?: boolean;
   upcomingLectures?: Array<{
     title: string;
     time: string;
@@ -30,17 +29,14 @@ interface CommonSidebarProps {
     lectureId?: string;
   }>;
   additionalContent?: React.ReactNode;
-  onStartBroadcast?: () => void;
 }
 
 const CommonSidebar: React.FC<CommonSidebarProps> = ({
   userType,
   userInfo,
-  showBroadcastControls = true,
   upcomingLectures = [],
   myLectures = [],
   additionalContent,
-  onStartBroadcast,
 }) => {
   // 실시간 카운트다운을 위한 현재 시간 상태
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -66,9 +62,11 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       : `/student/profile${userInfo.id ? `/${userInfo.id}` : ""}`;
 
   return (
-    <div className={`fixed top-20 left-0 w-80 bg-white shadow-lg h-[calc(100vh-5rem)] flex flex-col z-10 ${
-      userType === "student" ? "overflow-hidden" : "overflow-y-auto"
-    }`}>
+    <div
+      className={`fixed top-20 left-0 w-80 bg-white shadow-lg h-[calc(100vh-5rem)] flex flex-col z-10 ${
+        userType === "student" ? "overflow-hidden" : "overflow-y-auto"
+      }`}
+    >
       {/* 사용자 프로필 섹션 */}
       <div className="pt-10 p-6 border-b border-gray-200">
         <div className="flex items-center space-x-4 mb-4">
@@ -205,112 +203,6 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
           </div>
         )}
 
-      {/* 실시간 방송 시작하기 버튼 (교수만) */}
-      {userType === "professor" && showBroadcastControls && (
-        <div className="px-6 pt-6 pb-3">
-          {upcomingLectures && upcomingLectures.length > 0 && (
-            <div className="mb-2 text-center">
-              {(() => {
-                // 실시간으로 가장 가까운 강의 계산
-                const now = currentTime;
-                const validLectures = upcomingLectures
-                  .map((lecture) => {
-                    const classDate = lecture.classDate;
-                    if (!classDate) {
-                      // classDate가 없으면 기존 countdown 사용
-                      return lecture;
-                    }
-                    
-                    if (classDate <= now) {
-                      return null; // 지난 강의는 제외
-                    }
-
-                    // 날짜만 비교하여 정확한 일수 계산
-                    const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const classDateOnly = new Date(classDate.getFullYear(), classDate.getMonth(), classDate.getDate());
-                    const diffDays = Math.ceil((classDateOnly.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
-                    
-                    if (diffDays < 0 || diffDays > 7) {
-                      return null; // 지난 강의나 7일 넘어가면 제외
-                    }
-
-                    const hours = classDate.getHours();
-                    const minutes = classDate.getMinutes();
-                    const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
-
-                    return {
-                      ...lecture,
-                      countdown: `D-${diffDays}`,
-                      time: timeStr,
-                      classDate: classDate,
-                    };
-                  })
-                  .filter((lecture): lecture is NonNullable<typeof lecture> => lecture !== null);
-
-                if (validLectures.length === 0) {
-                  return null;
-                }
-
-                // 날짜 순으로 정렬
-                const sorted = validLectures.sort((a, b) => {
-                  if (a.classDate && b.classDate) {
-                    return a.classDate.getTime() - b.classDate.getTime();
-                  }
-                  // fallback
-                  const toNum = (d: string) => {
-                    const m = d.match(/\d+/);
-                    return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
-                  };
-                  const dn = toNum(a.countdown) - toNum(b.countdown);
-                  if (dn !== 0) return dn;
-                  return a.time.localeCompare(b.time);
-                });
-
-                const next = sorted[0];
-                return (
-                  <>
-                    <div className="text-[11px] text-red-700 font-semibold mb-0.5">
-                      가장 임박한 강의
-                    </div>
-                    <div className="text-xs text-gray-600">
-                      {next.countdown} · {next.time}
-                    </div>
-                    <div className="text-sm font-semibold text-gray-900 truncate">
-                      "{next.title}"
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          )}
-          {onStartBroadcast ? (
-            <button
-              onClick={onStartBroadcast}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-            >
-              <Play className="w-5 h-5" />
-              <span>
-                {upcomingLectures && upcomingLectures.length > 0
-                  ? "방송 시작하기"
-                  : "실시간 방송 시작하기"}
-              </span>
-            </button>
-          ) : (
-            <Link
-              to="/professor/realtime-dashboard"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-            >
-              <Play className="w-5 h-5" />
-              <span>
-                {upcomingLectures && upcomingLectures.length > 0
-                  ? "방송 시작하기"
-                  : "실시간 방송 시작하기"}
-              </span>
-            </Link>
-          )}
-        </div>
-      )}
-
       {/* 학생 내 강의 섹션 */}
       {userType === "student" && myLectures.length > 0 && (
         <div className="p-6 border-b border-gray-200">
@@ -365,83 +257,99 @@ const CommonSidebar: React.FC<CommonSidebarProps> = ({
       )}
 
       {/* 학생용 "가장 임박한 강의" 표시 */}
-      {userType === "student" && upcomingLectures && upcomingLectures.length > 0 && (
-        <div className="px-6 pt-6 pb-3 border-b border-gray-200">
-          <div className="mb-2 text-center">
-            {(() => {
-              // 실시간으로 가장 가까운 강의 계산
-              const now = currentTime;
-              const validLectures = upcomingLectures
-                .map((lecture) => {
-                  const classDate = lecture.classDate;
-                  if (!classDate) {
-                    // classDate가 없으면 기존 countdown 사용
-                    return lecture;
-                  }
-                  
-                  if (classDate <= now) {
-                    return null; // 지난 강의는 제외
-                  }
+      {userType === "student" &&
+        upcomingLectures &&
+        upcomingLectures.length > 0 && (
+          <div className="px-6 pt-6 pb-3 border-b border-gray-200">
+            <div className="mb-2 text-center">
+              {(() => {
+                // 실시간으로 가장 가까운 강의 계산
+                const now = currentTime;
+                const validLectures = upcomingLectures
+                  .map((lecture) => {
+                    const classDate = lecture.classDate;
+                    if (!classDate) {
+                      // classDate가 없으면 기존 countdown 사용
+                      return lecture;
+                    }
 
-                  // 날짜만 비교하여 정확한 일수 계산
-                  const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                  const classDateOnly = new Date(classDate.getFullYear(), classDate.getMonth(), classDate.getDate());
-                  const diffDays = Math.ceil((classDateOnly.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24));
-                  
-                  if (diffDays < 0 || diffDays > 7) {
-                    return null; // 지난 강의나 7일 넘어가면 제외
-                  }
+                    if (classDate <= now) {
+                      return null; // 지난 강의는 제외
+                    }
 
-                  const hours = classDate.getHours();
-                  const minutes = classDate.getMinutes();
-                  const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+                    // 날짜만 비교하여 정확한 일수 계산
+                    const nowDate = new Date(
+                      now.getFullYear(),
+                      now.getMonth(),
+                      now.getDate()
+                    );
+                    const classDateOnly = new Date(
+                      classDate.getFullYear(),
+                      classDate.getMonth(),
+                      classDate.getDate()
+                    );
+                    const diffDays = Math.ceil(
+                      (classDateOnly.getTime() - nowDate.getTime()) /
+                        (1000 * 60 * 60 * 24)
+                    );
 
-                  return {
-                    ...lecture,
-                    countdown: `D-${diffDays}`,
-                    time: timeStr,
-                    classDate: classDate,
-                  };
-                })
-                .filter((lecture): lecture is NonNullable<typeof lecture> => lecture !== null);
+                    if (diffDays < 0 || diffDays > 7) {
+                      return null; // 지난 강의나 7일 넘어가면 제외
+                    }
 
-              if (validLectures.length === 0) {
-                return null;
-              }
+                    const hours = classDate.getHours();
+                    const minutes = classDate.getMinutes();
+                    const timeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 
-              // 날짜 순으로 정렬
-              const sorted = validLectures.sort((a, b) => {
-                if (a.classDate && b.classDate) {
-                  return a.classDate.getTime() - b.classDate.getTime();
+                    return {
+                      ...lecture,
+                      countdown: `D-${diffDays}`,
+                      time: timeStr,
+                      classDate: classDate,
+                    };
+                  })
+                  .filter(
+                    (lecture): lecture is NonNullable<typeof lecture> =>
+                      lecture !== null
+                  );
+
+                if (validLectures.length === 0) {
+                  return null;
                 }
-                // fallback
-                const toNum = (d: string) => {
-                  const m = d.match(/\d+/);
-                  return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
-                };
-                const dn = toNum(a.countdown) - toNum(b.countdown);
-                if (dn !== 0) return dn;
-                return a.time.localeCompare(b.time);
-              });
 
-              const next = sorted[0];
-              return (
-                <>
-                  <div className="text-[11px] text-red-700 font-semibold mb-0.5">
-                    가장 임박한 강의
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {next.countdown} · {next.time}
-                  </div>
-                  <div className="text-sm font-semibold text-gray-900 truncate">
-                    "{next.title}"
-                  </div>
-                </>
-              );
-            })()}
+                // 날짜 순으로 정렬
+                const sorted = validLectures.sort((a, b) => {
+                  if (a.classDate && b.classDate) {
+                    return a.classDate.getTime() - b.classDate.getTime();
+                  }
+                  // fallback
+                  const toNum = (d: string) => {
+                    const m = d.match(/\d+/);
+                    return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER;
+                  };
+                  const dn = toNum(a.countdown) - toNum(b.countdown);
+                  if (dn !== 0) return dn;
+                  return a.time.localeCompare(b.time);
+                });
+
+                const next = sorted[0];
+                return (
+                  <>
+                    <div className="text-[11px] text-red-700 font-semibold mb-0.5">
+                      가장 임박한 강의
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      {next.countdown} · {next.time}
+                    </div>
+                    <div className="text-sm font-semibold text-gray-900 truncate">
+                      "{next.title}"
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* 학생용 액션 버튼들 */}
       {userType === "student" && (
