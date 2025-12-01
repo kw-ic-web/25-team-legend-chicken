@@ -160,12 +160,21 @@ socket.on("chat:send", async ({ message }) => {
   };
 
   // liveRoom과 baseRoom 모두에 브로드캐스트
+  const liveRoomSockets = io.sockets.adapter.rooms.get(liveRoom);
+  const baseRoomSockets = io.sockets.adapter.rooms.get(baseRoom);
+  console.log("[chat:send] 룸 정보:", {
+    liveRoom,
+    baseRoom,
+    liveRoomSocketsCount: liveRoomSockets ? liveRoomSockets.size : 0,
+    baseRoomSocketsCount: baseRoomSockets ? baseRoomSockets.size : 0,
+  });
+  
   io.to(liveRoom).emit("chat:message", payload);
   if (liveRoom !== baseRoom) {
     io.to(baseRoom).emit("chat:message", payload);
   }
   
-  console.log("[chat:send]", user_id, ":", messageText, "->", liveRoom);
+  console.log("[chat:send]", user_id, ":", messageText, "->", liveRoom, "브로드캐스트 완료");
 });
 
     // ─────────────────────────────────────────────

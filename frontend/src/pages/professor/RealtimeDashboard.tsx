@@ -892,8 +892,10 @@ const RealtimeDashboard: React.FC = () => {
       setChatMessages((prev) => {
         // 중복 방지
         if (prev.some((m) => m._id === message._id)) {
+          console.log("[RealtimeDashboard] 중복 메시지 무시:", message._id);
           return prev;
         }
+        console.log("[RealtimeDashboard] 새 메시지 추가:", message._id);
         return [...prev, message];
       });
       // 스크롤을 맨 아래로
@@ -906,6 +908,7 @@ const RealtimeDashboard: React.FC = () => {
     };
 
     socket.on("chat:message", handleChatMessage);
+    console.log("[RealtimeDashboard] chat:message 리스너 등록 완료");
 
     return () => {
       socket.off("connect", handleConnect);

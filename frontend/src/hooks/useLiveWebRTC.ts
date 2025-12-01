@@ -371,16 +371,32 @@ export function useLiveWebRTC({
           remoteStreamRef.current.get(remoteSocketId) || [];
         // 중복 스트림 체크 (stream ID로)
         const streamId = stream.id;
-        const hasActiveTracks = stream.getTracks().some(
+        const activeTracks = stream.getTracks().filter(
           (t) => t.readyState === "live" && t.enabled
         );
         
-        if (!hasActiveTracks) {
+        if (activeTracks.length === 0) {
           console.log("[WebRTC] ontrack: 스트림에 활성 트랙 없음, 무시");
           return;
         }
 
-        if (!existingStreams.some((s) => s.id === streamId)) {
+        console.log(
+          "[WebRTC] ontrack: 활성 트랙 발견:",
+          activeTracks.length,
+          "트랙 종류:",
+          activeTracks.map((t) => ({ kind: t.kind, label: t.label }))
+        );
+
+        // 스트림이 이미 존재하는지 확인 (stream ID 또는 트랙 ID로)
+        const streamExists = existingStreams.some((s) => {
+          if (s.id === streamId) return true;
+          // 같은 트랙을 가진 스트림이 있는지 확인
+          const existingTracks = s.getTracks().map((t) => t.id);
+          const newTracks = stream.getTracks().map((t) => t.id);
+          return newTracks.some((tid) => existingTracks.includes(tid));
+        });
+
+        if (!streamExists) {
           console.log(
             "[WebRTC] ontrack: 새 스트림 추가:",
             streamId,
@@ -397,12 +413,19 @@ export function useLiveWebRTC({
             "metadata:",
             metadataRef.current.get(remoteSocketId)
           );
-          updateRemoteParticipants();
-          console.log(
-            "[WebRTC] ontrack: updateRemoteParticipants 호출 완료"
-          );
+          // 즉시 업데이트
+          setTimeout(() => {
+            updateRemoteParticipants();
+            console.log(
+              "[WebRTC] ontrack: updateRemoteParticipants 호출 완료 (setTimeout)"
+            );
+          }, 100);
         } else {
           console.log("[WebRTC] ontrack: 중복 스트림 무시:", streamId);
+          // 기존 스트림의 트랙이 비활성화되었을 수 있으므로 업데이트
+          setTimeout(() => {
+            updateRemoteParticipants();
+          }, 100);
         }
       };
 
