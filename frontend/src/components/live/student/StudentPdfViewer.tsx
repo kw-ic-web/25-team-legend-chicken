@@ -176,9 +176,9 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
   }, [socket, pdfUrl]);
 
   return (
-    <div className="absolute inset-0 bg-white flex flex-col overflow-hidden z-20">
+    <div className="w-full h-full bg-white rounded-xl flex flex-col overflow-hidden shadow-lg">
       {/* 헤더 */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
         <div>
           <p className="text-sm font-semibold text-gray-900">공유 중인 PDF</p>
           <p className="text-xs text-gray-500 truncate max-w-xs">{pdfName}</p>

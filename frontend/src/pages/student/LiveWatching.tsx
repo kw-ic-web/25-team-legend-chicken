@@ -5,6 +5,7 @@ import { io, Socket } from "socket.io-client";
 import { getBaseUrl } from "../../api/auth/client";
 import StudentScreenArea from "../../components/live/student/StudentScreenArea";
 import StudentLiveControls from "../../components/live/student/StudentLiveControls";
+import StudentParticipantStrip from "../../components/live/student/StudentParticipantStrip";
 import { useLiveWebRTC } from "../../hooks/useLiveWebRTC";
 import { useAuth } from "../../contexts/AuthContext";
 import { getParticipateInfo } from "../../api/student";
@@ -722,10 +723,10 @@ const LiveWatching: React.FC = () => {
       chatSocketRef.current.emit("chat:send", {
         message: messageText,
       });
-      
+
       // 메시지 입력 필드 비우기
       setChatMessage("");
-      
+
       // DB 저장을 위해 REST API도 호출 (선택적, 백엔드에서 처리하도록 변경 가능)
       // 실시간 전송이 우선이므로 에러가 나도 무시
       sendChatMessage({
@@ -794,9 +795,6 @@ const LiveWatching: React.FC = () => {
           track.enabled = false;
         });
         setIsStudentCameraOn(false);
-        if (studentVideoRef.current) {
-          studentVideoRef.current.style.opacity = "0";
-        }
       }
       return;
     }
@@ -833,9 +831,6 @@ const LiveWatching: React.FC = () => {
           });
         }
         setIsStudentCameraOn(true);
-        if (studentVideoRef.current) {
-          studentVideoRef.current.style.opacity = "1";
-        }
         attachStudentStream(studentStreamRef.current);
       }
     } catch (error) {
@@ -1120,45 +1115,50 @@ const LiveWatching: React.FC = () => {
               </div>
             </div>
 
-            {/* 강의 콘텐츠(화면 공유 영역) */}
-            {sharedPdf ? (
-              <div className="relative flex-1">
-                <StudentPdfViewer
-                  pdfUrl={sharedPdf.url}
-                  pdfName={sharedPdf.name}
-                  socket={chatSocketRef.current}
-                />
+            {/* 상단 참여자(웹캠) 스트립 */}
+            <StudentParticipantStrip
+              professorCameraRef={professorVideoRef}
+              studentVideoRef={studentVideoRef}
+              isStudentCameraOn={isStudentCameraOn}
+              remoteParticipants={remoteParticipants}
+            />
+
+            {/* 강의 콘텐츠(화면 공유 영역) - 교수자와 동일한 구조 */}
+            <StudentScreenArea
+              isLive={isLive}
+              videoRef={videoRef}
+              hasPdfOverlay={!!sharedPdf}
+              statusText={
+                isLoading
+                  ? "로딩 중..."
+                  : !lectureInfo?.liveId
+                    ? "방송 대기 중"
+                    : webrtcStatus === "connecting"
+                      ? "연결 중..."
+                      : webrtcStatus === "connected"
+                        ? "라이브 방송 중"
+                        : "연결 오류"
+              }
+              connectionStatus={webrtcStatus}
+            >
+              <>
+                {sharedPdf && (
+                  <div className="absolute inset-4 z-20">
+                    <StudentPdfViewer
+                      pdfUrl={sharedPdf.url}
+                      pdfName={sharedPdf.name}
+                      socket={chatSocketRef.current}
+                    />
+                  </div>
+                )}
                 <StudentLiveControls
                   isMicOn={isStudentMicOn}
                   isCameraOn={isStudentCameraOn}
                   onToggleMic={toggleStudentMic}
                   onToggleCamera={toggleStudentCamera}
                 />
-              </div>
-            ) : (
-              <StudentScreenArea
-                isLive={isLive}
-                videoRef={videoRef}
-                statusText={
-                  isLoading
-                    ? "로딩 중..."
-                    : !lectureInfo?.liveId
-                      ? "방송 대기 중"
-                      : webrtcStatus === "connecting"
-                        ? "연결 중..."
-                        : webrtcStatus === "connected"
-                          ? "라이브 방송 중"
-                          : "연결 오류"
-                }
-              >
-                <StudentLiveControls
-                  isMicOn={isStudentMicOn}
-                  isCameraOn={isStudentCameraOn}
-                  onToggleMic={toggleStudentMic}
-                  onToggleCamera={toggleStudentCamera}
-                />
-              </StudentScreenArea>
-            )}
+              </>
+            </StudentScreenArea>
           </div>
         </div>
 
@@ -1222,9 +1222,7 @@ const LiveWatching: React.FC = () => {
                             </span>
                             <span
                               className={`text-[10px] ${
-                                isOwnMessage
-                                  ? "text-blue-200"
-                                  : "text-gray-500"
+                                isOwnMessage ? "text-blue-200" : "text-gray-500"
                               }`}
                             >
                               {timeStr}
