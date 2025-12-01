@@ -150,7 +150,16 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
             cameraStream.addTrack(participant.stream.getAudioTracks()[0]);
           }
           studentVideoRef.current.srcObject = cameraStream;
-          studentVideoRef.current.play().catch(console.error);
+          studentVideoRef.current
+            .play()
+            .catch((err) => {
+              if (err && (err as DOMException).name !== "AbortError") {
+                console.warn(
+                  "[ParticipantStrip] 학생 비디오 재생 실패:",
+                  err
+                );
+              }
+            });
         } else if (studentVideoRef.current && videoTracks.length > 0) {
           // 화면 공유 트랙이 아닌 첫 번째 비디오 트랙 사용
           const nonScreenTrack = videoTracks.find((track) => {
@@ -178,11 +187,29 @@ const ParticipantStrip: React.FC<ParticipantStripProps> = ({
               cameraStream.addTrack(participant.stream.getAudioTracks()[0]);
             }
             studentVideoRef.current.srcObject = cameraStream;
-            studentVideoRef.current.play().catch(console.error);
+            studentVideoRef.current
+              .play()
+              .catch((err) => {
+                if (err && (err as DOMException).name !== "AbortError") {
+                  console.warn(
+                    "[ParticipantStrip] 학생 비디오 재생 실패:",
+                    err
+                  );
+                }
+              });
           } else {
             // 모든 트랙이 화면 공유인 경우에도 일단 표시
             studentVideoRef.current.srcObject = participant.stream;
-            studentVideoRef.current.play().catch(console.error);
+            studentVideoRef.current
+              .play()
+              .catch((err) => {
+                if (err && (err as DOMException).name !== "AbortError") {
+                  console.warn(
+                    "[ParticipantStrip] 학생 비디오 재생 실패:",
+                    err
+                  );
+                }
+              });
           }
         }
       }
