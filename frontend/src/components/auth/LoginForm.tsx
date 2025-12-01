@@ -40,7 +40,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           placeholder={
             userType === "student"
               ? "학생 아이디를 입력하세요"
-              : "교수 아이디를 입력하세요"
+              : "강의자 아이디를 입력하세요"
           }
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           required
@@ -102,7 +102,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
         type="submit"
         className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
       >
-        {userType === "student" ? "학생 로그인" : "교수 로그인"}
+        {userType === "student" ? "학생 로그인" : "강의자 로그인"}
       </button>
     </form>
   );

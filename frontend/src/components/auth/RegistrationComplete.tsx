@@ -7,10 +7,7 @@ interface RegistrationCompleteProps {
   userId?: string;
 }
 
-const RegistrationComplete: React.FC<RegistrationCompleteProps> = ({
-  userName = "홍길동",
-  userId = "아이디",
-}) => {
+const RegistrationComplete: React.FC<RegistrationCompleteProps> = () => {
   return (
     <div className="max-w-2xl mx-auto px-4 text-center">
       {/* 아이콘 */}
@@ -27,7 +24,7 @@ const RegistrationComplete: React.FC<RegistrationCompleteProps> = ({
 
       {/* 완료 메시지 */}
       <p className="text-lg text-gray-700 mb-8">
-        {userName}({userId})님의 회원가입이 성공적으로 완료되었습니다.
+        <>회원가입이 성공적으로 완료되었습니다.</>
       </p>
 
       {/* 안내 박스 */}

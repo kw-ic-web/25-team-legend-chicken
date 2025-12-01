@@ -38,7 +38,7 @@ const UserTypeSelector: React.FC<UserTypeSelectorProps> = ({
             : "text-gray-700 hover:text-gray-900"
         }`}
       >
-        선생님
+        강의자
       </button>
     </div>
   );

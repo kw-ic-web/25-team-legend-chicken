@@ -4,7 +4,7 @@ import RegistrationComplete from "../RegistrationComplete";
 
 const RegisterStep3: React.FC = () => {
   const userData = {
-    name: "홍길동",
+    name: "회원",
     userId: "hong123",
   };
 
