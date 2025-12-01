@@ -51,6 +51,13 @@ router.get(
   authenticateToken,
   async (req, res) => {
     try {
+      console.log("[materials] GET 요청:", {
+        method: req.method,
+        path: req.path,
+        params: req.params,
+        query: req.query,
+        user: req.user?._id,
+      });
       const { lectureId, classId } = req.params;
       const { status = "finalized" } = req.query;
 
