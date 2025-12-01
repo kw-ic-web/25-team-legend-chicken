@@ -379,14 +379,22 @@ export function useLiveWebRTC({
       };
 
       peer.onnegotiationneeded = () => {
-        console.log("[WebRTC] negotiation needed for", remoteSocketId, "shouldInitiate:", shouldInitiate);
+        console.log(
+          "[WebRTC] negotiation needed for",
+          remoteSocketId,
+          "shouldInitiate:",
+          shouldInitiate
+        );
         // 재협상이 필요하면 항상 offer 전송 (학생도 재협상 가능)
         // 단, 이미 연결이 설정된 경우에만 (stable 상태)
         const currentState = peer.signalingState;
         if (currentState === "stable" || shouldInitiate) {
           void sendOffer(remoteSocketId, !shouldInitiate);
         } else {
-          console.log("[WebRTC] negotiation needed but signaling state is", currentState);
+          console.log(
+            "[WebRTC] negotiation needed but signaling state is",
+            currentState
+          );
         }
       };
 
@@ -637,12 +645,11 @@ export function useLiveWebRTC({
     peersRef.current.forEach((peer) => {
       syncLocalTracks(peer);
     });
-    if (shouldInitiate) {
-      peersRef.current.forEach((_peer, remoteId) => {
-        void sendOffer(remoteId);
-      });
-    }
-  }, [activeLocalStreams, sendOffer, shouldInitiate, syncLocalTracks]);
+    // 로컬 트랙 구성이 바뀌면 항상 재협상 트리거
+    peersRef.current.forEach((_peer, remoteId) => {
+      void sendOffer(remoteId, true);
+    });
+  }, [activeLocalStreams, sendOffer, syncLocalTracks]);
 
   // Socket.IO 연결 및 WebRTC 시그널링
   useEffect(() => {
