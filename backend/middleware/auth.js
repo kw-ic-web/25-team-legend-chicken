@@ -1,5 +1,7 @@
 const jwt = require("jsonwebtoken");
-const User = require("../models/user");
+// Linux 환경에서는 파일 시스템이 대소문자를 구분하므로
+// 모델 파일명(`User.js`)과 동일하게 대문자 U를 사용해야 한다.
+const User = require("../models/User");
 
 const tokenBlacklist = new Set();
 
@@ -10,7 +12,7 @@ function addToBlacklist(token) {
       const expirationTime = decoded.exp * 1000;
       const now = Date.now();
       const ttl = expirationTime - now;
-      
+
       if (ttl > 0) {
         tokenBlacklist.add(token);
         setTimeout(() => {
@@ -39,7 +41,10 @@ async function authenticateToken(req, res, next) {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "your-secret-key"
+    );
     const user = await User.findById(decoded.id);
     if (!user)
       return res.status(404).json({ message: "사용자를 찾을 수 없습니다." });

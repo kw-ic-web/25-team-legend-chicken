@@ -2,7 +2,7 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const Question = require("../models/Question");
 const Lecture = require("../models/lectures");
-const User = require("../models/user");
+const User = require("../models/User");
 const { exec } = require("child_process");
 const util = require("util");
 const execPromise = util.promisify(exec);
@@ -13,22 +13,30 @@ async function reinsertAllQuestions() {
     console.log("✅ MongoDB 연결 성공");
 
     console.log("\n🗑️  기존 질문 삭제 중...");
-    const deleteResult = await Question.deleteMany({ lecture_id: "LEC-32AEBA14" });
+    const deleteResult = await Question.deleteMany({
+      lecture_id: "LEC-32AEBA14",
+    });
     console.log(`✅ ${deleteResult.deletedCount}개의 기존 질문 삭제 완료`);
 
     await mongoose.connection.close();
 
     console.log("\n📝 Class 1 질문 삽입 중...");
-    await execPromise("node scripts/insertTestQuestions.js", { cwd: __dirname + "/.." });
-    
+    await execPromise("node scripts/insertTestQuestions.js", {
+      cwd: __dirname + "/..",
+    });
+
     console.log("\n📝 Class 2 질문 삽입 중...");
-    await execPromise("node scripts/insertTestQuestionsClass2.js", { cwd: __dirname + "/.." });
-    
+    await execPromise("node scripts/insertTestQuestionsClass2.js", {
+      cwd: __dirname + "/..",
+    });
+
     console.log("\n📝 Class 3 질문 삽입 중...");
-    await execPromise("node scripts/insertTestQuestionsClass3.js", { cwd: __dirname + "/.." });
+    await execPromise("node scripts/insertTestQuestionsClass3.js", {
+      cwd: __dirname + "/..",
+    });
 
     await mongoose.connect(process.env.MONGODB_URI);
-    
+
     const lecture = await Lecture.findOne({ lecture_id: "LEC-32AEBA14" });
     const studentIds = lecture.student_id_list || [];
     const students = await User.find({
@@ -43,11 +51,13 @@ async function reinsertAllQuestions() {
 
     for (const question of allQuestions) {
       const upvoteCount = Math.floor(Math.random() * 8);
-      
+
       if (upvoteCount > 0) {
         const upvoters = [];
-        const availableStudents = students.filter(s => String(s._id) !== String(question.author.id));
-        
+        const availableStudents = students.filter(
+          (s) => String(s._id) !== String(question.author.id)
+        );
+
         const shuffled = [...availableStudents].sort(() => Math.random() - 0.5);
         for (let i = 0; i < Math.min(upvoteCount, shuffled.length); i++) {
           upvoters.push(String(shuffled[i]._id));
@@ -59,15 +69,17 @@ async function reinsertAllQuestions() {
           ...(question.metadata || {}),
           likes: upvoters.length,
         };
-        
+
         await question.save();
         totalUpvotes += upvoters.length;
       }
     }
 
     console.log(`✅ 총 ${totalUpvotes}개의 upvote 추가 완료`);
-    console.log(`\n🎉 총 ${allQuestions.length}개의 질문이 성공적으로 저장되었습니다!`);
-    
+    console.log(
+      `\n🎉 총 ${allQuestions.length}개의 질문이 성공적으로 저장되었습니다!`
+    );
+
     await mongoose.connection.close();
     console.log("✅ MongoDB 연결 종료");
     process.exit(0);
@@ -79,4 +91,3 @@ async function reinsertAllQuestions() {
 }
 
 reinsertAllQuestions();
-

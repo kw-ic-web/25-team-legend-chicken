@@ -2,7 +2,7 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const Question = require("../models/Question");
 const Lecture = require("../models/lectures");
-const User = require("../models/user");
+const User = require("../models/User");
 
 async function reinsertQuestions() {
   try {
@@ -45,24 +45,24 @@ async function reinsertQuestions() {
     const class3Questions = require("./insertTestQuestionsClass3.js");
 
     const allQuestions = [
-      ...class1Questions.questions || [],
-      ...class2Questions.questions || [],
-      ...class3Questions.questions || [],
+      ...(class1Questions.questions || []),
+      ...(class2Questions.questions || []),
+      ...(class3Questions.questions || []),
     ];
 
     if (allQuestions.length === 0) {
       console.log("📝 질문 데이터를 직접 로드합니다...");
       const fs = require("fs");
       const path = require("path");
-      
+
       const class1Path = path.join(__dirname, "insertTestQuestions.js");
       const class2Path = path.join(__dirname, "insertTestQuestionsClass2.js");
       const class3Path = path.join(__dirname, "insertTestQuestionsClass3.js");
-      
+
       const class1Content = fs.readFileSync(class1Path, "utf8");
       const class2Content = fs.readFileSync(class2Path, "utf8");
       const class3Content = fs.readFileSync(class3Path, "utf8");
-      
+
       const extractQuestions = (content) => {
         const match = content.match(/const questions = \[([\s\S]*?)\];/);
         if (match) {
@@ -70,11 +70,11 @@ async function reinsertQuestions() {
         }
         return [];
       };
-      
+
       const q1 = extractQuestions(class1Content);
       const q2 = extractQuestions(class2Content);
       const q3 = extractQuestions(class3Content);
-      
+
       allQuestions.push(...q1, ...q2, ...q3);
     }
 
@@ -83,14 +83,17 @@ async function reinsertQuestions() {
     const insertedQuestions = [];
 
     for (const qData of allQuestions) {
-      const randomStudent = students[Math.floor(Math.random() * students.length)];
-      
+      const randomStudent =
+        students[Math.floor(Math.random() * students.length)];
+
       const question = new Question({
         lecture_id: qData.lecture_id,
         class_id: qData.class_id,
         page: qData.page,
         position: qData.position,
-        timestamp: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
+        timestamp: new Date(
+          Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000
+        ),
         type: "question",
         author: {
           id: String(randomStudent._id),
@@ -119,13 +122,22 @@ async function reinsertQuestions() {
 
     for (const question of insertedQuestions) {
       const upvoteCount = Math.floor(Math.random() * 8);
-      
+
       if (upvoteCount > 0) {
         const upvoters = [];
-        const availableStudents = students.filter(s => String(s._id) !== String(question.author.id));
-        
-        for (let i = 0; i < Math.min(upvoteCount, availableStudents.length); i++) {
-          const randomStudent = availableStudents[Math.floor(Math.random() * availableStudents.length)];
+        const availableStudents = students.filter(
+          (s) => String(s._id) !== String(question.author.id)
+        );
+
+        for (
+          let i = 0;
+          i < Math.min(upvoteCount, availableStudents.length);
+          i++
+        ) {
+          const randomStudent =
+            availableStudents[
+              Math.floor(Math.random() * availableStudents.length)
+            ];
           const studentId = String(randomStudent._id);
           if (!upvoters.includes(studentId)) {
             upvoters.push(studentId);
@@ -138,15 +150,17 @@ async function reinsertQuestions() {
           ...question.metadata,
           likes: upvoters.length,
         };
-        
+
         await question.save();
         totalUpvotes += upvoters.length;
       }
     }
 
     console.log(`✅ 총 ${totalUpvotes}개의 upvote 추가 완료`);
-    console.log(`\n🎉 총 ${insertedQuestions.length}개의 질문이 성공적으로 저장되었습니다!`);
-    
+    console.log(
+      `\n🎉 총 ${insertedQuestions.length}개의 질문이 성공적으로 저장되었습니다!`
+    );
+
     await mongoose.connection.close();
     console.log("✅ MongoDB 연결 종료");
     process.exit(0);
@@ -158,4 +172,3 @@ async function reinsertQuestions() {
 }
 
 reinsertQuestions();
-

@@ -2,67 +2,63 @@ const express = require("express");
 const router = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 const Lecture = require("../models/lectures");
-const User = require("../models/user");
+// Linux 환경에서는 파일 시스템이 대소문자를 구분하므로
+// 모델 파일명(`User.js`)과 동일하게 대문자 U를 사용해야 한다.
+const User = require("../models/User");
 const Question = require("../models/Question");
 
 // ✅ 학생이 초대 링크로 강좌 참가
-router.post(
-  "/join-lecture/:lectureId",
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const user = req.user;
-      const { lectureId } = req.params;
+router.post("/join-lecture/:lectureId", authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const { lectureId } = req.params;
 
-      // 학생 권한 확인
-      if (user.user_type !== "student") {
-        return res
-          .status(403)
-          .json({ message: "학생만 강좌에 참가할 수 있습니다." });
-      }
-
-      // 강좌 조회
-      const lecture = await Lecture.findOne({ lecture_id: lectureId });
-      if (!lecture) {
-        return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
-      }
-
-      // 이미 등록된 학생인지 확인
-      if (lecture.student_id_list.includes(user._id)) {
-        return res
-          .status(400)
-          .json({ message: "이미 해당 강좌에 등록되어 있습니다." });
-      }
-
-      // 수강 인원 초과 확인
-      if (lecture.student_id_list.length >= lecture.student_count) {
-        return res
-          .status(400)
-          .json({ message: "수강 인원이 가득 찼습니다." });
-      }
-
-      // 학생 추가
-      lecture.student_id_list.push(user._id);
-      await lecture.save();
-
-      res.status(200).json({
-        message: "강좌에 성공적으로 참가했습니다.",
-        lecture: {
-          lecture_id: lecture.lecture_id,
-          name: lecture.name,
-          schedule: lecture.schedule,
-          professor_name: lecture.professor_name,
-          professor_email: lecture.professor_email,
-        },
-        current_count: lecture.student_id_list.length,
-        max_count: lecture.student_count,
-      });
-    } catch (err) {
-      console.error("강좌 참가 오류:", err);
-      res.status(500).json({ message: "서버 오류가 발생했습니다." });
+    // 학생 권한 확인
+    if (user.user_type !== "student") {
+      return res
+        .status(403)
+        .json({ message: "학생만 강좌에 참가할 수 있습니다." });
     }
+
+    // 강좌 조회
+    const lecture = await Lecture.findOne({ lecture_id: lectureId });
+    if (!lecture) {
+      return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
+    }
+
+    // 이미 등록된 학생인지 확인
+    if (lecture.student_id_list.includes(user._id)) {
+      return res
+        .status(400)
+        .json({ message: "이미 해당 강좌에 등록되어 있습니다." });
+    }
+
+    // 수강 인원 초과 확인
+    if (lecture.student_id_list.length >= lecture.student_count) {
+      return res.status(400).json({ message: "수강 인원이 가득 찼습니다." });
+    }
+
+    // 학생 추가
+    lecture.student_id_list.push(user._id);
+    await lecture.save();
+
+    res.status(200).json({
+      message: "강좌에 성공적으로 참가했습니다.",
+      lecture: {
+        lecture_id: lecture.lecture_id,
+        name: lecture.name,
+        schedule: lecture.schedule,
+        professor_name: lecture.professor_name,
+        professor_email: lecture.professor_email,
+      },
+      current_count: lecture.student_id_list.length,
+      max_count: lecture.student_count,
+    });
+  } catch (err) {
+    console.error("강좌 참가 오류:", err);
+    res.status(500).json({ message: "서버 오류가 발생했습니다." });
   }
-);
+});
 
 // ✅ 학생이 본인의 수강 강좌 목록 조회
 router.get("/my-lectures", authenticateToken, async (req, res) => {
@@ -71,9 +67,7 @@ router.get("/my-lectures", authenticateToken, async (req, res) => {
 
     // 학생 권한 확인
     if (user.user_type !== "student") {
-      return res
-        .status(403)
-        .json({ message: "학생만 접근할 수 있습니다." });
+      return res.status(403).json({ message: "학생만 접근할 수 있습니다." });
     }
 
     // 학생이 수강 중인 강좌 조회
@@ -106,9 +100,7 @@ router.delete(
 
       // 학생 권한 확인
       if (user.user_type !== "student") {
-        return res
-          .status(403)
-          .json({ message: "학생만 접근할 수 있습니다." });
+        return res.status(403).json({ message: "학생만 접근할 수 있습니다." });
       }
 
       // 강좌 조회
@@ -149,9 +141,7 @@ router.get("/participate", authenticateToken, async (req, res) => {
 
     // 학생 권한 확인
     if (user.user_type !== "student") {
-      return res
-        .status(403)
-        .json({ message: "학생만 접근할 수 있습니다." });
+      return res.status(403).json({ message: "학생만 접근할 수 있습니다." });
     }
 
     // 필수 파라미터 확인
@@ -182,14 +172,18 @@ router.get("/participate", authenticateToken, async (req, res) => {
     // 클래스 조회
     const cls = lecture.classes.find((c) => Number(c.id) === cid);
     if (!cls) {
-      return res.status(404).json({ message: "해당 클래스를 찾을 수 없습니다." });
+      return res
+        .status(404)
+        .json({ message: "해당 클래스를 찾을 수 없습니다." });
     }
 
     // 현재 활성 라이브 정보 확인
     const isLiveActive = cls.isLiveActive === true;
     const currentLiveId = cls.currentLiveId || null;
     const currentLive = currentLiveId
-      ? (cls.lives || []).find((l) => Number(l.liveId) === Number(currentLiveId))
+      ? (cls.lives || []).find(
+          (l) => Number(l.liveId) === Number(currentLiveId)
+        )
       : null;
 
     return res.status(200).json({
@@ -200,9 +194,10 @@ router.get("/participate", authenticateToken, async (req, res) => {
       is_live_active: isLiveActive,
       live_id: currentLiveId,
       started_at: currentLive ? currentLive.startedAt : null,
-      live_path: isLiveActive && currentLiveId
-        ? `/student/participate?lectureId=${lectureId}&classId=${cid}`
-        : null,
+      live_path:
+        isLiveActive && currentLiveId
+          ? `/student/participate?lectureId=${lectureId}&classId=${cid}`
+          : null,
     });
   } catch (err) {
     console.error("학생 라이브 참여 정보 조회 오류:", err);
@@ -222,9 +217,7 @@ router.get(
 
       // 학생 권한 확인
       if (user.user_type !== "student") {
-        return res
-          .status(403)
-          .json({ message: "학생만 접근할 수 있습니다." });
+        return res.status(403).json({ message: "학생만 접근할 수 있습니다." });
       }
 
       // 강좌 조회
@@ -248,20 +241,30 @@ router.get(
       // 클래스 조회
       const classData = lecture.classes.find((c) => Number(c.id) === cid);
       if (!classData) {
-        return res.status(404).json({ message: "해당 클래스를 찾을 수 없습니다." });
+        return res
+          .status(404)
+          .json({ message: "해당 클래스를 찾을 수 없습니다." });
       }
 
       // materials 정규화 및 URL 변환
-      const { toAbsoluteUrl, convertMaterialsToAbsolute } = require("../utils/urlUtils");
-      const materialsWithAbsoluteUrls = convertMaterialsToAbsolute(req, classData.materials || []);
+      const {
+        toAbsoluteUrl,
+        convertMaterialsToAbsolute,
+      } = require("../utils/urlUtils");
+      const materialsWithAbsoluteUrls = convertMaterialsToAbsolute(
+        req,
+        classData.materials || []
+      );
 
       // 응답 형식: url 또는 fileId 기반
-      const pdfs = materialsWithAbsoluteUrls.map((material) => {
-        if (material.fileId) {
-          return toAbsoluteUrl(req, `/api/files/${material.fileId}`);
-        }
-        return material.url || "";
-      }).filter((url) => url && url.trim() !== "");
+      const pdfs = materialsWithAbsoluteUrls
+        .map((material) => {
+          if (material.fileId) {
+            return toAbsoluteUrl(req, `/api/files/${material.fileId}`);
+          }
+          return material.url || "";
+        })
+        .filter((url) => url && url.trim() !== "");
 
       return res.status(200).json({
         success: true,
@@ -272,8 +275,9 @@ router.get(
         pdf_count: pdfs.length,
         pdfs: pdfs,
         materials: materialsWithAbsoluteUrls,
-        message: "이 API는 하위 호환성을 위해 유지됩니다. 통일된 /api/lectures/:lectureId/classes/:classId/materials/pages API 사용을 권장합니다.",
-        recommended_api: `/api/lectures/${lectureId}/classes/${cid}/materials/pages`
+        message:
+          "이 API는 하위 호환성을 위해 유지됩니다. 통일된 /api/lectures/:lectureId/classes/:classId/materials/pages API 사용을 권장합니다.",
+        recommended_api: `/api/lectures/${lectureId}/classes/${cid}/materials/pages`,
       });
     } catch (err) {
       console.error("학생 강의 자료 조회 오류:", err);
@@ -290,9 +294,7 @@ router.get("/my-questions", authenticateToken, async (req, res) => {
 
     // 학생 권한 확인
     if (user.user_type !== "student") {
-      return res
-        .status(403)
-        .json({ message: "학생만 접근할 수 있습니다." });
+      return res.status(403).json({ message: "학생만 접근할 수 있습니다." });
     }
 
     const userId = String(user._id);
@@ -305,13 +307,13 @@ router.get("/my-questions", authenticateToken, async (req, res) => {
     // 선택적 필터: lectureId
     if (lectureId) {
       filter.lecture_id = lectureId;
-      
+
       // lectureId가 있으면 해당 강좌에 등록되어 있는지 확인
       const lecture = await Lecture.findOne({ lecture_id: lectureId });
       if (!lecture) {
         return res.status(404).json({ message: "강좌를 찾을 수 없습니다." });
       }
-      
+
       if (!lecture.student_id_list.includes(user._id)) {
         return res.status(403).json({
           message: "해당 강좌에 등록되어 있지 않습니다.",
@@ -340,9 +342,7 @@ router.get("/my-questions", authenticateToken, async (req, res) => {
       lecture_id: { $in: lectureIds },
     }).lean();
 
-    const lectureMap = new Map(
-      lectures.map((lec) => [lec.lecture_id, lec])
-    );
+    const lectureMap = new Map(lectures.map((lec) => [lec.lecture_id, lec]));
 
     // 응답 데이터 구성
     const questionsWithLectureInfo = questions.map((q) => {
