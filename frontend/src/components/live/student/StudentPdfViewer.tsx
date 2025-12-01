@@ -25,11 +25,11 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
       if (containerRef.current && canvasRef.current) {
         const container = containerRef.current;
         const canvas = canvasRef.current;
-        
+
         const rect = container.getBoundingClientRect();
         canvas.width = rect.width;
         canvas.height = rect.height;
-        
+
         canvas.style.width = `${rect.width}px`;
         canvas.style.height = `${rect.height}px`;
       }
@@ -37,7 +37,7 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
 
     adjustCanvasSize();
     window.addEventListener("resize", adjustCanvasSize);
-    
+
     return () => {
       window.removeEventListener("resize", adjustCanvasSize);
     };
@@ -65,7 +65,7 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
 
       const container = containerRef.current;
       const rect = container.getBoundingClientRect();
-      
+
       // 페이지가 변경되었으면 캔버스 초기화 및 PDF 페이지 변경
       // (이 부분은 handlePageChange에서 처리되므로 여기서는 제거)
 
@@ -93,7 +93,7 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
           ctx.globalCompositeOperation = "source-over";
           ctx.strokeStyle = data.brushColor || "#000000";
         }
-        
+
         ctx.beginPath();
         ctx.moveTo(x, y);
         lastPointRef.current = { x, y };
@@ -109,7 +109,7 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
           ctx.globalCompositeOperation = "source-over";
           ctx.strokeStyle = data.brushColor || "#000000";
         }
-        
+
         if (lastPointRef.current) {
           ctx.beginPath();
           ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
@@ -128,7 +128,7 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
           ctx.globalCompositeOperation = "source-over";
           ctx.strokeStyle = data.brushColor || "#000000";
         }
-        
+
         if (lastPointRef.current) {
           ctx.beginPath();
           ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
@@ -143,19 +143,19 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
     const handlePageChange = (data: { page: number; pdf_url?: string }) => {
       console.log("[StudentPdfViewer] 페이지 변경 수신:", data);
       if (!canvasRef.current) return;
-      
+
       const ctx = canvasRef.current.getContext("2d");
       if (ctx) {
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       }
-      
+
       currentPageRef.current = data.page;
       lastPointRef.current = null;
       isDrawingRef.current = false;
-      
+
       // 페이지별 PDF URL 사용 (없으면 원본 PDF 사용)
       const pdfUrlForPage = data.pdf_url || pdfUrl;
-      
+
       // PDF iframe 페이지 변경
       if (pdfIframeRef.current) {
         pdfIframeRef.current.src = `${pdfUrlForPage}#zoom=page-width&toolbar=0&navpanes=0&scrollbar=0`;
@@ -166,12 +166,37 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
       }
     };
 
+    // 페이지 전체 스냅샷 수신 (과거 필기 복원용)
+    const handlePageState = (data: { page: number; image: string }) => {
+      console.log("[StudentPdfViewer] 페이지 스냅샷 수신:", data.page);
+      if (!canvasRef.current || !containerRef.current) return;
+
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const img = new Image();
+      img.onload = () => {
+        const rect = containerRef.current!.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = data.image;
+    };
+
     socket.on("whiteboard:draw", handleWhiteboardDraw);
     socket.on("whiteboard:page-change", handlePageChange);
+    socket.on("whiteboard:page-state", handlePageState);
 
     return () => {
       socket.off("whiteboard:draw", handleWhiteboardDraw);
       socket.off("whiteboard:page-change", handlePageChange);
+      socket.off("whiteboard:page-state", handlePageState);
     };
   }, [socket, pdfUrl]);
 
@@ -203,4 +228,3 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
 };
 
 export default StudentPdfViewer;
-
