@@ -5,11 +5,24 @@ export const getBaseUrl = (): string => {
     fromEnv && fromEnv.trim().length > 0 ? fromEnv : "localhost:8080";
   // allow http(s) prefix omitted values
   if (base.startsWith("http://") || base.startsWith("https://")) return base;
-  // 프로덕션 환경에서는 HTTPS 사용 (현재 페이지가 HTTPS인 경우)
-  if (typeof window !== "undefined" && window.location.protocol === "https:") {
-    return `https://${base}`;
+
+  // 프로토콜이 없으면 환경에 따라 선택
+  // - 로컬 개발: http
+  // - 그 외(배포 서버 도메인 등): https (혼합 콘텐츠 방지)
+  if (
+    base.startsWith("localhost") ||
+    base.startsWith("127.0.0.1") ||
+    base.startsWith("192.168.") ||
+    base.startsWith("10.") ||
+    base.startsWith("172.16.") ||
+    base.startsWith("172.17.") ||
+    base.startsWith("172.18.") ||
+    base.startsWith("172.19.")
+  ) {
+    return `http://${base}`;
   }
-  return `http://${base}`;
+
+  return `https://${base}`;
 };
 
 /**
@@ -81,7 +94,7 @@ export async function tryRefreshToken(): Promise<boolean> {
 
       const text = await resp.text();
       const data = text ? JSON.parse(text) : {};
-      
+
       if (resp.ok && data.success && data.access_token) {
         localStorage.setItem("lecq.token", data.access_token);
         if (typeof data.expires_in === "number") {
@@ -134,16 +147,19 @@ export async function apiFetch<T>(
 
   const text = await resp.text();
   const data = text ? (JSON.parse(text) as T) : ({} as T);
-  
+
   // 토큰 만료 또는 인증 오류 처리
   if (resp.status === 419 || resp.status === 401) {
     // 로그인/회원가입 관련 API는 제외
-    const isAuthPath = path.includes("/login") || path.includes("/register") || path.includes("/refresh");
+    const isAuthPath =
+      path.includes("/login") ||
+      path.includes("/register") ||
+      path.includes("/refresh");
     if (!isAuthPath) {
       handleTokenExpiration();
     }
   }
-  
+
   if (!resp.ok) {
     const message =
       (data as unknown as { message?: string })?.message ||
