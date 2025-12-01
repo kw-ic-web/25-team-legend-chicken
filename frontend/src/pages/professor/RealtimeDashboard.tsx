@@ -28,11 +28,7 @@ import {
 } from "../../api/professor";
 import AnnotatablePdfViewer from "../../components/live/professor/AnnotatablePdfViewer";
 import { analyzeHandwriting } from "../../api/handwriting";
-import {
-  sendChatMessage,
-  getChatMessages,
-  type ChatMessage,
-} from "../../api/chat";
+import { getChatMessages, type ChatMessage } from "../../api/chat";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
 
 type PdfItem = {
@@ -789,20 +785,9 @@ const RealtimeDashboard: React.FC = () => {
       chatSocketRef.current.emit("chat:send", {
         message: messageText,
       });
-      
+
       // 메시지 입력 필드 비우기
       setChatMessage("");
-      
-      // DB 저장을 위해 REST API도 호출 (선택적, 백엔드에서 처리하도록 변경 가능)
-      // 실시간 전송이 우선이므로 에러가 나도 무시
-      sendChatMessage({
-        lecture_id: resolvedLectureId,
-        class_id: resolvedClassId,
-        live_id: resolvedLiveId ?? null,
-        text: messageText,
-      }).catch((err) => {
-        console.warn("채팅 DB 저장 실패 (실시간 전송은 성공):", err);
-      });
     } catch (error) {
       console.error("메시지 전송 실패:", error);
       showError(
@@ -1212,9 +1197,7 @@ const RealtimeDashboard: React.FC = () => {
                             </span>
                             <span
                               className={`text-[10px] ${
-                                isOwnMessage
-                                  ? "text-blue-200"
-                                  : "text-gray-500"
+                                isOwnMessage ? "text-blue-200" : "text-gray-500"
                               }`}
                             >
                               {timeStr}

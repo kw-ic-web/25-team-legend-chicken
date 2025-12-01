@@ -282,6 +282,24 @@ export function useLiveWebRTC({
           // stream이 없으면 track만 처리
           const track = event.track;
           if (track) {
+            // 트랙 종료 시 스트림 정리
+            const cleanupRemoteStreams = () => {
+              const existing =
+                remoteStreamRef.current.get(remoteSocketId) || [];
+              const aliveStreams = existing.filter((s) =>
+                s.getTracks().some((t) => t.readyState === "live" && t.enabled)
+              );
+              if (aliveStreams.length === 0) {
+                remoteStreamRef.current.delete(remoteSocketId);
+                metadataRef.current.delete(remoteSocketId);
+                makingOfferRef.current.delete(remoteSocketId);
+              } else {
+                remoteStreamRef.current.set(remoteSocketId, aliveStreams);
+              }
+              updateRemoteParticipants();
+            };
+            track.addEventListener("ended", cleanupRemoteStreams);
+
             // 기존 stream에 track 추가
             const existingStreams =
               remoteStreamRef.current.get(remoteSocketId) || [];
@@ -321,6 +339,25 @@ export function useLiveWebRTC({
           ":",
           metadataRef.current.get(remoteSocketId)
         );
+
+        // 트랙 종료 시 스트림 정리
+        const cleanupRemoteStreams = () => {
+          const existing = remoteStreamRef.current.get(remoteSocketId) || [];
+          const aliveStreams = existing.filter((s) =>
+            s.getTracks().some((t) => t.readyState === "live" && t.enabled)
+          );
+          if (aliveStreams.length === 0) {
+            remoteStreamRef.current.delete(remoteSocketId);
+            metadataRef.current.delete(remoteSocketId);
+            makingOfferRef.current.delete(remoteSocketId);
+          } else {
+            remoteStreamRef.current.set(remoteSocketId, aliveStreams);
+          }
+          updateRemoteParticipants();
+        };
+        stream.getTracks().forEach((t) => {
+          t.addEventListener("ended", cleanupRemoteStreams);
+        });
 
         // 여러 스트림 저장 (카메라와 화면 공유를 모두 저장)
         const existingStreams =
@@ -379,14 +416,22 @@ export function useLiveWebRTC({
       };
 
       peer.onnegotiationneeded = () => {
-        console.log("[WebRTC] negotiation needed for", remoteSocketId, "shouldInitiate:", shouldInitiate);
+        console.log(
+          "[WebRTC] negotiation needed for",
+          remoteSocketId,
+          "shouldInitiate:",
+          shouldInitiate
+        );
         // 재협상이 필요하면 항상 offer 전송 (학생도 재협상 가능)
         // 단, 이미 연결이 설정된 경우에만 (stable 상태)
         const currentState = peer.signalingState;
         if (currentState === "stable" || shouldInitiate) {
           void sendOffer(remoteSocketId, !shouldInitiate);
         } else {
-          console.log("[WebRTC] negotiation needed but signaling state is", currentState);
+          console.log(
+            "[WebRTC] negotiation needed but signaling state is",
+            currentState
+          );
         }
       };
 
@@ -637,12 +682,11 @@ export function useLiveWebRTC({
     peersRef.current.forEach((peer) => {
       syncLocalTracks(peer);
     });
-    if (shouldInitiate) {
-      peersRef.current.forEach((_peer, remoteId) => {
-        void sendOffer(remoteId);
-      });
-    }
-  }, [activeLocalStreams, sendOffer, shouldInitiate, syncLocalTracks]);
+    // 로컬 트랙 구성이 바뀌면 항상 재협상 트리거
+    peersRef.current.forEach((_peer, remoteId) => {
+      void sendOffer(remoteId, true);
+    });
+  }, [activeLocalStreams, sendOffer, syncLocalTracks]);
 
   // Socket.IO 연결 및 WebRTC 시그널링
   useEffect(() => {

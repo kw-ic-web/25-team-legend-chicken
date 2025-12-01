@@ -162,16 +162,18 @@ const StudentParticipantStrip: React.FC<Props> = ({
             autoPlay
             playsInline
             muted
-            className={`w-full h-full object-cover transition-opacity duration-200 ${
-              isStudentCameraOn ? "opacity-100" : "opacity-0"
-            }`}
+            className="w-full h-full object-cover"
+            style={{
+              opacity: isStudentCameraOn ? 1 : 0,
+              transition: "opacity 0.2s",
+            }}
           />
           {!isStudentCameraOn && (
-            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-300 bg-gray-800">
+            <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-300 bg-gray-800 z-10">
               내 화면
             </div>
           )}
-          <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded">
+          <div className="absolute left-1 bottom-1 text-[10px] bg-black/60 px-1.5 py-0.5 rounded z-20">
             {currentUserName}
           </div>
         </div>
