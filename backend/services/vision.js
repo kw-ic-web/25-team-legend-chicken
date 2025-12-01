@@ -29,10 +29,17 @@ const getClient = () => {
       const originalPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
       
       // 여러 대체 경로 시도
+      const baseName = path.basename(originalPath);
       const alternativePaths = [
-        path.resolve(process.cwd(), "backend", path.basename(originalPath)),
-        path.resolve(process.cwd(), "backend", "vision_api", path.basename(originalPath)),
+        // 원본 파일명 기준 경로
+        path.resolve(process.cwd(), "backend", baseName),
+        path.resolve(process.cwd(), "backend", "vision_api", baseName),
         path.resolve(process.cwd(), path.basename(originalPath)),
+        // 실제 파일명이 다른 경우를 위한 대체 경로 (서버/로컬 모두 지원)
+        path.resolve(process.cwd(), "vision_api", "daring-runway-477200-p6-23119492ca56.json"),
+        path.resolve(process.cwd(), "backend", "vision_api", "daring-runway-477200-p6-23119492ca56.json"),
+        path.resolve(process.cwd(), "daring-runway-477200-p6-23119492ca56.json"),
+        path.resolve(process.cwd(), "backend", "daring-runway-477200-p6-23119492ca56.json"),
         originalPath, // 원본 경로 그대로도 시도
       ];
       
