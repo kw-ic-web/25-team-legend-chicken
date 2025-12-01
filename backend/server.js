@@ -35,6 +35,12 @@ const { attachSocket } = require("./socket");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Reverse proxy 환경에서 X-Forwarded-* 헤더 신뢰
+// 프로덕션 환경에서는 trust proxy 설정 필요
+if (process.env.NODE_ENV === 'production' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', true);
+}
+
 app.use(cors());
 app.use(bodyParser.json({ limit: "50mb" }));
 app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
