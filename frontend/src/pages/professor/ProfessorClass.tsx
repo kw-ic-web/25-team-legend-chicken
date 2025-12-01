@@ -42,7 +42,7 @@ import type {
   MyInfoUser,
 } from "../../api/professor";
 import Toast from "../../components/common/Toast";
-import { getBaseUrl } from "../../api/auth/client";
+import { getBaseUrl, ensureHttps } from "../../api/auth/client";
 import Modal from "../../components/common/Modal";
 
 type MaterialEntry = string | { url?: string; originalName?: string };
@@ -153,7 +153,8 @@ const ProfessorClass: React.FC = () => {
 
   const resolveUrl = useCallback((url: string) => {
     if (!url) return url;
-    return url.startsWith("http") ? url : `${getBaseUrl()}${url}`;
+    const resolved = url.startsWith("http") ? url : `${getBaseUrl()}${url}`;
+    return ensureHttps(resolved);
   }, []);
 
   const fetchClassesData = useCallback(async () => {

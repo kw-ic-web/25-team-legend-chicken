@@ -25,6 +25,19 @@ export const getBaseUrl = (): string => {
   return `https://${base}`;
 };
 
+/**
+ * URL이 HTTP인 경우 현재 페이지 프로토콜에 맞춰 HTTPS로 변환
+ */
+export const ensureHttps = (url: string): string => {
+  if (!url) return url;
+  if (typeof window === "undefined") return url;
+  // 현재 페이지가 HTTPS인 경우 HTTP URL을 HTTPS로 변환
+  if (window.location.protocol === "https:" && url.startsWith("http://")) {
+    return url.replace("http://", "https://");
+  }
+  return url;
+};
+
 // 토큰 만료 시 처리 함수
 function handleTokenExpiration() {
   // 모든 인증 관련 데이터 정리

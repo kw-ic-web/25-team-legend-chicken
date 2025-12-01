@@ -8,7 +8,7 @@ import React, {
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Send } from "lucide-react";
 import { io, Socket } from "socket.io-client";
-import { getBaseUrl } from "../../api/auth/client";
+import { getBaseUrl, ensureHttps } from "../../api/auth/client";
 import LecturePersonnelModal from "../../components/modal/lecturePersonnel/LecturePersonnelModal";
 import ParticipantStrip from "../../components/live/professor/ParticipantStrip";
 import ScreenShareArea from "../../components/live/professor/ScreenShareArea";
@@ -115,9 +115,9 @@ const RealtimeDashboard: React.FC = () => {
   const resolveAssetUrl = useCallback((url?: string | null) => {
     if (!url) return "";
     if (url.startsWith("http://") || url.startsWith("https://")) {
-      return url;
+      return ensureHttps(url);
     }
-    return `${getBaseUrl()}${url}`;
+    return ensureHttps(`${getBaseUrl()}${url}`);
   }, []);
 
   const resolvedLectureId = liveState?.lectureId || params.lectureId;
