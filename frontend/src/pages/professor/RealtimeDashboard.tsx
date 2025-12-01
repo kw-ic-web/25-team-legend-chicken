@@ -1122,7 +1122,7 @@ const RealtimeDashboard: React.FC = () => {
                     />
                   </div>
                 )}
-                {isParticipantStripVisible && (
+                {isParticipantStripVisible ? (
                   <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
                     <ParticipantStrip
                       isCameraOn={isCameraOn}
@@ -1131,6 +1131,16 @@ const RealtimeDashboard: React.FC = () => {
                       studentNameMap={studentNameMap}
                       onClose={() => setIsParticipantStripVisible(false)}
                     />
+                  </div>
+                ) : (
+                  <div className="absolute top-6 right-6 z-30 pointer-events-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsParticipantStripVisible(true)}
+                      className="px-3 py-1.5 rounded-full bg-white/90 border border-gray-200 shadow text-xs text-gray-700 hover:bg-white"
+                    >
+                      참여자 목록 보기
+                    </button>
                   </div>
                 )}
                 <LiveControls
