@@ -14,22 +14,24 @@ const StudentDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  type LectureStatus = "broadcasting" | "scheduled" | "completed";
+
   const [lectures, setLectures] = useState<
     Array<{
       id: string;
       title: string;
       instructor: string;
       participants: number;
-      status: "broadcasting" | "scheduled" | "completed";
+      status: LectureStatus;
       newQuestions: number;
       subject: string;
       image?: string;
     }>
   >([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [liveStatusMap, setLiveStatusMap] = useState<Map<string, boolean>>(
-    new Map()
-  );
+  const [liveStatusMap, setLiveStatusMap] = useState<
+    Map<string, LectureStatus>
+  >(new Map());
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -51,7 +53,7 @@ const StudentDashboard: React.FC = () => {
             title: lec.name,
             instructor: lec.professor_name,
             participants: 0,
-            status: "scheduled" as const, // 기본값 (라이브 상태 확인 후 업데이트됨)
+            status: "scheduled" as LectureStatus, // 기본값 (라이브 상태 확인 후 업데이트됨)
             newQuestions: 0,
             subject: "Python", // 기본값
             image: thumbnail,
@@ -114,17 +116,31 @@ const StudentDashboard: React.FC = () => {
     const checkLiveStatuses = async () => {
       if (lectures.length === 0) return;
 
-      const statusMap = new Map<string, boolean>();
+      const statusMap = new Map<string, LectureStatus>();
 
       // 각 강좌의 라이브 상태 확인
       const promises = lectures.map(async (lecture) => {
         try {
           const liveStatus = await getLiveStatus(lecture.id);
-          // classes 배열에서 isLiveActive가 true인 클래스가 있는지 확인
-          const hasActiveLive = liveStatus.classes.some(
+
+          const classes = liveStatus.classes || [];
+
+          const hasActiveLive = classes.some(
             (cls) => cls.isLiveActive === true
           );
-          statusMap.set(lecture.id, hasActiveLive);
+          const hasAnyLiveHistory = classes.some(
+            (cls) => Array.isArray(cls.lives) && cls.lives.length > 0
+          );
+
+          let lectureStatus: LectureStatus = "scheduled";
+          if (hasActiveLive) {
+            lectureStatus = "broadcasting";
+          } else if (hasAnyLiveHistory) {
+            // 한 번이라도 라이브가 있었고, 지금은 진행 중이 아닌 경우 → 종료된 강좌
+            lectureStatus = "completed";
+          }
+
+          statusMap.set(lecture.id, lectureStatus);
         } catch (error) {
           console.error(`강좌 ${lecture.id} 라이브 상태 확인 오류:`, error);
           statusMap.set(lecture.id, false);
@@ -220,9 +236,8 @@ const StudentDashboard: React.FC = () => {
             const filteredLectures = lectures
               .map((lecture) => {
                 // 라이브 상태 확인 (live-status API 결과 사용)
-                const isLiveActive = liveStatusMap.get(lecture.id);
-                const status: "broadcasting" | "scheduled" | "completed" =
-                  isLiveActive === true ? "broadcasting" : lecture.status;
+                const liveStatus = liveStatusMap.get(lecture.id);
+                const status: LectureStatus = liveStatus ?? lecture.status;
 
                 return {
                   ...lecture,
@@ -244,10 +259,14 @@ const StudentDashboard: React.FC = () => {
               .filter((lecture) => {
                 // 탭 필터
                 if (activeTab === "all") return true;
-                if (activeTab === "ongoing")
-                  return lecture.status !== "completed"; // 종료되지 않은 모든 강좌
-                if (activeTab === "completed")
+                if (activeTab === "ongoing") {
+                  // 진행 중인 강좌: 라이브 방송 중인 경우만
+                  return lecture.status === "broadcasting";
+                }
+                if (activeTab === "completed") {
+                  // 종료된 강좌: 한 번이라도 라이브가 있었고, 현재는 방송 중이 아닌 경우
                   return lecture.status === "completed";
+                }
                 return true;
               });
 
