@@ -1,4 +1,4 @@
-import { apiFetch } from "../auth/client";
+import { apiFetch, getBaseUrl } from "../auth/client";
 
 export type InviteStudentRequest = {
   student_email: string;
@@ -670,4 +670,38 @@ export async function uploadClassPdf(
     original_pdf_url: response.original_material.url,
     pdf_url: response.original_material.url, // 호환성
   };
+}
+
+/**
+ * 필기본 다운로드
+ * @param lectureId 강좌 ID
+ * @param classId 클래스 ID
+ * @returns Promise<Blob> 다운로드할 PDF 파일
+ */
+export async function downloadNotes(
+  lectureId: string,
+  classId: number
+): Promise<Blob> {
+  const token = localStorage.getItem("lecq.token");
+  if (!token) {
+    throw new Error("인증 토큰이 필요합니다.");
+  }
+
+  const baseUrl = getBaseUrl();
+  const response = await fetch(
+    `${baseUrl}/api/lectures/${lectureId}/classes/${classId}/download-notes`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: "다운로드 실패" }));
+    throw new Error(errorData.message || "필기본 다운로드에 실패했습니다.");
+  }
+
+  return await response.blob();
 }

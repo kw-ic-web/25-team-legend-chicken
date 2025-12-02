@@ -21,6 +21,7 @@ import {
 import { useToast } from "../../../contexts/ToastContext";
 import { getMyInfo } from "../../../api/auth";
 import { getBaseUrl } from "../../../api/auth/client";
+import { downloadNotes } from "../../../api/professor";
 
 interface WhiteboardPage {
   page_number: number;
@@ -76,6 +77,7 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
     id: string;
     role: string;
   } | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
 
@@ -396,6 +398,38 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
     return "방금 전";
   };
 
+  const handleDownloadNotes = async () => {
+    if (!lectureId || !classId) {
+      showToast("강좌 정보를 찾을 수 없습니다.", "error");
+      return;
+    }
+
+    if (isDownloading) return;
+
+    setIsDownloading(true);
+    try {
+      const blob = await downloadNotes(lectureId, classId);
+      
+      // Blob을 다운로드 링크로 변환
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `필기본-${lessonTitle}-${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      showToast("필기본 다운로드가 시작되었습니다.", "success");
+    } catch (error) {
+      console.error("필기본 다운로드 실패:", error);
+      const message = error instanceof Error ? error.message : "필기본 다운로드에 실패했습니다.";
+      showToast(message, "error");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -410,9 +444,19 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
           <div className="text-sm text-gray-600">
             {fileName} [ {fileSize} ]
           </div>
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2">
+          <button
+            onClick={handleDownloadNotes}
+            disabled={isDownloading || !lectureId || !classId}
+            className={clsx(
+              "px-4 py-2 bg-blue-600 text-white rounded-lg transition-colors duration-200 flex items-center space-x-2",
+              {
+                "hover:bg-blue-700": !isDownloading && lectureId && classId,
+                "opacity-50 cursor-not-allowed": isDownloading || !lectureId || !classId,
+              }
+            )}
+          >
             <Download className="w-4 h-4" />
-            <span>필기본 다운로드</span>
+            <span>{isDownloading ? "다운로드 중..." : "필기본 다운로드"}</span>
           </button>
         </div>
 
@@ -465,7 +509,19 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                   const currentPageData = pages.find(
                     (p) => p.page_number === currentPage
                   );
-                  if (!currentPageData) {
+                  
+                  // 페이지 데이터가 없거나 pdf_path/image_path가 없으면 원본 PDF 사용
+                  if (!currentPageData || (!currentPageData.pdf_path && !currentPageData.image_path)) {
+                    // 원본 PDF가 있으면 사용
+                    if (pdfUrl) {
+                      return (
+                        <iframe
+                          src={`${pdfUrl}#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
+                          className="w-full h-full min-h-[600px] bg-white"
+                          title={`PDF 페이지 ${currentPage}`}
+                        />
+                      );
+                    }
                     return (
                       <div className="w-full min-h-[600px] flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-8">
                         <p className="text-gray-400 text-lg font-medium">
@@ -480,9 +536,10 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                   const isImagePathPdf =
                     imageUrl && imageUrl.toLowerCase().endsWith(".pdf");
                   const actualImageUrl = isImagePathPdf ? null : imageUrl;
+                  // pdf_path가 없으면 원본 PDF 사용
                   const actualPdfUrl = isImagePathPdf
                     ? imageUrl
-                    : pdfUrlForPage || null;
+                    : pdfUrlForPage || pdfUrl || null;
 
                   return (
                     <>
