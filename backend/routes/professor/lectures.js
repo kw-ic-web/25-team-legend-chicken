@@ -5,7 +5,7 @@ const { authenticateToken } = require("../../middleware/auth");
 const crypto = require("crypto");
 const { uploadThumbnail } = require("../../config/uploadImage");
 const { uploadToGridFS } = require("../../middleware/uploadToGridFS");
-const { convertClassesMaterialsToAbsolute } = require("../../utils/urlUtils");
+const { convertClassesMaterialsToAbsolute, toAbsoluteUrl } = require("../../utils/urlUtils");
 
 router.post(
   "/create",
@@ -160,10 +160,13 @@ router.get(
           return classResponse;
         });
 
-        // 로컬에 저장된 썸네일 경로 필터링 (GridFS만 사용)
+        // 로컬에 저장된 썸네일 경로 필터링 및 절대 URL 변환 (GridFS만 사용)
         const lectureObj = lecture.toObject();
         if (lectureObj.thumbnail && lectureObj.thumbnail.startsWith("/uploads/images/thumbnail-")) {
           lectureObj.thumbnail = ""; // 로컬 경로는 빈 문자열로 처리
+        } else if (lectureObj.thumbnail && lectureObj.thumbnail.startsWith("/api/files/")) {
+          // GridFS URL을 절대 URL로 변환
+          lectureObj.thumbnail = toAbsoluteUrl(req, lectureObj.thumbnail);
         }
 
         return {
