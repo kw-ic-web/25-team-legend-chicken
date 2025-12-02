@@ -19,9 +19,11 @@ import { getMyInfo } from "../../api/auth";
 import LessonQuestionModal from "../../components/modal/lessonQuestion/LessonQuestionModal";
 import {
   getClassDetail,
-  getWhiteboardPages,
-  type WhiteboardPage,
 } from "../../api/professor";
+import {
+  getMaterialPages,
+  type MaterialPage,
+} from "../../api/materials";
 import StudentPdfViewer from "../../components/live/student/StudentPdfViewer";
 
 const LiveWatching: React.FC = () => {
@@ -72,7 +74,7 @@ const LiveWatching: React.FC = () => {
     url?: string;
     lectureId?: string;
     classId?: number;
-    pages?: WhiteboardPage[];
+    pages?: MaterialPage[];
   } | null>(null);
   const [_isLessonDetailLoading, setIsLessonDetailLoading] = useState(false);
   const [sharedPdf, setSharedPdf] = useState<{
@@ -647,17 +649,17 @@ const LiveWatching: React.FC = () => {
         }
       }
 
-      // whiteboard pages 가져오기 시도
-      let pages: WhiteboardPage[] | undefined;
+      // material pages 가져오기 시도 (original_pdf_path 포함)
+      let pages: MaterialPage[] | undefined;
       try {
-        const pagesResponse = await getWhiteboardPages(
+        const pagesResponse = await getMaterialPages(
           lectureInfo.lectureId,
           lectureInfo.classId,
           "finalized"
         );
         pages = pagesResponse.pages || [];
       } catch (error) {
-        console.error("Whiteboard pages 조회 실패:", error);
+        console.error("Material pages 조회 실패:", error);
         pages = undefined;
       }
 

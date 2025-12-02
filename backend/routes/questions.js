@@ -438,18 +438,21 @@ async function generateGPTAnswer(
     for (const page of whiteboardPages) {
       let pageText = page.text || "";
       
+      // 원본 PDF 경로 우선 사용 (Vision AI는 원본 교안을 인식해야 함)
+      const pdfPathToUse = page.original_pdf_path || page.pdf_path;
+      
       // 텍스트가 비어있고 PDF 경로가 있으면 Vision API로 추출
-      if (!pageText.trim() && page.pdf_path) {
+      if (!pageText.trim() && pdfPathToUse) {
         try {
-          console.log(`[GPT 답변] 페이지 ${page.page_number}의 텍스트가 비어있어 PDF에서 추출 시도: ${page.pdf_path}`);
+          console.log(`[GPT 답변] 페이지 ${page.page_number}의 텍스트가 비어있어 PDF에서 추출 시도: ${pdfPathToUse} (original_pdf_path: ${page.original_pdf_path ? '사용' : '없음'})`);
           
           let pdfAbsolutePath = null;
           let isGridFS = false;
           
           // GridFS URL인지 확인 (/api/files/로 시작)
-          if (page.pdf_path.startsWith("/api/files/")) {
+          if (pdfPathToUse.startsWith("/api/files/")) {
             isGridFS = true;
-            const fileId = page.pdf_path.replace("/api/files/", "");
+            const fileId = pdfPathToUse.replace("/api/files/", "");
             const { downloadFile } = require("../utils/gridfs");
             const nodeFs = require("fs");
             
@@ -475,7 +478,7 @@ async function generateGPTAnswer(
             }
           } else {
             // 로컬 파일 경로인 경우 - 파일이 없으면 GridFS에서 찾기
-            pdfAbsolutePath = toAbsolutePath(page.pdf_path);
+            pdfAbsolutePath = toAbsolutePath(pdfPathToUse);
             
             // 파일 존재 확인
             if (!fs.existsSync(pdfAbsolutePath)) {
@@ -484,43 +487,51 @@ async function generateGPTAnswer(
               console.log(`[GPT 답변] 해당 페이지의 GridFS URL을 찾는 중...`);
               
               try {
-                // 해당 페이지 번호의 다른 WhiteboardPage에서 GridFS URL 찾기
+                // 해당 페이지 번호의 다른 WhiteboardPage에서 GridFS URL 찾기 (original_pdf_path 우선)
                 const pageWithGridFS = await WhiteboardPage.findOne({
                   lecture_id: lectureId,
                   class_id: String(classId),
                   page_number: page.page_number,
                   status: "finalized",
-                  pdf_path: { $regex: "^/api/files/" } // GridFS URL로 시작
+                  $or: [
+                    { original_pdf_path: { $regex: "^/api/files/" } },
+                    { pdf_path: { $regex: "^/api/files/" } }
+                  ]
                 })
-                  .select("pdf_path")
+                  .select("original_pdf_path pdf_path")
                   .lean();
                 
-                if (pageWithGridFS && pageWithGridFS.pdf_path) {
-                  // GridFS URL 발견 - GridFS에서 다운로드
-                  isGridFS = true;
-                  const fileId = pageWithGridFS.pdf_path.replace("/api/files/", "");
-                  const { downloadFile } = require("../utils/gridfs");
-                  const nodeFs = require("fs");
+                if (pageWithGridFS) {
+                  // original_pdf_path 우선, 없으면 pdf_path 사용
+                  const gridfsPath = pageWithGridFS.original_pdf_path?.startsWith("/api/files/") 
+                    ? pageWithGridFS.original_pdf_path 
+                    : (pageWithGridFS.pdf_path?.startsWith("/api/files/") ? pageWithGridFS.pdf_path : null);
                   
-                  const { stream, metadata } = await downloadFile(fileId);
-                  const tempPdfPath = path.join(require("os").tmpdir(), `gpt-extract-${fileId}-${Date.now()}.pdf`);
-                  const writeStream = nodeFs.createWriteStream(tempPdfPath);
-                  
-                  await new Promise((resolve, reject) => {
-                    stream.pipe(writeStream);
-                    stream.on("error", reject);
-                    writeStream.on("finish", resolve);
-                    writeStream.on("error", reject);
-                  });
-                  
-                  pdfAbsolutePath = tempPdfPath;
-                  console.log(`[GPT 답변] GridFS에서 PDF 다운로드 완료: ${tempPdfPath}`);
-                  
-                  // 현재 페이지의 pdf_path를 GridFS URL로 업데이트 (다음 번에는 바로 사용)
-                  await WhiteboardPage.updateOne(
-                    { _id: page._id },
-                    { $set: { pdf_path: pageWithGridFS.pdf_path } }
-                  );
+                  if (gridfsPath) {
+                    // GridFS URL 발견 - GridFS에서 다운로드
+                    isGridFS = true;
+                    const fileId = gridfsPath.replace("/api/files/", "");
+                    const { downloadFile } = require("../utils/gridfs");
+                    const nodeFs = require("fs");
+                    
+                    const { stream, metadata } = await downloadFile(fileId);
+                    const tempPdfPath = path.join(require("os").tmpdir(), `gpt-extract-${fileId}-${Date.now()}.pdf`);
+                    const writeStream = nodeFs.createWriteStream(tempPdfPath);
+                    
+                    await new Promise((resolve, reject) => {
+                      stream.pipe(writeStream);
+                      stream.on("error", reject);
+                      writeStream.on("finish", resolve);
+                      writeStream.on("error", reject);
+                    });
+                    
+                    pdfAbsolutePath = tempPdfPath;
+                    console.log(`[GPT 답변] GridFS에서 PDF 다운로드 완료: ${tempPdfPath}`);
+                  } else {
+                    // GridFS URL이 없으면 로컬 파일 경로는 건너뛰기
+                    console.warn(`[GPT 답변] 해당 페이지의 GridFS URL을 찾을 수 없습니다. 로컬 파일도 없어 건너뜁니다.`);
+                    continue;
+                  }
                 } else {
                   // GridFS URL이 없으면 로컬 파일 경로는 건너뛰기
                   console.warn(`[GPT 답변] 해당 페이지의 GridFS URL을 찾을 수 없습니다. 로컬 파일도 없어 건너뜁니다.`);
