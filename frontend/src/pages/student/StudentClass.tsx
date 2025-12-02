@@ -553,18 +553,29 @@ const StudentClass: React.FC = () => {
 
       if (pagesResponse.pages && pagesResponse.pages.length > 0) {
         // 페이지별 교안이 있는 경우
+        // original_pdf_path를 포함하여 WhiteboardPage 형식으로 변환
         pages = pagesResponse.pages.map(page => ({
           page_number: page.page_number,
           image_path: page.image_path,
           pdf_path: page.pdf_path,
+          original_pdf_path: page.original_pdf_path, // 원본 교안 PDF (교안 및 질문 보기용)
           text: page.text,
           status: page.status,
         }));
         
-        // 첫 번째 페이지의 PDF 경로 사용 (페이지별 PDF가 있으면 사용)
+        // 원본 교안 PDF URL 찾기 (original_pdf_path 우선 사용)
         const { ensureHttps } = await import("../../api/auth/client");
         const firstPage = pagesResponse.pages[0];
-        if (firstPage.pdf_path) {
+        
+        // original_pdf_path가 있으면 원본 교안 사용
+        if (firstPage.original_pdf_path) {
+          materialUrl = ensureHttps(
+            firstPage.original_pdf_path.startsWith("http")
+              ? firstPage.original_pdf_path
+              : `${getBaseUrl()}${firstPage.original_pdf_path}`
+          );
+        } else if (firstPage.pdf_path) {
+          // original_pdf_path가 없으면 pdf_path 사용 (하위 호환성)
           materialUrl = ensureHttps(
             firstPage.pdf_path.startsWith("http")
               ? firstPage.pdf_path

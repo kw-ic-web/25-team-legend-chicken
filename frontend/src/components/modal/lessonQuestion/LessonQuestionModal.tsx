@@ -26,7 +26,7 @@ import { downloadNotes } from "../../../api/professor";
 interface WhiteboardPage {
   page_number: number;
   image_path: string;
-  original_pdf_path?: string; // 원본 교안 PDF
+  original_pdf_path?: string | null; // 원본 교안 PDF
   pdf_path: string; // 필기+교안 합본 PDF
   text: string;
   status: string;
