@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
 import { Socket } from "socket.io-client";
 
 interface StudentPdfViewerProps {
@@ -20,6 +20,8 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
   // 페이지별 캔버스 상태 저장 (페이지 번호 -> ImageData)
   const pageCanvasDataRef = useRef<Map<number, ImageData>>(new Map());
+  // 현재 PDF URL 추적 (필기 복원을 위해 필요)
+  const [currentPdfUrl, setCurrentPdfUrl] = useState(pdfUrl);
 
   // 현재 페이지의 캔버스 상태 복원
   const restorePageCanvas = useCallback((page: number) => {
@@ -117,6 +119,38 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
     }
   }, []);
 
+  // PDF iframe 스크롤 비활성화
+  useEffect(() => {
+    const disableIframeScroll = () => {
+      if (pdfIframeRef.current && pdfIframeRef.current.contentDocument) {
+        try {
+          const iframeDoc = pdfIframeRef.current.contentDocument;
+          const iframeBody = iframeDoc.body;
+          if (iframeBody) {
+            iframeBody.style.overflow = "hidden";
+            iframeBody.style.position = "relative";
+          }
+          const iframeHtml = iframeDoc.documentElement;
+          if (iframeHtml) {
+            iframeHtml.style.overflow = "hidden";
+            iframeHtml.style.height = "100%";
+          }
+        } catch (e) {
+          // Cross-origin 제한으로 접근 불가능할 수 있음 (정상)
+        }
+      }
+    };
+
+    // iframe 로드 후 스크롤 비활성화 시도
+    if (pdfIframeRef.current) {
+      pdfIframeRef.current.onload = () => {
+        setTimeout(disableIframeScroll, 100);
+      };
+      // 이미 로드된 경우에도 시도
+      setTimeout(disableIframeScroll, 500);
+    }
+  }, [currentPdfUrl]);
+
   // PDF 로드 후 캔버스 크기 조정
   useEffect(() => {
     const adjustCanvasSize = () => {
@@ -147,6 +181,71 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
       window.removeEventListener("resize", adjustCanvasSize);
     };
   }, [restorePageCanvas]);
+
+  // PDF URL 변경 후 필기 복원 (교수자 코드와 동일한 로직)
+  useEffect(() => {
+    if (!canvasRef.current || !currentPdfUrl) return;
+
+    // 캔버스가 준비될 때까지 대기
+    const checkAndRestore = (retryCount = 0) => {
+      if (retryCount > 10) {
+        console.log(
+          "[StudentPdfViewer] 복원 시도 실패 (최대 재시도 횟수 초과):",
+          currentPageRef.current
+        );
+        return;
+      }
+
+      if (
+        canvasRef.current &&
+        canvasRef.current.width > 0 &&
+        canvasRef.current.height > 0
+      ) {
+        restorePageCanvas(currentPageRef.current);
+      } else {
+        // 캔버스가 아직 준비되지 않았으면 다시 시도
+        setTimeout(() => checkAndRestore(retryCount + 1), 100);
+      }
+    };
+
+    // PDF 로드 후 필기 복원 (약간의 지연을 두어 PDF 로드 후 복원)
+    const timer = setTimeout(() => {
+      checkAndRestore();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [currentPdfUrl, restorePageCanvas]);
+
+  // 초기 마운트 시 필기 복원
+  useEffect(() => {
+    if (!canvasRef.current || !currentPdfUrl) return;
+
+    const checkAndRestore = (retryCount = 0) => {
+      if (retryCount > 15) {
+        console.log(
+          "[StudentPdfViewer] 초기 복원 시도 실패 (최대 재시도 횟수 초과):",
+          currentPageRef.current
+        );
+        return;
+      }
+
+      if (
+        canvasRef.current &&
+        canvasRef.current.width > 0 &&
+        canvasRef.current.height > 0
+      ) {
+        restorePageCanvas(currentPageRef.current);
+      } else {
+        setTimeout(() => checkAndRestore(retryCount + 1), 100);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      checkAndRestore();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []); // 초기 마운트 시에만 실행
 
   // Socket.io 이벤트 리스너
   useEffect(() => {
@@ -283,6 +382,9 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
       // 페이지별 PDF URL 사용 (없으면 원본 PDF 사용)
       const pdfUrlForPage = data.pdf_url || pdfUrl;
 
+      // currentPdfUrl state 업데이트 (이것이 변경되면 useEffect에서 필기 복원)
+      setCurrentPdfUrl(pdfUrlForPage);
+
       // PDF iframe 페이지 변경 (zoom을 page-fit으로 변경하여 스크롤 방지)
       if (pdfIframeRef.current) {
         pdfIframeRef.current.src = `${pdfUrlForPage}#page=${data.page}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`;
@@ -292,10 +394,7 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
         });
       }
 
-      // 새 페이지의 필기 복원 (약간의 지연을 두어 PDF 로드 후 복원)
-      setTimeout(() => {
-        restorePageCanvas(data.page);
-      }, 300);
+      // 필기 복원은 currentPdfUrl 변경으로 인한 useEffect에서 처리됨
     };
 
     // 페이지 전체 스냅샷 수신 (과거 필기 복원용)
@@ -355,13 +454,24 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
       </div>
 
       {/* PDF + 필기 영역 */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+      <div 
+        ref={containerRef} 
+        className="flex-1 relative overflow-hidden"
+        style={{ overflow: "hidden" }}
+      >
         <iframe
           ref={pdfIframeRef}
-          src={`${pdfUrl}#page=${currentPageRef.current}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
+          src={`${currentPdfUrl}#page=${currentPageRef.current}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
           title="공유 중인 PDF"
           className="absolute inset-0 w-full h-full"
-          style={{ pointerEvents: "none" }}
+          style={{ 
+            pointerEvents: "none",
+            overflow: "hidden",
+            border: "none",
+            display: "block"
+          }}
+          scrolling="no"
+          allow="fullscreen"
         />
         <canvas
           ref={canvasRef}
