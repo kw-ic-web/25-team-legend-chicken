@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useCallback } from "react";
 import { Socket } from "socket.io-client";
 
 interface StudentPdfViewerProps {
@@ -18,6 +18,104 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
   const currentPageRef = useRef<number>(1);
   const isDrawingRef = useRef<boolean>(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  // 페이지별 캔버스 상태 저장 (페이지 번호 -> ImageData)
+  const pageCanvasDataRef = useRef<Map<number, ImageData>>(new Map());
+
+  // 현재 페이지의 캔버스 상태 복원
+  const restorePageCanvas = useCallback((page: number) => {
+    if (!canvasRef.current) {
+      console.log("[StudentPdfViewer] 캔버스 ref 없음, 복원 불가:", page);
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      console.log("[StudentPdfViewer] 컨텍스트 없음, 복원 불가:", page);
+      return;
+    }
+
+    if (canvas.width === 0 || canvas.height === 0) {
+      console.log("[StudentPdfViewer] 캔버스 크기가 0, 복원 불가:", page, {
+        width: canvas.width,
+        height: canvas.height,
+      });
+      return;
+    }
+
+    const savedData = pageCanvasDataRef.current.get(page);
+    console.log("[StudentPdfViewer] 필기 복원 시도:", page, {
+      hasSavedData: !!savedData,
+      canvasSize: { width: canvas.width, height: canvas.height },
+      savedSize: savedData
+        ? { width: savedData.width, height: savedData.height }
+        : null,
+    });
+
+    // 항상 먼저 캔버스 초기화
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (savedData) {
+      // 저장된 데이터의 크기가 현재 캔버스와 다를 수 있으므로 확인
+      if (
+        savedData.width === canvas.width &&
+        savedData.height === canvas.height
+      ) {
+        ctx.putImageData(savedData, 0, 0);
+        console.log("[StudentPdfViewer] 페이지 필기 복원 성공:", page);
+      } else {
+        // 크기가 다르면 초기화만 (복원 실패)
+        console.log(
+          "[StudentPdfViewer] 캔버스 크기 불일치, 복원 실패:",
+          page,
+          {
+            saved: { width: savedData.width, height: savedData.height },
+            current: { width: canvas.width, height: canvas.height },
+          }
+        );
+      }
+    } else {
+      console.log("[StudentPdfViewer] 저장된 필기 없음, 초기화:", page);
+    }
+  }, []);
+
+  // 현재 페이지의 캔버스 상태 저장
+  const savePageCanvas = useCallback((page: number) => {
+    if (!canvasRef.current) {
+      console.log("[StudentPdfViewer] 캔버스 ref 없음, 저장 불가:", page);
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      console.log("[StudentPdfViewer] 컨텍스트 없음, 저장 불가:", page);
+      return;
+    }
+
+    if (canvas.width === 0 || canvas.height === 0) {
+      console.log("[StudentPdfViewer] 캔버스 크기가 0, 저장 불가:", page, {
+        width: canvas.width,
+        height: canvas.height,
+      });
+      return;
+    }
+
+    try {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      pageCanvasDataRef.current.set(page, imageData);
+      const hasData = imageData.data.some(
+        (pixel, index) => index % 4 !== 3 && pixel !== 0
+      );
+      console.log("[StudentPdfViewer] 페이지 필기 저장 성공:", page, {
+        width: canvas.width,
+        height: canvas.height,
+        hasData: hasData,
+      });
+    } catch (error) {
+      console.error("[StudentPdfViewer] 필기 저장 실패:", error, page);
+    }
+  }, []);
 
   // PDF 로드 후 캔버스 크기 조정
   useEffect(() => {
@@ -32,6 +130,13 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
 
         canvas.style.width = `${rect.width}px`;
         canvas.style.height = `${rect.height}px`;
+
+        // 캔버스 크기 조정 후 현재 페이지 필기 복원
+        if (rect.width > 0 && rect.height > 0) {
+          setTimeout(() => {
+            restorePageCanvas(currentPageRef.current);
+          }, 100);
+        }
       }
     };
 
@@ -41,7 +146,7 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
     return () => {
       window.removeEventListener("resize", adjustCanvasSize);
     };
-  }, []);
+  }, [restorePageCanvas]);
 
   // Socket.io 이벤트 리스너
   useEffect(() => {
@@ -137,6 +242,9 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
         }
         lastPointRef.current = null;
         isDrawingRef.current = false;
+
+        // 그리기 종료 시 현재 페이지 필기 저장
+        savePageCanvas(currentPageRef.current);
       }
     };
 
@@ -144,11 +252,30 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
       console.log("[StudentPdfViewer] 페이지 변경 수신:", data);
       if (!canvasRef.current) return;
 
-      const ctx = canvasRef.current.getContext("2d");
-      if (ctx) {
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      // 현재 페이지의 필기 저장 (페이지 변경 전에 저장)
+      const currentPageToSave = currentPageRef.current;
+      if (canvasRef.current.width > 0 && canvasRef.current.height > 0) {
+        const ctx = canvasRef.current.getContext("2d");
+        if (ctx) {
+          try {
+            const imageData = ctx.getImageData(
+              0,
+              0,
+              canvasRef.current.width,
+              canvasRef.current.height
+            );
+            pageCanvasDataRef.current.set(currentPageToSave, imageData);
+            console.log(
+              "[StudentPdfViewer] 현재 페이지 필기 저장:",
+              currentPageToSave
+            );
+          } catch (error) {
+            console.error("[StudentPdfViewer] 필기 저장 실패:", error);
+          }
+        }
       }
 
+      // 새 페이지로 변경
       currentPageRef.current = data.page;
       lastPointRef.current = null;
       isDrawingRef.current = false;
@@ -156,14 +283,19 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
       // 페이지별 PDF URL 사용 (없으면 원본 PDF 사용)
       const pdfUrlForPage = data.pdf_url || pdfUrl;
 
-      // PDF iframe 페이지 변경
+      // PDF iframe 페이지 변경 (zoom을 page-fit으로 변경하여 스크롤 방지)
       if (pdfIframeRef.current) {
-        pdfIframeRef.current.src = `${pdfUrlForPage}#zoom=page-width&toolbar=0&navpanes=0&scrollbar=0`;
+        pdfIframeRef.current.src = `${pdfUrlForPage}#page=${data.page}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`;
         console.log("[StudentPdfViewer] PDF iframe 페이지 변경:", {
           page: data.page,
           pdf_url: pdfUrlForPage,
         });
       }
+
+      // 새 페이지의 필기 복원 (약간의 지연을 두어 PDF 로드 후 복원)
+      setTimeout(() => {
+        restorePageCanvas(data.page);
+      }, 300);
     };
 
     // 페이지 전체 스냅샷 수신 (과거 필기 복원용)
@@ -185,6 +317,18 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // 스냅샷을 페이지별 필기 상태로 저장
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          pageCanvasDataRef.current.set(data.page, imageData);
+          console.log(
+            "[StudentPdfViewer] 페이지 스냅샷 저장 완료:",
+            data.page
+          );
+        } catch (error) {
+          console.error("[StudentPdfViewer] 스냅샷 저장 실패:", error);
+        }
       };
       img.src = data.image;
     };
@@ -198,7 +342,7 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
       socket.off("whiteboard:page-change", handlePageChange);
       socket.off("whiteboard:page-state", handlePageState);
     };
-  }, [socket, pdfUrl]);
+  }, [socket, pdfUrl, savePageCanvas, restorePageCanvas]);
 
   return (
     <div className="w-full h-full bg-white rounded-xl flex flex-col overflow-hidden shadow-lg">
@@ -214,9 +358,10 @@ const StudentPdfViewer: React.FC<StudentPdfViewerProps> = ({
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
         <iframe
           ref={pdfIframeRef}
-          src={`${pdfUrl}#page=${currentPageRef.current}&zoom=page-width&toolbar=0&navpanes=0&scrollbar=0`}
+          src={`${pdfUrl}#page=${currentPageRef.current}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
           title="공유 중인 PDF"
           className="absolute inset-0 w-full h-full"
+          style={{ pointerEvents: "none" }}
         />
         <canvas
           ref={canvasRef}
