@@ -512,8 +512,8 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                   );
                   
                   // 교안 및 질문 보기에서는 항상 원본 교안 PDF 사용
-                  // original_pdf_path가 있으면 사용, 없으면 pdf_path 사용, 둘 다 없으면 전체 PDF 사용
-                  const originalPdfUrl = currentPageData?.original_pdf_path || currentPageData?.pdf_path || pdfUrl;
+                  // original_pdf_path가 있으면 사용, 없으면 전체 pdfUrl 사용 (pdf_path는 필기본이므로 사용하지 않음)
+                  const originalPdfUrl = currentPageData?.original_pdf_path || pdfUrl;
                   
                   if (!originalPdfUrl) {
                     return (
