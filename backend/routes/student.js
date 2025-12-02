@@ -6,6 +6,7 @@ const Lecture = require("../models/lectures");
 // 모델 파일명(`User.js`)과 동일하게 대문자 U를 사용해야 한다.
 const User = require("../models/User");
 const Question = require("../models/Question");
+const { toAbsoluteUrl } = require("../utils/urlUtils");
 
 // ✅ 학생이 초대 링크로 강좌 참가
 router.post("/join-lecture/:lectureId", authenticateToken, async (req, res) => {
@@ -77,11 +78,14 @@ router.get("/my-lectures", authenticateToken, async (req, res) => {
       "lecture_id name schedule professor_name professor_email professor_phone lecture_description thumbnail"
     );
 
-    // 로컬에 저장된 썸네일 경로 필터링 (GridFS만 사용)
+    // 로컬에 저장된 썸네일 경로 필터링 및 절대 URL 변환 (GridFS만 사용)
     const filteredLectures = lectures.map(lecture => {
       const lectureObj = lecture.toObject();
       if (lectureObj.thumbnail && lectureObj.thumbnail.startsWith("/uploads/images/thumbnail-")) {
         lectureObj.thumbnail = ""; // 로컬 경로는 빈 문자열로 처리
+      } else if (lectureObj.thumbnail && lectureObj.thumbnail.startsWith("/api/files/")) {
+        // GridFS URL을 절대 URL로 변환
+        lectureObj.thumbnail = toAbsoluteUrl(req, lectureObj.thumbnail);
       }
       return lectureObj;
     });
