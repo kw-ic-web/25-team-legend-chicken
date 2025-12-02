@@ -98,15 +98,45 @@ router.get(
       const materials = convertMaterialsToAbsolute(req, classData.materials || []);
 
       // 페이지별로 응답 구성
-      const pagesWithUrls = pages.map((page) => ({
-        page_number: page.page_number,
-        image_path: toAbsoluteUrl(req, page.image_path),
-        pdf_path: toAbsoluteUrl(req, page.pdf_path),
-        text: page.text || "",
-        status: page.status,
-        createdAt: page.createdAt,
-        updatedAt: page.updatedAt,
-      }));
+      // 교안 및 질문 보기에서는 항상 original_pdf_path (원본 교안) 사용
+      const pagesWithUrls = pages.map((page) => {
+        // original_pdf_path가 없으면 같은 페이지 번호의 다른 상태 페이지에서 찾기
+        let originalPdfPath = page.original_pdf_path;
+        if (!originalPdfPath) {
+          const samePageNumber = pages.find(
+            (p) => p.page_number === page.page_number && p.original_pdf_path
+          );
+          originalPdfPath = samePageNumber?.original_pdf_path;
+        }
+        
+        // 여전히 없으면 materials 배열에서 원본 PDF 찾기
+        if (!originalPdfPath) {
+          if (materials && materials.length > 0) {
+            const firstMaterial = materials[0];
+            const materialUrl = typeof firstMaterial === "string" 
+              ? firstMaterial 
+              : firstMaterial.url;
+            // 전체 PDF URL 사용 (프론트엔드에서 페이지 번호 지정)
+            originalPdfPath = materialUrl;
+          }
+        }
+        
+        // original_pdf_path를 절대 URL로 변환
+        const absoluteOriginalPdfPath = originalPdfPath 
+          ? toAbsoluteUrl(req, originalPdfPath) 
+          : null;
+        
+        return {
+          page_number: page.page_number,
+          image_path: toAbsoluteUrl(req, page.image_path),
+          pdf_path: toAbsoluteUrl(req, page.pdf_path), // 필기본 (필기본 다운로드용)
+          original_pdf_path: absoluteOriginalPdfPath, // 원본 교안 (교안 및 질문 보기용)
+          text: page.text || "",
+          status: page.status,
+          createdAt: page.createdAt,
+          updatedAt: page.updatedAt,
+        };
+      });
 
       return res.json({
         success: true,
