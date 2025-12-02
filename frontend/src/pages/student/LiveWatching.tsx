@@ -83,6 +83,7 @@ const LiveWatching: React.FC = () => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const lastMessageTimeRef = useRef<number>(0);
+  const [isParticipantStripVisible, setIsParticipantStripVisible] = useState(true);
 
   // 학생의 로컬 스트림 (카메라/마이크)
   const [studentLocalStream, setStudentLocalStream] =
@@ -1106,14 +1107,6 @@ const LiveWatching: React.FC = () => {
               </div>
             </div>
 
-            {/* 상단 참여자(웹캠) 스트립 */}
-            <StudentParticipantStrip
-              professorCameraRef={professorVideoRef}
-              studentVideoRef={studentVideoRef}
-              isStudentCameraOn={isStudentCameraOn}
-              remoteParticipants={remoteParticipants}
-            />
-
             {/* 강의 콘텐츠(화면 공유 영역) - 교수자와 동일한 구조 */}
             <StudentScreenArea
               isLive={isLive}
@@ -1140,6 +1133,27 @@ const LiveWatching: React.FC = () => {
                       pdfName={sharedPdf.name}
                       socket={chatSocketRef.current}
                     />
+                  </div>
+                )}
+                {isParticipantStripVisible ? (
+                  <div className="absolute top-6 left-0 right-0 flex justify-center pointer-events-none z-30">
+                    <StudentParticipantStrip
+                      professorCameraRef={professorVideoRef}
+                      studentVideoRef={studentVideoRef}
+                      isStudentCameraOn={isStudentCameraOn}
+                      remoteParticipants={remoteParticipants}
+                      onClose={() => setIsParticipantStripVisible(false)}
+                    />
+                  </div>
+                ) : (
+                  <div className="absolute top-6 right-6 z-30 pointer-events-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsParticipantStripVisible(true)}
+                      className="px-3 py-1.5 rounded-full bg-white/90 border border-gray-200 shadow text-xs text-gray-700 hover:bg-white"
+                    >
+                      참여자 목록 보기
+                    </button>
                   </div>
                 )}
                 <StudentLiveControls
