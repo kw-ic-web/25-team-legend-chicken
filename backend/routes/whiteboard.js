@@ -392,9 +392,13 @@ router.get(
 
       // 페이지의 image_path, original_pdf_path, pdf_path를 절대 URL로 변환
       // 교안 및 질문 보기에서는 original_pdf_path (원본 교안) 사용
+      // original_pdf_path가 없으면 null (pdf_path는 필기본이므로 사용하지 않음)
       const pagesWithAbsoluteUrls = pages.map(page => {
         const absoluteImagePath = toAbsoluteUrl(req, page.image_path);
-        const absoluteOriginalPdfPath = toAbsoluteUrl(req, page.original_pdf_path || page.pdf_path);
+        // original_pdf_path만 사용 (pdf_path는 필기본이므로 사용하지 않음)
+        const absoluteOriginalPdfPath = page.original_pdf_path 
+          ? toAbsoluteUrl(req, page.original_pdf_path) 
+          : null;
         const absolutePdfPath = toAbsoluteUrl(req, page.pdf_path);
         console.log("[DEBUG] URL 변환:", {
           page_number: page.page_number,
