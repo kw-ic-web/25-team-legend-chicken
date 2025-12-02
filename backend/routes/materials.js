@@ -430,7 +430,8 @@ router.post(
           page_number: basePageNumber + i + 1,
           image_path: imagePath,
           text: text,
-          pdf_path: pdfGridfsUrl, // GridFS URL 사용
+          original_pdf_path: pdfGridfsUrl, // 원본 교안 PDF (GridFS URL)
+          pdf_path: pdfGridfsUrl, // 초기에는 원본과 동일 (필기 후 필기+교안 합본으로 업데이트)
           status: "finalized",
         });
 
@@ -604,12 +605,38 @@ router.post(
         }
       }
 
-      // PDF 생성
+      // 필기+교안 합본 PDF 생성 (GridFS에 저장)
       const { pdfPath } = await createPdfFromImage(finalImagePath, {
         lectureId: lectureId,
         classId: String(classId),
         pageNumber: pageNum,
+        saveToGridFS: true,
       });
+
+      // 원본 PDF 찾기
+      let originalPdfPath = null;
+      const existingPage = await WhiteboardPage.findOne({
+        lecture_id: lectureId,
+        class_id: String(classId),
+        page_number: pageNum,
+        status: "finalized",
+      });
+
+      if (existingPage && existingPage.original_pdf_path) {
+        originalPdfPath = existingPage.original_pdf_path;
+      } else {
+        // 같은 강의의 다른 페이지에서 원본 PDF 찾기
+        const otherPage = await WhiteboardPage.findOne({
+          lecture_id: lectureId,
+          class_id: String(classId),
+          original_pdf_path: { $exists: true, $ne: "" },
+          status: "finalized",
+        }).sort({ page_number: 1 });
+
+        if (otherPage && otherPage.original_pdf_path) {
+          originalPdfPath = otherPage.original_pdf_path;
+        }
+      }
 
       // WhiteboardPage에 저장 (draft 상태로 저장, 나중에 finalized 가능)
       // 이미지 경로: GridFS URL 우선, 없으면 파일 시스템 경로
@@ -621,7 +648,8 @@ router.post(
         page_number: pageNum,
         image_path: imagePath,
         text: normalizedText,
-        pdf_path: pdfPath,
+        original_pdf_path: originalPdfPath || "",
+        pdf_path: pdfPath, // 필기+교안 합본
         status: "draft", // 실시간 필기는 draft 상태
       });
 
@@ -700,6 +728,33 @@ router.put(
           success: false,
           message: "최종화할 draft 필기가 없습니다." 
         });
+      }
+
+      // original_pdf_path가 없으면 찾아서 설정
+      if (!draftPage.original_pdf_path) {
+        const existingFinalizedPage = await WhiteboardPage.findOne({
+          lecture_id: lectureId,
+          class_id: String(classId),
+          page_number: pageNum,
+          status: "finalized",
+          original_pdf_path: { $exists: true, $ne: "" },
+        });
+
+        if (existingFinalizedPage && existingFinalizedPage.original_pdf_path) {
+          draftPage.original_pdf_path = existingFinalizedPage.original_pdf_path;
+        } else {
+          // 같은 강의의 다른 페이지에서 원본 PDF 찾기
+          const otherPage = await WhiteboardPage.findOne({
+            lecture_id: lectureId,
+            class_id: String(classId),
+            original_pdf_path: { $exists: true, $ne: "" },
+            status: "finalized",
+          }).sort({ page_number: 1 });
+
+          if (otherPage && otherPage.original_pdf_path) {
+            draftPage.original_pdf_path = otherPage.original_pdf_path;
+          }
+        }
       }
 
       draftPage.status = "finalized";
