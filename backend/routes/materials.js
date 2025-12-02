@@ -635,15 +635,7 @@ router.post(
         }
       }
 
-      // 필기+교안 합본 PDF 생성 (GridFS에 저장)
-      const { pdfPath } = await createPdfFromImage(finalImagePath, {
-        lectureId: lectureId,
-        classId: String(classId),
-        pageNumber: pageNum,
-        saveToGridFS: true,
-      });
-
-      // 원본 PDF 찾기
+      // 원본 PDF 찾기 (필기+교안 합본 생성 전에 필요)
       let originalPdfPath = null;
       const existingPage = await WhiteboardPage.findOne({
         lecture_id: lectureId,
@@ -666,6 +658,111 @@ router.post(
         if (otherPage && otherPage.original_pdf_path) {
           originalPdfPath = otherPage.original_pdf_path;
         }
+      }
+
+      // 필기+교안 합본 PDF 생성 (원본 PDF가 있으면 합치기, 없으면 필기만)
+      let pdfPath;
+      if (originalPdfPath) {
+        // 원본 PDF와 필기 이미지를 합치기
+        try {
+          const PDFLib = require("pdf-lib");
+          const { downloadFile } = require("../utils/gridfs");
+          const https = require("https");
+          const http = require("http");
+          
+          // 원본 PDF 가져오기
+          let originalPdfBytes;
+          if (originalPdfPath.startsWith("/api/files/")) {
+            // GridFS에서 가져오기
+            const fileId = originalPdfPath.replace("/api/files/", "");
+            const { stream } = await downloadFile(fileId);
+            const chunks = [];
+            for await (const chunk of stream) {
+              chunks.push(chunk);
+            }
+            originalPdfBytes = Buffer.concat(chunks);
+          } else if (originalPdfPath.startsWith("http://") || originalPdfPath.startsWith("https://")) {
+            // URL에서 다운로드
+            const client = originalPdfPath.startsWith("https://") ? https : http;
+            originalPdfBytes = await new Promise((resolve, reject) => {
+              client.get(originalPdfPath, (res) => {
+                const chunks = [];
+                res.on("data", (chunk) => chunks.push(chunk));
+                res.on("end", () => resolve(Buffer.concat(chunks)));
+                res.on("error", reject);
+              }).on("error", reject);
+            });
+          } else {
+            // 로컬 파일
+            originalPdfBytes = await fs.readFile(toAbsolutePath(originalPdfPath));
+          }
+          
+          // PDFLib로 원본 PDF 로드
+          const srcDoc = await PDFLib.PDFDocument.load(originalPdfBytes);
+          const pages = srcDoc.getPages();
+          
+          // 해당 페이지 찾기 (페이지 번호는 1부터 시작)
+          const targetPageIndex = pageNum - 1;
+          if (targetPageIndex >= 0 && targetPageIndex < pages.length) {
+            const targetPage = pages[targetPageIndex];
+            const { width, height } = targetPage.getSize();
+            
+            // 필기 이미지를 PDF에 임베드
+            const handwritingImageBytes = await fs.readFile(finalImagePath);
+            const handwritingImage = await srcDoc.embedPng(handwritingImageBytes).catch(async () => {
+              // PNG 실패 시 JPEG로 시도
+              return await srcDoc.embedJpg(handwritingImageBytes);
+            });
+            
+            // 필기 이미지를 페이지 크기에 맞게 조정하여 오버레이
+            const imageDims = handwritingImage.scale(1);
+            const scaleX = width / imageDims.width;
+            const scaleY = height / imageDims.height;
+            const scale = Math.min(scaleX, scaleY);
+            
+            targetPage.drawImage(handwritingImage, {
+              x: 0,
+              y: 0,
+              width: imageDims.width * scale,
+              height: imageDims.height * scale,
+            });
+          }
+          
+          // 합본 PDF 저장
+          const combinedPdfBytes = await srcDoc.save();
+          
+          // GridFS에 저장
+          const timestamp = Date.now();
+          const filename = `whiteboard-${lectureId}-${classId}-p${pageNum}-${timestamp}.pdf`;
+          const gridfsId = await uploadFile(combinedPdfBytes, filename, "application/pdf", {
+            lectureId,
+            classId: String(classId),
+            pageNumber: pageNum,
+            type: "annotated_pdf",
+          });
+          
+          pdfPath = `/api/files/${gridfsId}`;
+          console.log(`[materials] 원본 교안과 필기 합본 PDF 생성 완료: ${pdfPath}`);
+        } catch (error) {
+          console.error("[materials] 원본 교안과 필기 합치기 실패, 필기만 저장:", error);
+          // 실패 시 필기만 PDF로 변환
+          const result = await createPdfFromImage(finalImagePath, {
+            lectureId: lectureId,
+            classId: String(classId),
+            pageNumber: pageNum,
+            saveToGridFS: true,
+          });
+          pdfPath = result.pdfPath;
+        }
+      } else {
+        // 원본 PDF가 없으면 필기만 PDF로 변환
+        const result = await createPdfFromImage(finalImagePath, {
+          lectureId: lectureId,
+          classId: String(classId),
+          pageNumber: pageNum,
+          saveToGridFS: true,
+        });
+        pdfPath = result.pdfPath;
       }
 
       // WhiteboardPage에 저장 (draft 상태로 저장, 나중에 finalized 가능)

@@ -407,29 +407,32 @@ async function generateGPTAnswer(
     if (questionPage !== null && questionPage !== undefined) {
       filter.page_number = Number(questionPage);
       
-      // 먼저 GridFS URL을 가진 페이지 찾기
+      // 먼저 GridFS URL을 가진 페이지 찾기 (original_pdf_path 포함)
       const pageWithGridFS = await WhiteboardPage.findOne({
         ...filter,
-        pdf_path: { $regex: "^/api/files/" } // GridFS URL로 시작
+        $or: [
+          { pdf_path: { $regex: "^/api/files/" } },
+          { original_pdf_path: { $regex: "^/api/files/" } }
+        ]
       })
-        .select("text page_number pdf_path _id")
+        .select("text page_number pdf_path original_pdf_path _id")
         .lean();
       
       if (pageWithGridFS) {
         // GridFS URL을 가진 페이지가 있으면 사용
         whiteboardPages = [pageWithGridFS];
       } else {
-        // 없으면 일반 조회
+        // 없으면 일반 조회 (original_pdf_path 포함)
         whiteboardPages = await WhiteboardPage.find(filter)
           .sort({ page_number: 1 })
-          .select("text page_number pdf_path _id")
+          .select("text page_number pdf_path original_pdf_path _id")
           .lean();
       }
     } else {
-      // 모든 페이지 조회 (GridFS URL 우선)
+      // 모든 페이지 조회 (GridFS URL 우선, original_pdf_path 포함)
       whiteboardPages = await WhiteboardPage.find(filter)
         .sort({ page_number: 1 })
-        .select("text page_number pdf_path _id")
+        .select("text page_number pdf_path original_pdf_path _id")
         .lean();
     }
 
@@ -477,8 +480,60 @@ async function generateGPTAnswer(
               continue;
             }
           } else {
-            // 로컬 파일 경로인 경우 - 파일이 없으면 GridFS에서 찾기
-            pdfAbsolutePath = toAbsolutePath(pdfPathToUse);
+            // 로컬 파일 경로인 경우
+            // URL인지 확인 (http:// 또는 https://로 시작)
+            if (pdfPathToUse.startsWith("http://") || pdfPathToUse.startsWith("https://")) {
+              // 전체 PDF URL인 경우 - 해당 페이지를 추출해야 함
+              console.log(`[GPT 답변] 전체 PDF URL 감지, 페이지 ${page.page_number} 추출 시도: ${pdfPathToUse}`);
+              
+              try {
+                // URL에서 PDF 다운로드
+                const url = require("url");
+                const https = require("https");
+                const http = require("http");
+                const client = pdfPathToUse.startsWith("https://") ? https : http;
+                
+                const pdfBuffer = await new Promise((resolve, reject) => {
+                  client.get(pdfPathToUse, (res) => {
+                    const chunks = [];
+                    res.on("data", (chunk) => chunks.push(chunk));
+                    res.on("end", () => resolve(Buffer.concat(chunks)));
+                    res.on("error", reject);
+                  }).on("error", reject);
+                });
+                
+                // PDFLib을 사용하여 해당 페이지 추출
+                const PDFLib = require("pdf-lib");
+                const srcDoc = await PDFLib.PDFDocument.load(pdfBuffer);
+                const totalPages = srcDoc.getPageCount();
+                
+                if (page.page_number > totalPages) {
+                  console.warn(`[GPT 답변] 페이지 번호 ${page.page_number}가 총 페이지 수 ${totalPages}를 초과합니다.`);
+                  continue;
+                }
+                
+                // 해당 페이지만 추출
+                const outDoc = await PDFLib.PDFDocument.create();
+                const [copied] = await outDoc.copyPages(srcDoc, [page.page_number - 1]);
+                outDoc.addPage(copied);
+                
+                const outBytes = await outDoc.save();
+                
+                // 임시 파일로 저장
+                const tempPdfPath = path.join(require("os").tmpdir(), `gpt-extract-page-${page.page_number}-${Date.now()}.pdf`);
+                await fs.writeFile(tempPdfPath, outBytes);
+                
+                pdfAbsolutePath = tempPdfPath;
+                console.log(`[GPT 답변] 전체 PDF에서 페이지 ${page.page_number} 추출 완료: ${tempPdfPath}`);
+              } catch (urlError) {
+                console.error(`[GPT 답변] 전체 PDF URL에서 페이지 추출 실패:`, urlError.message || urlError);
+                // URL 처리 실패 시 다른 방법 시도
+                continue;
+              }
+            } else {
+              // 로컬 파일 경로인 경우
+              pdfAbsolutePath = toAbsolutePath(pdfPathToUse);
+            }
             
             // 파일 존재 확인
             if (!fs.existsSync(pdfAbsolutePath)) {
@@ -565,8 +620,9 @@ async function generateGPTAnswer(
           // 임시 파일 정리
           try {
             await fs.remove(imagePath);
-            if (isGridFS && pdfAbsolutePath) {
-              await fs.remove(pdfAbsolutePath);
+            // 전체 PDF URL에서 추출한 임시 파일도 정리
+            if (pdfAbsolutePath && (isGridFS || pdfAbsolutePath.includes("gpt-extract"))) {
+              await fs.remove(pdfAbsolutePath).catch(() => {});
             }
           } catch (cleanupError) {
             // 정리 실패는 무시
