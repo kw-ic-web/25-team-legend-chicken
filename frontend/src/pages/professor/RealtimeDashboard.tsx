@@ -134,6 +134,7 @@ const RealtimeDashboard: React.FC = () => {
   const isStartingShareRef = useRef(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [currentPdfPage, setCurrentPdfPage] = useState(1);
 
   const localStreams = useMemo(
     () => [cameraStream, screenStream],
@@ -479,9 +480,8 @@ const RealtimeDashboard: React.FC = () => {
           ? imageData.split(",")[1]
           : imageData;
 
-        // 현재 PDF 페이지 번호 추정 (간단히 1로 설정, 추후 개선 가능)
-        // 실제로는 PDF 뷰어에서 현재 페이지를 추적해야 함
-        const currentPage = 1;
+        // 현재 PDF 페이지 번호 사용
+        const currentPage = currentPdfPage;
 
         await analyzeHandwriting({
           image_data: base64Data,
@@ -494,14 +494,20 @@ const RealtimeDashboard: React.FC = () => {
 
         console.log(
           "[RealtimeDashboard] PDF+필기 캡쳐 및 분석 완료:",
-          timestamp
+          timestamp,
+          "페이지:",
+          currentPage
         );
       } catch (error) {
         console.error("[RealtimeDashboard] PDF+필기 캡쳐 실패:", error);
       }
     },
-    [resolvedLectureId, resolvedClassId, selectedPdf]
+    [resolvedLectureId, resolvedClassId, selectedPdf, currentPdfPage]
   );
+  
+  const handlePdfPageChange = useCallback((page: number) => {
+    setCurrentPdfPage(page);
+  }, []);
 
   const handleClosePdfModal = useCallback(() => {
     setIsPdfModalOpen(false);
@@ -1117,7 +1123,8 @@ const RealtimeDashboard: React.FC = () => {
                       lectureId={resolvedLectureId}
                       classId={resolvedClassId}
                       socket={chatSocketRef.current}
-                      currentPage={1}
+                      currentPage={currentPdfPage}
+                      onPageChange={handlePdfPageChange}
                       whiteboardPages={whiteboardPages}
                     />
                   </div>

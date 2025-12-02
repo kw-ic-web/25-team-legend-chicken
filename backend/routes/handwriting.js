@@ -134,16 +134,33 @@ router.post("/analyze-test", authenticateToken, async (req, res) => {
       pageNumber: detectedPageNumber,
     });
 
-    // WhiteboardPage에 저장
-    const saved = await WhiteboardPage.create({
+    // 기존 페이지가 있으면 업데이트, 없으면 생성
+    let saved = await WhiteboardPage.findOne({
       lecture_id,
       class_id: String(class_id),
       page_number: detectedPageNumber,
-      image_path: `/captures/${savedFileName}`,
-      text: normalizedText,
-      pdf_path: pdfPath,
       status: "finalized",
     });
+
+    if (saved) {
+      // 기존 페이지 업데이트
+      saved.image_path = `/captures/${savedFileName}`;
+      saved.text = normalizedText;
+      saved.pdf_path = pdfPath;
+      saved.updatedAt = new Date();
+      await saved.save();
+    } else {
+      // 새 페이지 생성
+      saved = await WhiteboardPage.create({
+        lecture_id,
+        class_id: String(class_id),
+        page_number: detectedPageNumber,
+        image_path: `/captures/${savedFileName}`,
+        text: normalizedText,
+        pdf_path: pdfPath,
+        status: "finalized",
+      });
+    }
 
     return res.status(200).json({
       success: true,

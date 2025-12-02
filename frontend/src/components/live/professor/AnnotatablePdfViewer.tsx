@@ -45,9 +45,18 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
   const captureIntervalRef = useRef<number | null>(null);
   const lastCaptureTimeRef = useRef<number>(0);
   const [pdfPage, setPdfPage] = useState(currentPage);
+  // 초기 PDF URL은 항상 원본 pdfUrl로 설정 (whiteboardPages 로드 전에도 표시되도록)
   const [currentPdfUrl, setCurrentPdfUrl] = useState(pdfUrl);
   // 페이지별 캔버스 상태 저장 (페이지 번호 -> ImageData)
   const pageCanvasDataRef = useRef<Map<number, ImageData>>(new Map());
+  
+  // pdfUrl이 변경되면 currentPdfUrl도 업데이트 (whiteboardPages가 없을 때)
+  useEffect(() => {
+    if (pdfUrl && pdfUrl.trim() !== "" && whiteboardPages.length === 0) {
+      setCurrentPdfUrl(pdfUrl);
+      console.log("[AnnotatablePdfViewer] pdfUrl 변경, currentPdfUrl 업데이트:", pdfUrl);
+    }
+  }, [pdfUrl, whiteboardPages.length]);
 
   // 현재 페이지의 캔버스를 학생에게 동기화 (스냅샷 전송)
   const broadcastCurrentCanvas = useCallback(
@@ -184,20 +193,34 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
 
   // Whiteboard pages가 있으면 해당 페이지의 PDF를 사용
   useEffect(() => {
+    // whiteboardPages가 비어있거나 해당 페이지가 없으면 원본 PDF 사용
     if (whiteboardPages.length > 0) {
       const pageData = whiteboardPages.find((p) => p.page_number === pdfPage);
-      if (pageData && pageData.pdf_path) {
+      // pdf_path가 있고 유효한 URL인 경우에만 사용
+      if (pageData && pageData.pdf_path && pageData.pdf_path.trim() !== "") {
         setCurrentPdfUrl(pageData.pdf_path);
         console.log("[AnnotatablePdfViewer] 페이지별 PDF 로드:", {
           page: pdfPage,
           pdf_path: pageData.pdf_path,
         });
       } else {
-        // 해당 페이지가 없으면 원본 PDF 사용
-        setCurrentPdfUrl(pdfUrl);
+        // 해당 페이지가 없거나 pdf_path가 없으면 원본 PDF 사용
+        console.log("[AnnotatablePdfViewer] 페이지 데이터 없음, 원본 PDF 사용:", {
+          page: pdfPage,
+          hasPageData: !!pageData,
+          pdf_path: pageData?.pdf_path,
+        });
+        // pdfUrl이 유효한 경우에만 설정
+        if (pdfUrl && pdfUrl.trim() !== "") {
+          setCurrentPdfUrl(pdfUrl);
+        }
       }
     } else {
-      setCurrentPdfUrl(pdfUrl);
+      // whiteboardPages가 비어있으면 원본 PDF 사용
+      // pdfUrl이 유효한 경우에만 설정
+      if (pdfUrl && pdfUrl.trim() !== "") {
+        setCurrentPdfUrl(pdfUrl);
+      }
     }
   }, [pdfPage, whiteboardPages, pdfUrl]);
 
@@ -235,11 +258,20 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [currentPdfUrl, pdfPage, restorePageCanvas]);
+  }, [currentPdfUrl, pdfUrl, pdfPage, restorePageCanvas]);
 
   // 초기 마운트 시 필기 복원 (currentPdfUrl이 이미 설정된 경우)
   useEffect(() => {
-    if (!canvasRef.current || !currentPdfUrl) return;
+    // currentPdfUrl이 없으면 원본 pdfUrl 사용
+    const effectivePdfUrl = currentPdfUrl || pdfUrl;
+    if (!canvasRef.current || !effectivePdfUrl) {
+      console.log("[AnnotatablePdfViewer] 초기 복원 스킵: PDF URL 없음", {
+        currentPdfUrl,
+        pdfUrl,
+        effectivePdfUrl,
+      });
+      return;
+    }
 
     const checkAndRestore = (retryCount = 0) => {
       if (retryCount > 15) {
@@ -268,7 +300,7 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
     }, 500);
 
     return () => clearTimeout(timer);
-  }, []); // 초기 마운트 시에만 실행
+  }, [pdfUrl]); // pdfUrl이 변경되면 다시 실행 (초기 로드 시)
 
   // PDF 로드 후 캔버스 크기 조정
   useEffect(() => {
@@ -712,7 +744,7 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
         <iframe
           ref={pdfIframeRef}
-          src={`${currentPdfUrl}#page=${pdfPage}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
+          src={`${currentPdfUrl || pdfUrl}#page=${pdfPage}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
           title="공유 중인 PDF"
           className="absolute inset-0 w-full h-full"
           style={{ pointerEvents: "none" }}
