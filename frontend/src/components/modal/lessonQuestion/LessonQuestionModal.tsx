@@ -533,40 +533,6 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                       title={`PDF 페이지 ${currentPage}`}
                     />
                   );
-                  const isImagePathPdf =
-                    imageUrl && imageUrl.toLowerCase().endsWith(".pdf");
-                  const actualImageUrl = isImagePathPdf ? null : imageUrl;
-                  // pdf_path가 없으면 원본 PDF 사용
-                  const actualPdfUrl = isImagePathPdf
-                    ? imageUrl
-                    : pdfUrlForPage || pdfUrl || null;
-
-                  return (
-                    <>
-                      {actualImageUrl ? (
-                        <div className="w-full min-h-[600px] flex items-center justify-center bg-white p-4">
-                          <img
-                            src={actualImageUrl}
-                            alt={`페이지 ${currentPage}`}
-                            className="max-w-full max-h-[600px] object-contain"
-                          />
-                        </div>
-                      ) : actualPdfUrl ? (
-                        <iframe
-                          src={actualPdfUrl}
-                          className="w-full h-full min-h-[600px] bg-white"
-                          title={`PDF 페이지 ${currentPage}`}
-                        />
-                      ) : (
-                        <div className="w-full min-h-[600px] flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-8">
-                          <FileText className="w-10 h-10 text-gray-400 mb-4" />
-                          <p className="text-gray-400 text-lg font-medium">
-                            페이지 데이터를 불러올 수 없습니다
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  );
                 })()
               ) : pdfUrl ? (
                 <iframe
