@@ -6,6 +6,7 @@ interface WhiteboardPage {
   page_number: number;
   image_path: string;
   pdf_path: string;
+  original_pdf_path?: string | null; // 원본 교안 PDF (교안 및 질문 보기용)
   text: string;
   status: string;
 }
@@ -191,24 +192,25 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
     }
   }, []);
 
-  // Whiteboard pages가 있으면 해당 페이지의 PDF를 사용
+  // Whiteboard pages가 있으면 해당 페이지의 원본 교안 PDF를 사용
+  // 항상 original_pdf_path를 우선 사용 (원본 교안 유지)
   useEffect(() => {
     // whiteboardPages가 비어있거나 해당 페이지가 없으면 원본 PDF 사용
     if (whiteboardPages.length > 0) {
       const pageData = whiteboardPages.find((p) => p.page_number === pdfPage);
-      // pdf_path가 있고 유효한 URL인 경우에만 사용
-      if (pageData && pageData.pdf_path && pageData.pdf_path.trim() !== "") {
-        setCurrentPdfUrl(pageData.pdf_path);
-        console.log("[AnnotatablePdfViewer] 페이지별 PDF 로드:", {
+      // original_pdf_path를 우선 사용 (원본 교안)
+      if (pageData && pageData.original_pdf_path && pageData.original_pdf_path.trim() !== "") {
+        setCurrentPdfUrl(pageData.original_pdf_path);
+        console.log("[AnnotatablePdfViewer] 페이지별 원본 교안 PDF 로드:", {
           page: pdfPage,
-          pdf_path: pageData.pdf_path,
+          original_pdf_path: pageData.original_pdf_path,
         });
       } else {
-        // 해당 페이지가 없거나 pdf_path가 없으면 원본 PDF 사용
-        console.log("[AnnotatablePdfViewer] 페이지 데이터 없음, 원본 PDF 사용:", {
+        // original_pdf_path가 없으면 원본 PDF (pdfUrl prop) 사용
+        console.log("[AnnotatablePdfViewer] original_pdf_path 없음, 원본 PDF 사용:", {
           page: pdfPage,
           hasPageData: !!pageData,
-          pdf_path: pageData?.pdf_path,
+          original_pdf_path: pageData?.original_pdf_path,
         });
         // pdfUrl이 유효한 경우에만 설정
         if (pdfUrl && pdfUrl.trim() !== "") {
@@ -566,9 +568,10 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
 
       // 새 페이지의 캔버스 상태 복원은 useEffect에서 처리
 
-      // Whiteboard pages에서 해당 페이지의 PDF 찾기
+      // Whiteboard pages에서 해당 페이지의 원본 교안 PDF 찾기
+      // 항상 original_pdf_path를 우선 사용 (원본 교안 유지)
       const pageData = whiteboardPages.find((p) => p.page_number === newPage);
-      const pdfToLoad = pageData?.pdf_path || pdfUrl;
+      const pdfToLoad = pageData?.original_pdf_path || pdfUrl;
 
       // currentPdfUrl state 업데이트
       setCurrentPdfUrl(pdfToLoad);
@@ -584,10 +587,11 @@ const AnnotatablePdfViewer: React.FC<AnnotatablePdfViewerProps> = ({
         pdfIframeRef.current.src = newSrc;
       }
 
-      // Socket.io로 페이지 변경 전송 (페이지별 PDF URL 포함)
+      // Socket.io로 페이지 변경 전송 (페이지별 원본 교안 PDF URL 포함)
       if (socket && lectureId && classId !== undefined) {
         const pageData = whiteboardPages.find((p) => p.page_number === newPage);
-        const pdfUrlForPage = pageData?.pdf_path || pdfUrl;
+        // 항상 original_pdf_path를 우선 사용 (원본 교안 유지)
+        const pdfUrlForPage = pageData?.original_pdf_path || pdfUrl;
         console.log("[AnnotatablePdfViewer] Socket.io로 페이지 변경 전송:", {
           page: newPage,
           pdf_url: pdfUrlForPage,

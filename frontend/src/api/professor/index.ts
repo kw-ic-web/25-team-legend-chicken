@@ -571,6 +571,7 @@ export type WhiteboardPage = {
   page_number: number;
   image_path: string;
   pdf_path: string;
+  original_pdf_path?: string | null; // 원본 교안 PDF (교안 및 질문 보기용)
   text: string;
   status: string;
   createdAt?: string;
