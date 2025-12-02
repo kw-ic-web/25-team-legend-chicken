@@ -512,8 +512,21 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                   );
                   
                   // 교안 및 질문 보기에서는 항상 원본 교안 PDF 사용
-                  // original_pdf_path가 있으면 사용, 없으면 전체 pdfUrl 사용 (pdf_path는 필기본이므로 사용하지 않음)
-                  const originalPdfUrl = currentPageData?.original_pdf_path || pdfUrl;
+                  // original_pdf_path가 있으면 사용, 없으면 같은 페이지 번호의 다른 페이지에서 찾거나 전체 pdfUrl 사용
+                  let originalPdfUrl = currentPageData?.original_pdf_path;
+                  
+                  // original_pdf_path가 없으면 같은 페이지 번호의 다른 페이지에서 찾기
+                  if (!originalPdfUrl) {
+                    const samePageNumberData = pages.find(
+                      (p) => p.page_number === currentPage && p.original_pdf_path
+                    );
+                    originalPdfUrl = samePageNumberData?.original_pdf_path;
+                  }
+                  
+                  // 여전히 없으면 전체 pdfUrl 사용 (페이지 번호 지정)
+                  if (!originalPdfUrl) {
+                    originalPdfUrl = pdfUrl;
+                  }
                   
                   if (!originalPdfUrl) {
                     return (
@@ -526,9 +539,18 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                   }
 
                   // 원본 교안 PDF 표시 (필기 없이)
+                  // original_pdf_path가 있으면 페이지별 PDF이므로 페이지 번호 불필요
+                  // 전체 PDF이면 페이지 번호 지정
+                  const isPageSpecificPdf = currentPageData?.original_pdf_path || 
+                    pages.some(p => p.page_number === currentPage && p.original_pdf_path);
+                  const iframeSrc = isPageSpecificPdf
+                    ? originalPdfUrl
+                    : `${originalPdfUrl}#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`;
+                  
                   return (
                     <iframe
-                      src={`${originalPdfUrl}#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
+                      key={`pdf-${currentPage}-${originalPdfUrl}`}
+                      src={iframeSrc}
                       className="w-full h-full min-h-[600px] bg-white"
                       title={`PDF 페이지 ${currentPage}`}
                     />
