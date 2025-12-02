@@ -1,6 +1,9 @@
 const express = require("express");
 const fs = require("fs-extra");
 const router = express.Router();
+const path = require("path");
+const https = require("https");
+const http = require("http");
 
 const { authenticateToken } = require("../middleware/auth");
 const { uploadWhiteboardSnapshot } = require("../config/uploadImage");
@@ -16,6 +19,8 @@ const {
 } = require("../utils/pdf");
 const Lecture = require("../models/lectures");
 const { toAbsoluteUrl } = require("../utils/urlUtils");
+const { downloadFile } = require("../utils/gridfs");
+const PDFLib = require("pdf-lib");
 
 const tokenize = (text = "") =>
   text
@@ -293,7 +298,8 @@ async function handleUploadPdfSplit(req, res) {
         page_number: basePageNumber + i + 1,
         image_path: imagePath,
         text: text,
-        pdf_path: page.pdfPath,
+        original_pdf_path: page.pdfPath, // 원본 교안 PDF
+        pdf_path: page.pdfPath, // 초기에는 원본과 동일 (필기 후 필기+교안 합본으로 업데이트)
         status: "finalized",
       });
 
@@ -370,7 +376,7 @@ router.get(
 
       const pages = await WhiteboardPage.find(filter)
         .sort({ page_number: 1 })
-        .select("page_number image_path pdf_path text status createdAt updatedAt")
+        .select("page_number image_path original_pdf_path pdf_path text status createdAt updatedAt")
         .lean();
 
       console.log("[DEBUG] Whiteboard pages 조회 결과:", {
@@ -378,26 +384,32 @@ router.get(
         pages: pages.map(p => ({
           page_number: p.page_number,
           image_path: p.image_path,
+          original_pdf_path: p.original_pdf_path,
           pdf_path: p.pdf_path,
           status: p.status,
         })),
       });
 
-      // 페이지의 image_path와 pdf_path를 절대 URL로 변환
+      // 페이지의 image_path, original_pdf_path, pdf_path를 절대 URL로 변환
+      // 교안 및 질문 보기에서는 original_pdf_path (원본 교안) 사용
       const pagesWithAbsoluteUrls = pages.map(page => {
         const absoluteImagePath = toAbsoluteUrl(req, page.image_path);
+        const absoluteOriginalPdfPath = toAbsoluteUrl(req, page.original_pdf_path || page.pdf_path);
         const absolutePdfPath = toAbsoluteUrl(req, page.pdf_path);
         console.log("[DEBUG] URL 변환:", {
           page_number: page.page_number,
           original_image_path: page.image_path,
           absolute_image_path: absoluteImagePath,
-          original_pdf_path: page.pdf_path,
+          original_pdf_path: page.original_pdf_path,
+          absolute_original_pdf_path: absoluteOriginalPdfPath,
+          pdf_path: page.pdf_path,
           absolute_pdf_path: absolutePdfPath,
         });
         return {
           ...page,
           image_path: absoluteImagePath,
-          pdf_path: absolutePdfPath,
+          original_pdf_path: absoluteOriginalPdfPath, // 교안 보기용 (원본)
+          pdf_path: absolutePdfPath, // 필기본 다운로드용 (필기+교안 합본)
         };
       });
 
@@ -455,6 +467,178 @@ router.get(
     } catch (err) {
       console.error("최신 화이트보드 페이지 조회 오류:", err);
       return res.status(500).json({ message: "서버 오류가 발생했습니다." });
+    }
+  }
+);
+
+/**
+ * GET /api/lectures/:lectureId/classes/:classId/download-notes
+ * 필기본 다운로드 - 모든 finalized 페이지의 필기+교안 합본 PDF를 합쳐서 다운로드
+ */
+router.get(
+  "/lectures/:lectureId/classes/:classId/download-notes",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { lectureId, classId } = req.params;
+      const access = await canAccess(req.user, lectureId);
+      if (!access.ok) {
+        return res.status(access.code).json({ 
+          success: false,
+          message: access.msg 
+        });
+      }
+
+      // 라이브 상태 확인 (라이브 중이면 다운로드 불가)
+      const lecture = await Lecture.findOne({ lecture_id: lectureId });
+      if (!lecture) {
+        return res.status(404).json({ 
+          success: false,
+          message: "강좌를 찾을 수 없습니다." 
+        });
+      }
+
+      const classData = lecture.classes.find(
+        (cls) => cls.id === parseInt(classId)
+      );
+      if (!classData) {
+        return res.status(404).json({ 
+          success: false,
+          message: "해당 클래스를 찾을 수 없습니다." 
+        });
+      }
+
+      // 라이브 상태 확인
+      if (classData.live_status === "active") {
+        return res.status(403).json({ 
+          success: false,
+          message: "라이브 강의가 진행 중일 때는 필기본을 다운로드할 수 없습니다. 라이브 종료 후 다시 시도해주세요." 
+        });
+      }
+
+      // 모든 finalized 페이지 가져오기 (필기+교안 합본 PDF 사용)
+      const pages = await WhiteboardPage.find({
+        lecture_id: lectureId,
+        class_id: String(classId),
+        status: "finalized",
+      })
+        .sort({ page_number: 1 })
+        .lean();
+
+      if (pages.length === 0) {
+        return res.status(404).json({ 
+          success: false,
+          message: "다운로드할 필기본이 없습니다." 
+        });
+      }
+
+      console.log(`[download-notes] ${pages.length}개 페이지 병합 시작`);
+
+      // PDF 병합을 위한 임시 파일 배열
+      const tempFiles = [];
+      const mergedPdf = await PDFLib.PDFDocument.create();
+
+      try {
+        // 각 페이지의 필기+교안 합본 PDF 다운로드 및 병합
+        for (const page of pages) {
+          // pdf_path가 없으면 original_pdf_path 사용 (필기가 없는 페이지)
+          const pdfPathToUse = page.pdf_path || page.original_pdf_path;
+          
+          if (!pdfPathToUse) {
+            console.warn(`[download-notes] 페이지 ${page.page_number}의 PDF 경로가 없습니다. 건너뜁니다.`);
+            continue;
+          }
+
+          let pdfBuffer = null;
+
+          try {
+            // GridFS에서 다운로드
+            if (pdfPathToUse.startsWith("/api/files/")) {
+              const fileId = pdfPathToUse.replace("/api/files/", "");
+              const { stream } = await downloadFile(fileId);
+              
+              // 스트림을 버퍼로 변환
+              const chunks = [];
+              for await (const chunk of stream) {
+                chunks.push(chunk);
+              }
+              pdfBuffer = Buffer.concat(chunks);
+            } 
+            // HTTP/HTTPS URL에서 다운로드
+            else if (pdfPathToUse.startsWith("http://") || pdfPathToUse.startsWith("https://")) {
+              pdfBuffer = await new Promise((resolve, reject) => {
+                const url = new URL(pdfPathToUse);
+                const client = url.protocol === "https:" ? https : http;
+                client.get(url, (res) => {
+                  const chunks = [];
+                  res.on("data", (chunk) => chunks.push(chunk));
+                  res.on("end", () => resolve(Buffer.concat(chunks)));
+                  res.on("error", reject);
+                }).on("error", reject);
+              });
+            } 
+            // 로컬 파일 경로
+            else {
+              const absolutePath = toAbsolutePath(pdfPathToUse);
+              if (await fs.pathExists(absolutePath)) {
+                pdfBuffer = await fs.readFile(absolutePath);
+              } else {
+                console.warn(`[download-notes] 파일을 찾을 수 없습니다: ${absolutePath}`);
+                continue;
+              }
+            }
+
+            if (!pdfBuffer) {
+              console.warn(`[download-notes] 페이지 ${page.page_number}의 PDF 버퍼를 가져올 수 없습니다.`);
+              continue;
+            }
+
+            // PDF 로드 및 병합
+            const pdfDoc = await PDFLib.PDFDocument.load(pdfBuffer);
+            const pdfPages = await mergedPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
+            pdfPages.forEach((pdfPage) => mergedPdf.addPage(pdfPage));
+
+            console.log(`[download-notes] 페이지 ${page.page_number} 병합 완료`);
+          } catch (error) {
+            console.error(`[download-notes] 페이지 ${page.page_number} 처리 실패:`, error.message);
+            // 개별 페이지 실패해도 계속 진행
+            continue;
+          }
+        }
+
+        // 병합된 PDF를 바이트로 변환
+        const mergedPdfBytes = await mergedPdf.save();
+
+        // 파일명 생성
+        const fileName = `필기본-${lecture.name}-${classData.title}-${Date.now()}.pdf`;
+
+        // 응답 헤더 설정
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${encodeURIComponent(fileName)}"`
+        );
+        res.setHeader("Content-Length", mergedPdfBytes.length);
+
+        // PDF 전송
+        res.send(mergedPdfBytes);
+
+        console.log(`[download-notes] 필기본 다운로드 완료: ${fileName} (${pages.length}페이지)`);
+      } catch (error) {
+        console.error("[download-notes] PDF 병합 오류:", error);
+        return res.status(500).json({ 
+          success: false,
+          message: "필기본 병합 중 오류가 발생했습니다.",
+          error: error.message 
+        });
+      }
+    } catch (error) {
+      console.error("[download-notes] 필기본 다운로드 오류:", error);
+      return res.status(500).json({ 
+        success: false,
+        message: "서버 오류가 발생했습니다.",
+        error: error.message 
+      });
     }
   }
 );

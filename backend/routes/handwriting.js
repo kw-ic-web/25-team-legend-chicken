@@ -9,6 +9,7 @@ const { analyzeHandwritingTest, detectHandwritingChanges, filterIncreasedWriting
 const WhiteboardPage = require("../models/whiteboardPage");
 const { extractTextFromImage } = require("../services/vision");
 const { createPdfFromImage, convertPdfPageToImage } = require("../utils/pdf");
+const { uploadFile } = require("../utils/gridfs");
 
 // 캡쳐된 이미지를 임시 저장할 디렉토리
 const CAPTURE_DIR = path.join(__dirname, "../captures");
@@ -127,37 +128,115 @@ router.post("/analyze-test", authenticateToken, async (req, res) => {
     // 최종 이미지 파일 복사 (PDF+필기 또는 필기만)
     await fs.copy(finalImagePath, savedFilePath);
 
-    // PDF 생성
+    // 필기 이미지를 GridFS에 저장
+    const savedImageBuffer = await fs.readFile(savedFilePath);
+    let imageGridfsUrl = `/captures/${savedFileName}`; // 기본값: 로컬 경로
+    try {
+      const imageGridfsId = await uploadFile(
+        savedImageBuffer,
+        savedFileName,
+        "image/jpeg",
+        {
+          lectureId: lecture_id,
+          classId: String(class_id),
+          pageNumber: detectedPageNumber,
+          type: "handwriting_image",
+        }
+      );
+      imageGridfsUrl = `/api/files/${imageGridfsId}`;
+    } catch (error) {
+      console.error("[analyze-test] 이미지 GridFS 저장 실패:", error);
+      // GridFS 저장 실패 시 로컬 경로 사용
+    }
+
+    // 필기+교안 합본 PDF 생성 (GridFS에 저장)
     const { pdfPath } = await createPdfFromImage(savedFilePath, {
       lectureId: lecture_id,
       classId: String(class_id),
       pageNumber: detectedPageNumber,
+      saveToGridFS: true,
     });
 
-    // 기존 페이지가 있으면 업데이트, 없으면 생성
-    let saved = await WhiteboardPage.findOne({
+    // 기존 페이지에서 원본 PDF 찾기
+    let originalPdfPath = null;
+    const existingPage = await WhiteboardPage.findOne({
       lecture_id,
       class_id: String(class_id),
       page_number: detectedPageNumber,
       status: "finalized",
     });
 
-    if (saved) {
+    if (existingPage && existingPage.original_pdf_path) {
+      // 기존 페이지에 원본 PDF가 있으면 사용
+      originalPdfPath = existingPage.original_pdf_path;
+    } else {
+      // 원본 PDF를 찾기 위해 같은 lecture_id, class_id의 다른 페이지 확인
+      const otherPage = await WhiteboardPage.findOne({
+        lecture_id,
+        class_id: String(class_id),
+        original_pdf_path: { $exists: true, $ne: "" },
+        status: "finalized",
+      }).sort({ page_number: 1 });
+
+      if (otherPage && otherPage.original_pdf_path) {
+        // 같은 강의의 다른 페이지에서 원본 PDF 패턴 찾기
+        originalPdfPath = otherPage.original_pdf_path;
+      } else if (pdf_url) {
+        // pdf_url이 있으면 원본 PDF로 사용 (GridFS에 저장 필요)
+        try {
+          const pdfBuffer = await new Promise((resolve, reject) => {
+            const url = new URL(pdf_url);
+            const client = url.protocol === "https:" ? https : http;
+            client.get(url, (res) => {
+              const chunks = [];
+              res.on("data", (chunk) => chunks.push(chunk));
+              res.on("end", () => resolve(Buffer.concat(chunks)));
+              res.on("error", reject);
+            }).on("error", reject);
+          });
+
+          const originalPdfFilename = `original-${lecture_id}-${class_id}-p${detectedPageNumber}-${Date.now()}.pdf`;
+          const originalPdfGridfsId = await uploadFile(
+            pdfBuffer,
+            originalPdfFilename,
+            "application/pdf",
+            {
+              lectureId: lecture_id,
+              classId: String(class_id),
+              pageNumber: detectedPageNumber,
+              type: "original_pdf_page",
+            }
+          );
+          originalPdfPath = `/api/files/${originalPdfGridfsId}`;
+        } catch (error) {
+          console.error("[analyze-test] 원본 PDF 저장 실패:", error);
+        }
+      }
+    }
+
+    // 기존 페이지가 있으면 업데이트, 없으면 생성
+    let saved;
+    if (existingPage) {
       // 기존 페이지 업데이트
-      saved.image_path = `/captures/${savedFileName}`;
-      saved.text = normalizedText;
-      saved.pdf_path = pdfPath;
-      saved.updatedAt = new Date();
-      await saved.save();
+      existingPage.image_path = imageGridfsUrl;
+      existingPage.text = normalizedText;
+      existingPage.pdf_path = pdfPath; // 필기+교안 합본
+      if (originalPdfPath) {
+        existingPage.original_pdf_path = originalPdfPath;
+      }
+      existingPage.updatedAt = new Date();
+      await existingPage.save();
+      saved = existingPage;
     } else {
       // 새 페이지 생성
       saved = await WhiteboardPage.create({
         lecture_id,
         class_id: String(class_id),
         page_number: detectedPageNumber,
-        image_path: `/captures/${savedFileName}`,
+        image_path: imageGridfsUrl,
         text: normalizedText,
-        pdf_path: pdfPath,
+        original_pdf_path: originalPdfPath || "",
+        pdf_path: pdfPath, // 필기+교안 합본
         status: "finalized",
       });
     }

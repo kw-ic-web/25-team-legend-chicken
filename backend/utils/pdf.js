@@ -20,31 +20,36 @@ try {
 }
 
 const pdfBaseDir = "uploads/pdfs/whiteboard";
+const { uploadFile } = require("./gridfs");
 
 fs.ensureDirSync(pdfBaseDir);
 const execFileAsync = util.promisify(execFile);
 
 /**
- * 이미지 한 장을 PDF로 변환합니다.
+ * 이미지 한 장을 PDF로 변환하고 GridFS에 저장합니다.
  * @param {string} imagePath - 원본 이미지의 파일 시스템 경로
  * @param {object} options
  * @param {string} options.lectureId
  * @param {string} options.classId
  * @param {number} options.pageNumber
- * @returns {Promise<{ pdfPath: string, filename: string }>}
+ * @param {boolean} options.saveToGridFS - GridFS에 저장할지 여부 (기본값: true)
+ * @returns {Promise<{ pdfPath: string, filename: string, gridfsId?: string }>}
  */
-async function createPdfFromImage(imagePath, { lectureId, classId, pageNumber }) {
+async function createPdfFromImage(imagePath, { lectureId, classId, pageNumber, saveToGridFS = true }) {
   const timestamp = Date.now();
   const filename = `whiteboard-${lectureId}-${classId}-p${pageNumber}-${timestamp}.pdf`;
   const outputPath = path.join(pdfBaseDir, filename);
 
-  await new Promise((resolve, reject) => {
+  // PDF 생성
+  const pdfBuffer = await new Promise((resolve, reject) => {
     const doc = new PDFDocument({ autoFirstPage: false });
-    const stream = fs.createWriteStream(outputPath);
+    const chunks = [];
 
-    doc.pipe(stream);
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
     doc.addPage({ margin: 0 });
-
     const { width, height } = doc.page;
 
     doc.image(imagePath, 0, 0, {
@@ -55,10 +60,35 @@ async function createPdfFromImage(imagePath, { lectureId, classId, pageNumber })
     });
 
     doc.end();
-
-    stream.on("finish", resolve);
-    stream.on("error", reject);
   });
+
+  // GridFS에 저장
+  if (saveToGridFS) {
+    try {
+      const gridfsId = await uploadFile(pdfBuffer, filename, "application/pdf", {
+        lectureId,
+        classId: String(classId),
+        pageNumber,
+        type: "annotated_pdf",
+      });
+      
+      // 임시 파일 삭제
+      await fs.remove(outputPath).catch(() => {});
+      
+      return {
+        pdfPath: `/api/files/${gridfsId}`,
+        filename,
+        gridfsId,
+      };
+    } catch (error) {
+      console.error("[createPdfFromImage] GridFS 저장 실패, 로컬 파일 사용:", error);
+      // GridFS 저장 실패 시 로컬 파일로 저장
+      await fs.writeFile(outputPath, pdfBuffer);
+    }
+  } else {
+    // 로컬 파일로만 저장
+    await fs.writeFile(outputPath, pdfBuffer);
+  }
 
   return {
     pdfPath: `/${outputPath.replace(/\\/g, "/")}`,

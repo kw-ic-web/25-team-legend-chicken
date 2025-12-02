@@ -26,7 +26,8 @@ import { downloadNotes } from "../../../api/professor";
 interface WhiteboardPage {
   page_number: number;
   image_path: string;
-  pdf_path: string;
+  original_pdf_path?: string; // 원본 교안 PDF
+  pdf_path: string; // 필기+교안 합본 PDF
   text: string;
   status: string;
 }
@@ -510,18 +511,11 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                     (p) => p.page_number === currentPage
                   );
                   
-                  // 페이지 데이터가 없거나 pdf_path/image_path가 없으면 원본 PDF 사용
-                  if (!currentPageData || (!currentPageData.pdf_path && !currentPageData.image_path)) {
-                    // 원본 PDF가 있으면 사용
-                    if (pdfUrl) {
-                      return (
-                        <iframe
-                          src={`${pdfUrl}#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
-                          className="w-full h-full min-h-[600px] bg-white"
-                          title={`PDF 페이지 ${currentPage}`}
-                        />
-                      );
-                    }
+                  // 교안 및 질문 보기에서는 항상 원본 교안 PDF 사용
+                  // original_pdf_path가 있으면 사용, 없으면 pdf_path 사용, 둘 다 없으면 전체 PDF 사용
+                  const originalPdfUrl = currentPageData?.original_pdf_path || currentPageData?.pdf_path || pdfUrl;
+                  
+                  if (!originalPdfUrl) {
                     return (
                       <div className="w-full min-h-[600px] flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-8">
                         <p className="text-gray-400 text-lg font-medium">
@@ -531,8 +525,14 @@ const LessonQuestionModal: React.FC<LessonQuestionModalProps> = ({
                     );
                   }
 
-                  const imageUrl = currentPageData.image_path || null;
-                  const pdfUrlForPage = currentPageData.pdf_path || null;
+                  // 원본 교안 PDF 표시 (필기 없이)
+                  return (
+                    <iframe
+                      src={`${originalPdfUrl}#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`}
+                      className="w-full h-full min-h-[600px] bg-white"
+                      title={`PDF 페이지 ${currentPage}`}
+                    />
+                  );
                   const isImagePathPdf =
                     imageUrl && imageUrl.toLowerCase().endsWith(".pdf");
                   const actualImageUrl = isImagePathPdf ? null : imageUrl;
